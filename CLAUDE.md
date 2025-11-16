@@ -583,6 +583,8 @@ When user asks to work on rush, immediately check and enforce SDD.
 - Flat file for command history (~/.config/rush/history), TOML for optional config (~/.config/rush/rush.toml) (001-rush-mvp)
 - Rust 2021 edition (workspace standard) + reedline 0.26+ (already in use, has Completer trait support) (002-tab-completion)
 - In-memory caches for PATH executables and filesystem entries (no persistent storage) (002-tab-completion)
+- Rust 1.75+ (Rust 2021 edition) + reedline (line editing library with Hinter trait support) (003-autosuggestions)
+- File-based command history (existing FileBackedHistory from reedline) (003-autosuggestions)
 
 ## Recent Changes
 - 001-rush-mvp: Added Rust 1.75+ (edition 2021)
