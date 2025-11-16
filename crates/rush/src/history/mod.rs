@@ -37,13 +37,7 @@ impl HistoryEntry {
             .unwrap()
             .as_secs();
 
-        Self {
-            command,
-            timestamp,
-            exit_code: None,
-            working_dir,
-            session_id,
-        }
+        Self { command, timestamp, exit_code: None, working_dir, session_id }
     }
 
     /// Set the exit code after command completes
@@ -59,11 +53,7 @@ mod tests {
 
     #[test]
     fn test_history_entry_new() {
-        let entry = HistoryEntry::new(
-            "ls -la".to_string(),
-            PathBuf::from("/home/user"),
-            42,
-        );
+        let entry = HistoryEntry::new("ls -la".to_string(), PathBuf::from("/home/user"), 42);
 
         assert_eq!(entry.command, "ls -la");
         assert!(entry.timestamp > 0);
@@ -74,12 +64,8 @@ mod tests {
 
     #[test]
     fn test_history_entry_with_exit_code() {
-        let entry = HistoryEntry::new(
-            "echo test".to_string(),
-            PathBuf::from("/tmp"),
-            1,
-        )
-        .with_exit_code(0);
+        let entry =
+            HistoryEntry::new("echo test".to_string(), PathBuf::from("/tmp"), 1).with_exit_code(0);
 
         assert_eq!(entry.exit_code, Some(0));
     }
@@ -93,11 +79,7 @@ mod tests {
 
     #[test]
     fn test_history_entry_timestamp() {
-        let entry = HistoryEntry::new(
-            "test".to_string(),
-            PathBuf::from("/tmp"),
-            1,
-        );
+        let entry = HistoryEntry::new("test".to_string(), PathBuf::from("/tmp"), 1);
 
         // Timestamp should be recent (within last minute)
         let now = std::time::SystemTime::now()
@@ -133,8 +115,7 @@ mod tests {
 
     #[test]
     fn test_history_entry_chaining_with_exit_code() {
-        let entry = HistoryEntry::new("test".to_string(), PathBuf::from("/"), 1)
-            .with_exit_code(42);
+        let entry = HistoryEntry::new("test".to_string(), PathBuf::from("/"), 1).with_exit_code(42);
 
         assert_eq!(entry.exit_code, Some(42));
         assert_eq!(entry.command, "test");
@@ -182,11 +163,7 @@ mod tests {
 
     #[test]
     fn test_history_entry_unicode_command() {
-        let entry = HistoryEntry::new(
-            "echo 你好世界 🚀".to_string(),
-            PathBuf::from("/"),
-            1,
-        );
+        let entry = HistoryEntry::new("echo 你好世界 🚀".to_string(), PathBuf::from("/"), 1);
 
         assert_eq!(entry.command, "echo 你好世界 🚀");
     }

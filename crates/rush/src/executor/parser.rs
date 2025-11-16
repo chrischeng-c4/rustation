@@ -49,9 +49,9 @@ fn tokenize(line: &str) -> Result<Vec<String>> {
     let mut in_double_quote = false;
     let mut escape_next = false;
     let mut had_quotes = false; // Track if current token was quoted
-    let mut chars = line.chars().peekable();
+    let chars = line.chars();
 
-    while let Some(ch) = chars.next() {
+    for ch in chars {
         if escape_next {
             // Escaped character - add literally
             current_token.push(ch);
@@ -98,19 +98,13 @@ fn tokenize(line: &str) -> Result<Vec<String>> {
 
     // Check for unclosed quotes
     if in_single_quote {
-        return Err(RushError::Execution(
-            "Unclosed single quote in command".to_string(),
-        ));
+        return Err(RushError::Execution("Unclosed single quote in command".to_string()));
     }
     if in_double_quote {
-        return Err(RushError::Execution(
-            "Unclosed double quote in command".to_string(),
-        ));
+        return Err(RushError::Execution("Unclosed double quote in command".to_string()));
     }
     if escape_next {
-        return Err(RushError::Execution(
-            "Trailing backslash in command".to_string(),
-        ));
+        return Err(RushError::Execution("Trailing backslash in command".to_string()));
     }
 
     // Add final token if non-empty or was quoted empty string

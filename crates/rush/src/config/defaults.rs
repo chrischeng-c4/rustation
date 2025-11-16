@@ -108,6 +108,7 @@ struct ConfigFile {
 #[derive(Debug, serde::Deserialize)]
 struct AppearanceConfig {
     prompt: Option<String>,
+    #[allow(dead_code)] // Reserved for future theme support
     theme: Option<String>,
 }
 
@@ -132,7 +133,7 @@ impl Default for Theme {
     fn default() -> Self {
         Self {
             command_color: Color::Green,
-            flag_color: Color::Blue,
+            flag_color: Color::Cyan, // Cyan for better visibility on dark terminals
             path_color: Color::Cyan,
             string_color: Color::Yellow,
             error_color: Color::Red,

@@ -22,10 +22,7 @@ fn main() {
     // Initialize logging based on CLI flags
     initialize_logging(&cli);
 
-    tracing::info!(
-        version = env!("CARGO_PKG_VERSION"),
-        "rush shell starting"
-    );
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), "rush shell starting");
 
     // Handle utility commands that don't start the REPL
     if cli.dump_config {
@@ -89,7 +86,9 @@ fn initialize_logging(cli: &Cli) {
 
         // Create file appender
         let file_appender = tracing_appender::rolling::never(
-            log_file_path.parent().unwrap_or_else(|| std::path::Path::new(".")),
+            log_file_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new(".")),
             log_file_path.file_name().unwrap_or_default(),
         );
 
@@ -207,12 +206,9 @@ fn run_health_check(_cli: &Cli) {
     let config_path = Config::config_path();
     if config_path.exists() {
         println!("✓ Config file exists: {}", config_path.display());
-        match Config::load() {
-            config => {
-                println!("  └─ Loaded successfully");
-                println!("     history_size: {}", config.history_size);
-            }
-        }
+        let config = Config::load();
+        println!("  └─ Loaded successfully");
+        println!("     history_size: {}", config.history_size);
     } else {
         println!("ℹ Config file not found (using defaults): {}", config_path.display());
     }

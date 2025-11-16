@@ -13,10 +13,14 @@ pub mod lexer;
 pub mod prompt;
 pub mod suggest;
 
+use crate::completion::CompletionRegistry; // US1: Add tab completion
 use crate::config::Config;
 use crate::error::Result;
 use crate::executor::execute::CommandExecutor;
-use reedline::{FileBackedHistory, Reedline, Signal};
+use reedline::{
+    default_emacs_keybindings, ColumnarMenu, Emacs, FileBackedHistory, KeyCode, KeyModifiers,
+    MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal,
+};
 use std::path::PathBuf;
 
 use self::highlight::RushHighlighter;
@@ -28,6 +32,7 @@ pub struct Repl {
     editor: Reedline,
 
     /// Shell configuration
+    #[allow(dead_code)] // Reserved for future REPL configuration
     config: Config,
 
     /// Command executor
@@ -66,17 +71,35 @@ impl Repl {
         // Create highlighter
         let highlighter = Box::new(RushHighlighter::new());
 
-        // Build editor with history and syntax highlighting
+        // Create tab completer (US1: Command completion)
+        let completer = Box::new(CompletionRegistry::new());
+
+        // Create completion menu for visual display (T015)
+        let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
+
+        // Set up keybindings for Tab key to trigger completion (T015)
+        let mut keybindings = default_emacs_keybindings();
+        keybindings.add_binding(
+            KeyModifiers::NONE,
+            KeyCode::Tab,
+            ReedlineEvent::UntilFound(vec![
+                ReedlineEvent::Menu("completion_menu".to_string()),
+                ReedlineEvent::MenuNext,
+            ]),
+        );
+
+        // Create edit mode with keybindings (T015)
+        let edit_mode = Box::new(Emacs::new(keybindings));
+
+        // Build editor with history, syntax highlighting, and tab completion (T015)
         let editor = Reedline::create()
             .with_history(history)
-            .with_highlighter(highlighter);
+            .with_highlighter(highlighter)
+            .with_completer(completer)
+            .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
+            .with_edit_mode(edit_mode); // US1: Enable tab completion with menu
 
-        Ok(Self {
-            editor,
-            config,
-            executor: CommandExecutor::new(),
-            last_exit_code: 0,
-        })
+        Ok(Self { editor, config, executor: CommandExecutor::new(), last_exit_code: 0 })
     }
 
     /// Run the REPL loop until exit
@@ -110,10 +133,7 @@ impl Repl {
 
                     // Check for exit command
                     if line == "exit" || line == "quit" {
-                        tracing::info!(
-                            exit_code = self.last_exit_code,
-                            "Exit command received"
-                        );
+                        tracing::info!(exit_code = self.last_exit_code, "Exit command received");
                         return Ok(self.last_exit_code);
                     }
 
@@ -141,10 +161,7 @@ impl Repl {
                 }
                 Ok(Signal::CtrlD) => {
                     // Exit on Ctrl+D
-                    tracing::info!(
-                        exit_code = self.last_exit_code,
-                        "Ctrl+D received, exiting"
-                    );
+                    tracing::info!(exit_code = self.last_exit_code, "Ctrl+D received, exiting");
                     return Ok(self.last_exit_code);
                 }
                 Ok(Signal::CtrlC) => {
@@ -198,7 +215,7 @@ mod tests {
 
     #[test]
     fn test_history_path() {
-        let path = Repl::history_path();
+        let path = Repl::history_path().expect("Should get history path");
         assert!(path.to_string_lossy().contains("rush"));
         assert!(path.to_string_lossy().ends_with("history.txt"));
     }

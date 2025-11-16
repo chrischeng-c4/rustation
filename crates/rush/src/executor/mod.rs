@@ -145,11 +145,8 @@ mod tests {
 
     #[test]
     fn test_redirect_struct() {
-        let redirect = Redirect {
-            fd: 1,
-            mode: RedirectMode::Overwrite,
-            target: PathBuf::from("output.txt"),
-        };
+        let redirect =
+            Redirect { fd: 1, mode: RedirectMode::Overwrite, target: PathBuf::from("output.txt") };
 
         assert_eq!(redirect.fd, 1);
         assert_eq!(redirect.mode, RedirectMode::Overwrite);
@@ -205,11 +202,8 @@ mod tests {
 
     #[test]
     fn test_redirect_clone() {
-        let redirect1 = Redirect {
-            fd: 2,
-            mode: RedirectMode::Append,
-            target: PathBuf::from("err.log"),
-        };
+        let redirect1 =
+            Redirect { fd: 2, mode: RedirectMode::Append, target: PathBuf::from("err.log") };
         let redirect2 = redirect1.clone();
 
         assert_eq!(redirect1, redirect2);

@@ -6,11 +6,11 @@ use reedline::Highlighter;
 
 /// Syntax highlighter for rush shell
 ///
-/// Provides real-time syntax highlighting with colors:
+/// Provides real-time syntax highlighting optimized for dark terminals:
 /// - Commands: Green
-/// - Flags: Blue
+/// - Flags: Cyan (changed from Blue for better visibility on dark backgrounds)
 /// - Arguments: Default (white/terminal default)
-/// - Operators: Cyan
+/// - Operators: Cyan (pipes, redirects, etc.)
 /// - Strings: Yellow
 /// - Comments: Gray
 pub struct RushHighlighter;
@@ -22,10 +22,11 @@ impl RushHighlighter {
     }
 
     /// Get Style for a token type
+    /// Colors optimized for dark terminal backgrounds (out-of-box experience)
     fn get_style(token_type: &TokenType) -> Style {
         match token_type {
             TokenType::Command => Style::new().fg(Color::Green),
-            TokenType::Flag => Style::new().fg(Color::Blue),
+            TokenType::Flag => Style::new().fg(Color::Cyan), // Cyan instead of Blue for visibility on dark backgrounds
             TokenType::Argument => Style::default(),
             TokenType::Pipe => Style::new().fg(Color::Cyan),
             TokenType::And => Style::new().fg(Color::Cyan),
@@ -113,7 +114,7 @@ mod tests {
     #[test]
     fn test_get_style_for_flag() {
         let style = RushHighlighter::get_style(&TokenType::Flag);
-        assert_eq!(style.foreground, Some(Color::Blue));
+        assert_eq!(style.foreground, Some(Color::Cyan)); // Changed to Cyan for dark terminal visibility
     }
 
     #[test]

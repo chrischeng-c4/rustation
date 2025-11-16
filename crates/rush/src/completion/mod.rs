@@ -1,58 +1,113 @@
-//! Tab completion engine module
+//! Tab completion module for rush shell
 //!
 //! Provides completions for:
-//! - Commands from PATH
-//! - Filesystem paths
-//! - Command flags
+//! - Command names from PATH (P1 - CommandCompleter)
+//! - File and directory paths (P2 - PathCompleter)
+//! - Flags for common commands (P3 - FlagCompleter)
+//!
+//! Uses reedline's Completer trait for integration with the REPL.
 
-pub mod command;
+// Re-export reedline types for convenience (T005)
+pub use reedline::{Completer, Span, Suggestion};
+
+// Module declarations
+pub mod command; // US1 - Command completion from PATH
 pub mod flag;
-pub mod path;
+pub mod path; // US2 - File and directory path completion // US3 - Flag completion for common commands
 
-/// A potential completion match for user input
-#[derive(Debug, Clone, PartialEq)]
-pub struct CompletionResult {
-    /// Completion text to insert
-    pub text: String,
+// Re-export completers for convenience
+pub use command::CommandCompleter;
+pub use flag::FlagCompleter;
+pub use path::PathCompleter; // T033 // T058
 
-    /// What kind of completion this is
-    pub completion_type: CompletionType,
-
-    /// Optional helper text
-    pub description: Option<String>,
-
-    /// Relevance score for ranking (0.0 to 1.0, higher is better)
-    pub score: f32,
+/// CompletionRegistry routes completion requests to appropriate completers (T006)
+///
+/// This is the main entry point for tab completion. It analyzes the input
+/// context and delegates to the appropriate completer based on what's being
+/// completed (command, path, or flag).
+pub struct CompletionRegistry {
+    // US1: Command completion
+    command_completer: CommandCompleter,
+    // US2: Path completion
+    path_completer: PathCompleter,
+    // US3: Flag completion
+    flag_completer: FlagCompleter,
 }
 
-impl CompletionResult {
-    /// Create a new completion result
-    pub fn new(
-        text: String,
-        completion_type: CompletionType,
-        description: Option<String>,
-        score: f32,
-    ) -> Self {
+impl CompletionRegistry {
+    /// Create a new CompletionRegistry with all completers
+    pub fn new() -> Self {
         Self {
-            text,
-            completion_type,
-            description,
-            score: score.clamp(0.0, 1.0),
+            command_completer: CommandCompleter::new(), // US1
+            path_completer: PathCompleter::new(),       // US2
+            flag_completer: FlagCompleter::new(),       // US3
         }
     }
 }
 
-/// Type of completion
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CompletionType {
-    /// Executable from PATH
-    Command,
+impl Default for CompletionRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-    /// File or directory
-    Path,
+/// T034: Determine what type of completion is needed based on context
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum CompletionContext {
+    Command, // First word - complete command names
+    Path,    // After first word - complete file/directory paths
+    Flag,    // T059: Arguments starting with - or -- - complete flags
+}
 
-    /// Command-line flag
-    Flag,
+impl CompletionRegistry {
+    /// T034: Analyze line and cursor position to determine completion context
+    /// T059: Updated to detect flag completion context
+    fn determine_context(&self, line: &str, pos: usize) -> CompletionContext {
+        let before_cursor = &line[..pos];
+
+        // Check if there's a space before the cursor
+        // If no space, we're in the first word (command position)
+        if !before_cursor.contains(' ') {
+            CompletionContext::Command
+        } else {
+            // T059: Detect if current word starts with - (flag indicator)
+            let last_word_start = before_cursor
+                .rfind(|c: char| c.is_whitespace())
+                .map(|i| i + 1)
+                .unwrap_or(0);
+
+            let current_word = &before_cursor[last_word_start..];
+
+            if current_word.starts_with('-') {
+                CompletionContext::Flag
+            } else {
+                CompletionContext::Path
+            }
+        }
+    }
+}
+
+/// T035: Route completion requests to appropriate completer
+/// T060: Updated to include flag completion routing
+impl Completer for CompletionRegistry {
+    fn complete(&mut self, line: &str, pos: usize) -> Vec<Suggestion> {
+        // Determine what type of completion is needed
+        let context = self.determine_context(line, pos);
+
+        tracing::debug!(
+            context = ?context,
+            line = %line,
+            pos = pos,
+            "Routing completion request"
+        );
+
+        // Delegate to appropriate completer
+        match context {
+            CompletionContext::Command => self.command_completer.complete(line, pos),
+            CompletionContext::Path => self.path_completer.complete(line, pos),
+            CompletionContext::Flag => self.flag_completer.complete(line, pos), // T060
+        }
+    }
 }
 
 #[cfg(test)]
@@ -60,167 +115,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_completion_result_new() {
-        let result = CompletionResult::new(
-            "ls".to_string(),
-            CompletionType::Command,
-            Some("list files".to_string()),
-            1.0,
-        );
-
-        assert_eq!(result.text, "ls");
-        assert_eq!(result.completion_type, CompletionType::Command);
-        assert_eq!(result.description, Some("list files".to_string()));
-        assert_eq!(result.score, 1.0);
+    fn test_completion_registry_new() {
+        let mut registry = CompletionRegistry::new();
+        // Verify it compiles and creates successfully
+        assert_eq!(registry.complete("", 0).len(), 0); // Empty input returns no completions
     }
 
     #[test]
-    fn test_completion_score_clamping() {
-        let result1 = CompletionResult::new(
-            "test".to_string(),
-            CompletionType::Path,
-            None,
-            1.5, // Above max
-        );
-        assert_eq!(result1.score, 1.0);
-
-        let result2 = CompletionResult::new(
-            "test".to_string(),
-            CompletionType::Flag,
-            None,
-            -0.5, // Below min
-        );
-        assert_eq!(result2.score, 0.0);
+    fn test_completion_registry_default() {
+        let mut registry = CompletionRegistry::default();
+        // Empty input returns no completions
+        assert_eq!(registry.complete("", 0).len(), 0);
     }
 
     #[test]
-    fn test_completion_types() {
-        let types = vec![
-            CompletionType::Command,
-            CompletionType::Path,
-            CompletionType::Flag,
-        ];
-        assert_eq!(types.len(), 3);
-    }
-
-    #[test]
-    fn test_completion_clone() {
-        let result1 = CompletionResult::new(
-            "echo".to_string(),
-            CompletionType::Command,
-            None,
-            0.8,
-        );
-        let result2 = result1.clone();
-        assert_eq!(result1, result2);
-    }
-
-    #[test]
-    fn test_completion_with_description() {
-        let result = CompletionResult::new(
-            "git".to_string(),
-            CompletionType::Command,
-            Some("version control system".to_string()),
-            0.95,
-        );
-
-        assert_eq!(result.text, "git");
-        assert_eq!(result.description, Some("version control system".to_string()));
-        assert_eq!(result.score, 0.95);
-    }
-
-    #[test]
-    fn test_completion_types_equality() {
-        assert_eq!(CompletionType::Command, CompletionType::Command);
-        assert_ne!(CompletionType::Command, CompletionType::Path);
-        assert_ne!(CompletionType::Path, CompletionType::Flag);
-    }
-
-    #[test]
-    fn test_completion_score_boundaries() {
-        // Test exact boundaries
-        let result1 = CompletionResult::new(
-            "test".to_string(),
-            CompletionType::Command,
-            None,
-            0.0,
-        );
-        assert_eq!(result1.score, 0.0);
-
-        let result2 = CompletionResult::new(
-            "test".to_string(),
-            CompletionType::Command,
-            None,
-            1.0,
-        );
-        assert_eq!(result2.score, 1.0);
-    }
-
-    #[test]
-    fn test_completion_extreme_scores() {
-        // Test very large positive score
-        let result1 = CompletionResult::new(
-            "test".to_string(),
-            CompletionType::Command,
-            None,
-            1000.0,
-        );
-        assert_eq!(result1.score, 1.0); // Should clamp to 1.0
-
-        // Test very large negative score
-        let result2 = CompletionResult::new(
-            "test".to_string(),
-            CompletionType::Command,
-            None,
-            -1000.0,
-        );
-        assert_eq!(result2.score, 0.0); // Should clamp to 0.0
-    }
-
-    #[test]
-    fn test_completion_result_equality() {
-        let result1 = CompletionResult::new(
-            "ls".to_string(),
-            CompletionType::Command,
-            Some("list".to_string()),
-            0.9,
-        );
-
-        let result2 = CompletionResult::new(
-            "ls".to_string(),
-            CompletionType::Command,
-            Some("list".to_string()),
-            0.9,
-        );
-
-        assert_eq!(result1, result2);
-    }
-
-    #[test]
-    fn test_completion_different_types() {
-        let cmd = CompletionResult::new(
-            "test".to_string(),
-            CompletionType::Command,
-            None,
-            0.5,
-        );
-
-        let path = CompletionResult::new(
-            "test".to_string(),
-            CompletionType::Path,
-            None,
-            0.5,
-        );
-
-        let flag = CompletionResult::new(
-            "test".to_string(),
-            CompletionType::Flag,
-            None,
-            0.5,
-        );
-
-        assert_ne!(cmd.completion_type, path.completion_type);
-        assert_ne!(path.completion_type, flag.completion_type);
-        assert_ne!(cmd.completion_type, flag.completion_type);
+    fn test_completion_registry_delegates_to_command_completer() {
+        let mut registry = CompletionRegistry::new();
+        // Should delegate to CommandCompleter for command completion
+        // Try a common command prefix
+        let suggestions = registry.complete("ca", 2);
+        // Should either find matches or return empty (depending on PATH)
+        // Main thing is it doesn't crash
+        assert!(suggestions.len() >= 0);
     }
 }

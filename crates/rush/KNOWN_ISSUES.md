@@ -21,6 +21,10 @@ This document tracks what's implemented, what's not, and what's planned for futu
 - ✅ **Command History** - Persistent history across sessions
   - ↑/↓ arrow key navigation
   - Survives shell restart
+- ✅ **Tab Completion** - Intelligent completion for commands, paths, and flags
+  - Command names from PATH
+  - File and directory paths (with tilde expansion)
+  - Flags for common commands (git, cargo, ls, grep, cat, find, echo, cd)
 - ✅ **Line Editing** - Cursor movement, backspace, delete
 - ✅ **Empty Line Handling** - Gracefully skips empty input
 
@@ -33,7 +37,6 @@ This document tracks what's implemented, what's not, and what's planned for futu
 ## ❌ What Doesn't Work Yet
 
 ### Shell Features (Planned for v0.2.0+)
-- ❌ **Tab Completion** - No completion yet (defined but not wired)
 - ❌ **Autosuggestions** - History-based suggestions not implemented
 - ❌ **Pipes** - `ls | grep foo` not supported
 - ❌ **Redirections** - `echo foo > file.txt` not supported
@@ -83,7 +86,7 @@ None reported yet. Please report issues during alpha testing!
 
 ### v0.2.0 (Next Release)
 **Focus: Enhanced Parsing & Configuration**
-- [ ] Implement tab completion
+- [x] Implement tab completion (✅ Completed in v0.1.0)
 - [ ] Add autosuggestions from history
 - [ ] Support basic pipes (`|`)
 - [ ] Support basic redirections (`>`, `>>`, `<`)
@@ -110,8 +113,9 @@ None reported yet. Please report issues during alpha testing!
 ## 🧪 Testing Notes
 
 ### Test Coverage
-- **124 tests passing** (all unit and integration tests)
-- **+17 new parser tests** for quote and escape handling
+- **203 tests passing** (all unit and integration tests)
+  - **+79 new completion tests** for tab completion (commands, paths, flags)
+  - **+17 parser tests** for quote and escape handling
 - See [TEST_COVERAGE.md](TEST_COVERAGE.md) for details
 
 ### Alpha Testing Focus
@@ -135,6 +139,8 @@ $ git commit -m "message"   # ✅ Complex quoted args
 $ date
 $ whoami
 $ git status
+$ gi<TAB>                   # ✅ Tab completion works!
+$ git --ver<TAB>            # ✅ Flag completion too!
 ```
 
 **This won't work (yet):**

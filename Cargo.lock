@@ -919,6 +919,7 @@ dependencies = [
  "dirs",
  "nix 0.29.0",
  "nu-ansi-term",
+ "once_cell",
  "reedline",
  "rexpect",
  "serde",

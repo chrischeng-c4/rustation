@@ -48,7 +48,22 @@
       "Bash(__NEW_LINE__ git commit -m \"$(cat <<''EOF''\nchore(rush): add linting and formatting configuration\n\nAdd configuration for code quality tools:\n- .rustfmt.toml: Rust formatting rules\n- clippy.toml: Linter configuration\n\nEnsures consistent code style across the project.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(__NEW_LINE__ git commit -m \"$(cat <<''EOF''\nchore: update project management and spec-driven development setup\n\nUpdates to project configuration and spec-kit:\n- CLAUDE.md: Add aggressive spec-driven development enforcement\n- .specify/memory/constitution.md: Update project constitution\n- .claude/settings.local.json: Configure Claude Code hooks and settings\n- specs/: Add rush MVP specifications and contracts\n\nEnforces specification-first development workflow for all rush features.\nAll code must have corresponding specifications, plans, and tasks before\nimplementation.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(./target/release/rush:*)",
-      "Bash(__NEW_LINE__ git commit -m \"$(cat <<''EOF''\nfix(rush): address bot review feedback for alpha release\n\nFixes four issues identified in PR review:\n\n1. **Single command mode (-c) now functional**\n   - Previously returned exit code 0 regardless of command result\n   - Now properly executes command and propagates exit code\n   - Example: `rush -c \"false\"` correctly returns 1\n\n2. **Safer history path fallback**\n   - Previously fell back to current directory (unsafe)\n   - Now tries data_dir, then home_dir/.local/share, then errors\n   - Prevents history files in unexpected locations\n\n3. **File locking documented**\n   - Added TODO comment for v0.2.0 implementation\n   - Documented limitation in KNOWN_ISSUES.md\n   - Planned: Use fs2 crate for cross-platform locking\n\n4. **--config flag documentation updated**\n   - Clarified that flag exists but uses defaults\n   - Updated KNOWN_ISSUES.md with workaround\n   - Removed -c from future features (now implemented!)\n\nTesting:\n- All 124 tests still passing\n- Verified -c flag works with exit codes\n- Confirmed better error messages for command failures\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(__NEW_LINE__ git commit -m \"$(cat <<''EOF''\nfix(rush): address bot review feedback for alpha release\n\nFixes four issues identified in PR review:\n\n1. **Single command mode (-c) now functional**\n   - Previously returned exit code 0 regardless of command result\n   - Now properly executes command and propagates exit code\n   - Example: `rush -c \"false\"` correctly returns 1\n\n2. **Safer history path fallback**\n   - Previously fell back to current directory (unsafe)\n   - Now tries data_dir, then home_dir/.local/share, then errors\n   - Prevents history files in unexpected locations\n\n3. **File locking documented**\n   - Added TODO comment for v0.2.0 implementation\n   - Documented limitation in KNOWN_ISSUES.md\n   - Planned: Use fs2 crate for cross-platform locking\n\n4. **--config flag documentation updated**\n   - Clarified that flag exists but uses defaults\n   - Updated KNOWN_ISSUES.md with workaround\n   - Removed -c from future features (now implemented!)\n\nTesting:\n- All 124 tests still passing\n- Verified -c flag works with exit codes\n- Confirmed better error messages for command failures\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(~/.local/bin/rush-test logs:*)",
+      "Bash(sed:*)",
+      "Bash(.specify/scripts/bash/create-new-feature.sh:*)",
+      "Bash(.specify/scripts/bash/setup-plan.sh:*)",
+      "Bash(.specify/scripts/bash/update-agent-context.sh:*)",
+      "Bash(test:*)",
+      "Bash(timeout 2 /Users/chrischeng/projects/rust-station/target/debug/rush:*)",
+      "Bash(/Users/chrischeng/projects/rust-station/target/debug/rush:*)",
+      "Bash(cp:*)",
+      "Bash(cargo clean:*)",
+      "Bash(touch:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(RUSTDOCFLAGS=\"-W missing-docs\" cargo doc:*)",
+      "Bash(RUSTDOCFLAGS=\"-W missing-docs\" cargo rustdoc:*)"
     ],
     "deny": [],
     "ask": []

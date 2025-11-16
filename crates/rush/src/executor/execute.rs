@@ -2,8 +2,8 @@
 
 use std::process::{Command as StdCommand, Stdio};
 
-use crate::error::{Result, RushError};
 use super::parser::parse_command_line;
+use crate::error::{Result, RushError};
 
 /// Simple command executor
 ///
@@ -85,10 +85,7 @@ impl CommandExecutor {
                             pid,
                             "Failed to wait for process"
                         );
-                        Err(RushError::Execution(format!(
-                            "Failed to wait for command: {}",
-                            e
-                        )))
+                        Err(RushError::Execution(format!("Failed to wait for command: {}", e)))
                     }
                 }
             }

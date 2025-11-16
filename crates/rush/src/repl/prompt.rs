@@ -80,10 +80,7 @@ impl Prompt for RushPrompt {
             PromptHistorySearchStatus::Failing => "failing ",
         };
 
-        Cow::Owned(format!(
-            "({}reverse-search: {}) ",
-            prefix, history_search.term
-        ))
+        Cow::Owned(format!("({}reverse-search: {}) ", prefix, history_search.term))
     }
 }
 

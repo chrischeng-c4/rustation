@@ -25,14 +25,7 @@ pub struct Job {
 impl Job {
     /// Create a new job
     pub fn new(id: usize, pid: i32, pgid: i32, command: String, background: bool) -> Self {
-        Self {
-            id,
-            pid,
-            pgid,
-            command,
-            state: JobState::Running,
-            background,
-        }
+        Self { id, pid, pgid, command, state: JobState::Running, background }
     }
 }
 

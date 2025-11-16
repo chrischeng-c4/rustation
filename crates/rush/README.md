@@ -15,12 +15,15 @@ Rush is currently in **alpha testing**. Core features work, but some functionali
 - **Command execution** - Run external commands with argument passing
 - **Syntax highlighting** - Real-time color coding as you type
 - **Command history** - Persistent history with navigation (↑/↓ arrows)
+- **Tab completion** - Intelligent completion for commands, paths, and flags
+  - Command names from PATH
+  - File and directory paths
+  - Flags for common commands (git, cargo, ls, grep, cat, find, etc.)
 - **Exit code tracking** - Track and display last command status
 - **Signal handling** - Ctrl+C (cancel), Ctrl+D (exit)
 - **Comprehensive CLI** - Verbose logging, config inspection, health checks
 
 ### 🚧 Planned (v0.2.0+)
-- Tab completion
 - Autosuggestions from history
 - Pipes and redirections
 - Job control & background execution
@@ -90,7 +93,15 @@ cargo run --release
    - Press ↓ to navigate forward
    - Type and see syntax highlighting
 
-4. **Exit:**
+4. **Try tab completion:**
+   ```bash
+   $ gi<TAB>        # Completes to git, gist, etc.
+   $ ls ./s<TAB>    # Completes to ./src/, ./specs/, etc.
+   $ git --ver<TAB> # Completes to --version, --verbose
+   $ ls -<TAB>      # Shows available ls flags
+   ```
+
+5. **Exit:**
    ```bash
    $ exit
    # or press Ctrl+D
@@ -223,7 +234,6 @@ See [DAILY_TESTING.md](../../DAILY_TESTING.md) in the project root for:
 **What won't work yet:**
 - Pipes (`ls | grep`)
 - Redirections (`echo x > file`)
-- Tab completion
 - Autosuggestions
 - Globbing (`ls *.txt`)
 

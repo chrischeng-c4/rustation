@@ -22,8 +22,8 @@
 
 // Public modules
 pub mod cli;
-pub mod config;
 pub mod completion;
+pub mod config;
 pub mod executor;
 pub mod history;
 pub mod repl;

@@ -47,12 +47,7 @@ pub struct Token {
 
 impl Token {
     fn new(token_type: TokenType, text: String, start: usize, end: usize) -> Self {
-        Self {
-            token_type,
-            text,
-            start,
-            end,
-        }
+        Self { token_type, text, start, end }
     }
 }
 
@@ -116,12 +111,7 @@ impl Lexer {
                 TokenType::Argument
             };
 
-            tokens.push(Token::new(
-                token_type,
-                word.text.clone(),
-                word.start,
-                word.end,
-            ));
+            tokens.push(Token::new(token_type, word.text.clone(), word.start, word.end));
         }
 
         tokens
@@ -194,59 +184,24 @@ impl Lexer {
         // Check for two-character operators first
         if remaining.starts_with("&&") {
             self.position += 2;
-            return Some(Token::new(
-                TokenType::And,
-                "&&".to_string(),
-                start,
-                self.position,
-            ));
+            return Some(Token::new(TokenType::And, "&&".to_string(), start, self.position));
         }
         if remaining.starts_with("||") {
             self.position += 2;
-            return Some(Token::new(
-                TokenType::Or,
-                "||".to_string(),
-                start,
-                self.position,
-            ));
+            return Some(Token::new(TokenType::Or, "||".to_string(), start, self.position));
         }
         if remaining.starts_with(">>") {
             self.position += 2;
-            return Some(Token::new(
-                TokenType::Redirect,
-                ">>".to_string(),
-                start,
-                self.position,
-            ));
+            return Some(Token::new(TokenType::Redirect, ">>".to_string(), start, self.position));
         }
 
         // Check for single-character operators
         let ch = self.current_char();
         let token = match ch {
-            '|' => Some(Token::new(
-                TokenType::Pipe,
-                "|".to_string(),
-                start,
-                start + 1,
-            )),
-            ';' => Some(Token::new(
-                TokenType::Semicolon,
-                ";".to_string(),
-                start,
-                start + 1,
-            )),
-            '&' => Some(Token::new(
-                TokenType::Background,
-                "&".to_string(),
-                start,
-                start + 1,
-            )),
-            '>' => Some(Token::new(
-                TokenType::Redirect,
-                ">".to_string(),
-                start,
-                start + 1,
-            )),
+            '|' => Some(Token::new(TokenType::Pipe, "|".to_string(), start, start + 1)),
+            ';' => Some(Token::new(TokenType::Semicolon, ";".to_string(), start, start + 1)),
+            '&' => Some(Token::new(TokenType::Background, "&".to_string(), start, start + 1)),
+            '>' => Some(Token::new(TokenType::Redirect, ">".to_string(), start, start + 1)),
             _ => None,
         };
 
@@ -365,7 +320,9 @@ mod tests {
         let mut lexer = Lexer::new("sleep 10 &".to_string());
         let tokens = lexer.tokenize();
 
-        let bg = tokens.iter().find(|t| t.token_type == TokenType::Background);
+        let bg = tokens
+            .iter()
+            .find(|t| t.token_type == TokenType::Background);
         assert!(bg.is_some());
         assert_eq!(bg.unwrap().text, "&");
     }
@@ -517,10 +474,22 @@ mod tests {
         let mut lexer = Lexer::new("cmd1 | cmd2 && cmd3 || cmd4 ; cmd5".to_string());
         let tokens = lexer.tokenize();
 
-        let pipe_count = tokens.iter().filter(|t| t.token_type == TokenType::Pipe).count();
-        let and_count = tokens.iter().filter(|t| t.token_type == TokenType::And).count();
-        let or_count = tokens.iter().filter(|t| t.token_type == TokenType::Or).count();
-        let semi_count = tokens.iter().filter(|t| t.token_type == TokenType::Semicolon).count();
+        let pipe_count = tokens
+            .iter()
+            .filter(|t| t.token_type == TokenType::Pipe)
+            .count();
+        let and_count = tokens
+            .iter()
+            .filter(|t| t.token_type == TokenType::And)
+            .count();
+        let or_count = tokens
+            .iter()
+            .filter(|t| t.token_type == TokenType::Or)
+            .count();
+        let semi_count = tokens
+            .iter()
+            .filter(|t| t.token_type == TokenType::Semicolon)
+            .count();
 
         assert_eq!(pipe_count, 1);
         assert_eq!(and_count, 1);
