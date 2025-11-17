@@ -64,15 +64,7 @@
       "Bash(cargo clippy:*)",
       "Bash(RUSTDOCFLAGS=\"-W missing-docs\" cargo doc:*)",
       "Bash(RUSTDOCFLAGS=\"-W missing-docs\" cargo rustdoc:*)",
-      "Bash(gh pr create:*)",
-      "Bash(gh pr view:*)",
-      "Bash(gh pr checks:*)",
-      "Bash(for:*)",
-      "Bash(1 if gh pr checks 3)",
-      "Bash(then echo \"Review completed!\" break fi if [ $i -lt 10 ])",
-      "Bash(then echo \"Still pending... waiting 30 seconds\" sleep 30 fi done)",
-      "Bash(git checkout:*)",
-      "Bash(git pull:*)"
+      "Bash(.specify/scripts/bash/check-prerequisites.sh:*)"
     ],
     "deny": [],
     "ask": []

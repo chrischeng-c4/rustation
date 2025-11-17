@@ -25,6 +25,7 @@ use std::path::PathBuf;
 
 use self::highlight::RushHighlighter;
 use self::prompt::RushPrompt;
+use self::suggest::RushHinter;
 
 /// Interactive REPL for rush shell
 pub struct Repl {
@@ -71,6 +72,9 @@ impl Repl {
         // Create highlighter
         let highlighter = Box::new(RushHighlighter::new());
 
+        // Create hinter for autosuggestions (US1: Autosuggestions)
+        let hinter = Box::new(RushHinter::new());
+
         // Create tab completer (US1: Command completion)
         let completer = Box::new(CompletionRegistry::new());
 
@@ -91,13 +95,14 @@ impl Repl {
         // Create edit mode with keybindings (T015)
         let edit_mode = Box::new(Emacs::new(keybindings));
 
-        // Build editor with history, syntax highlighting, and tab completion (T015)
+        // Build editor with history, syntax highlighting, autosuggestions, and tab completion
         let editor = Reedline::create()
             .with_history(history)
             .with_highlighter(highlighter)
+            .with_hinter(hinter) // US1: Enable autosuggestions
             .with_completer(completer)
             .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
-            .with_edit_mode(edit_mode); // US1: Enable tab completion with menu
+            .with_edit_mode(edit_mode);
 
         Ok(Self { editor, config, executor: CommandExecutor::new(), last_exit_code: 0 })
     }
