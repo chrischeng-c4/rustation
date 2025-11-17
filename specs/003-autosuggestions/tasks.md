@@ -97,12 +97,12 @@
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] Review existing keybindings in crates/rush/src/repl/mod.rs
-- [ ] T030 [US2] Verify EditCommand::AcceptHint is available in reedline (from research.md)
-- [ ] T031 [US2] Add Right Arrow keybinding for AcceptHint in Repl::with_config() in crates/rush/src/repl/mod.rs
-- [ ] T032 [US2] Configure conditional behavior (cursor at end + suggestion exists) in crates/rush/src/repl/mod.rs
-- [ ] T033 [US2] Run cargo test to verify all US2 tests pass
-- [ ] T034 [US2] Run cargo clippy to check for warnings
+- [X] T029 [US2] Review existing keybindings in crates/rush/src/repl/mod.rs
+- [X] T030 [US2] Verify EditCommand::AcceptHint is available in reedline (from research.md)
+- [X] T031 [US2] Add Right Arrow keybinding for HistoryHintComplete in Repl::with_config() in crates/rush/src/repl/mod.rs
+- [X] T032 [US2] Configure conditional behavior (cursor at end + suggestion exists) via UntilFound in crates/rush/src/repl/mod.rs
+- [X] T033 [US2] Run cargo test to verify all US2 tests pass
+- [X] T034 [US2] Run cargo clippy to check for warnings
 - [ ] T035 [US2] Test manually: Type "git s", press Right Arrow, verify buffer becomes "git status"
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work - suggestions can be accepted
@@ -123,11 +123,11 @@
 
 ### Implementation for User Story 3
 
-- [ ] T039 [US3] Verify EditCommand::AcceptHintWord is available in reedline (from research.md)
-- [ ] T040 [US3] Add Alt+Right Arrow keybinding for AcceptHintWord in Repl::with_config() in crates/rush/src/repl/mod.rs
-- [ ] T041 [US3] Configure word boundary detection (reedline handles this) in crates/rush/src/repl/mod.rs
-- [ ] T042 [US3] Run cargo test to verify all US3 tests pass
-- [ ] T043 [US3] Run cargo clippy to check for warnings
+- [X] T039 [US3] Verify HistoryHintWordComplete is available in reedline (from research.md)
+- [X] T040 [US3] Add Alt+Right Arrow keybinding for HistoryHintWordComplete in Repl::with_config() in crates/rush/src/repl/mod.rs
+- [X] T041 [US3] Configure word boundary detection (reedline handles this) via UntilFound in crates/rush/src/repl/mod.rs
+- [X] T042 [US3] Run cargo test to verify all US3 tests pass
+- [X] T043 [US3] Run cargo clippy to check for warnings
 - [ ] T044 [US3] Test manually: Type "git", press Alt+Right multiple times, verify word-by-word acceptance
 
 **Checkpoint**: All user stories should now be independently functional

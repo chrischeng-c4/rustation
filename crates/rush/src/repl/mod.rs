@@ -92,6 +92,26 @@ impl Repl {
             ]),
         );
 
+        // Set up keybinding for Right Arrow to accept full autosuggestion (US2)
+        keybindings.add_binding(
+            KeyModifiers::NONE,
+            KeyCode::Right,
+            ReedlineEvent::UntilFound(vec![
+                ReedlineEvent::HistoryHintComplete,
+                ReedlineEvent::Edit(vec![reedline::EditCommand::MoveRight { select: false }]),
+            ]),
+        );
+
+        // Set up keybinding for Alt+Right Arrow to accept word from autosuggestion (US3)
+        keybindings.add_binding(
+            KeyModifiers::ALT,
+            KeyCode::Right,
+            ReedlineEvent::UntilFound(vec![
+                ReedlineEvent::HistoryHintWordComplete,
+                ReedlineEvent::Edit(vec![reedline::EditCommand::MoveWordRight { select: false }]),
+            ]),
+        );
+
         // Create edit mode with keybindings (T015)
         let edit_mode = Box::new(Emacs::new(keybindings));
 
