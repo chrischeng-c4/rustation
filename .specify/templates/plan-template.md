@@ -102,3 +102,84 @@ directories captured above]
 |-----------|------------|-------------------------------------|
 | [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
 | [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+
+## Deployment Strategy
+
+**How this feature will be delivered incrementally via pull requests.**
+
+### Pull Request Plan
+
+**CRITICAL: Keep PRs small and reviewable (see CLAUDE.md for limits).**
+
+**Strategy**: [Choose one based on feature complexity]
+
+**Option 1: Single PR** (if entire feature ≤ 500 lines)
+```
+PR #1: Complete feature implementation
+  - All user stories in one PR
+  - Acceptable only if total ≤ 500 lines
+```
+
+**Option 2: PR per User Story** (RECOMMENDED for multi-story features)
+```
+PR #1: Foundation + Setup
+  - Project structure, dependencies, core infrastructure
+  - Target: ≤ 500 lines
+
+PR #2: User Story 1 (P1 - Highest Priority)
+  - Implement US1 independently
+  - Tests, docs, validation
+  - Target: ≤ 1,500 lines
+
+PR #3: User Story 2 (P2)
+  - Implement US2 independently
+  - Tests, docs, validation
+  - Target: ≤ 1,500 lines
+
+PR #4: User Story 3 (P3)
+  - Implement US3 independently
+  - Tests, docs, validation
+  - Target: ≤ 1,500 lines
+
+PR #5: Polish & Integration
+  - Cross-cutting improvements
+  - Documentation updates
+  - Target: ≤ 500 lines
+```
+
+**Option 3: PR per Component** (if single story >1,500 lines)
+```
+Break large user story into independently mergeable components:
+  - PR for data models
+  - PR for services
+  - PR for API/UI
+  - PR for tests and docs
+```
+
+### Selected Strategy
+
+[Document which option above you're using and why]
+
+**Rationale**: [e.g., "3 user stories × ~1,200 lines each = 3 PRs per Option 2"]
+
+### Merge Sequence
+
+1. [PR description] → Merge to main
+2. [PR description] → Merge to main
+3. [PR description] → Merge to main
+
+**Branch Strategy**: [e.g., "Create `002-feature-name` base branch, then `002-US1`, `002-US2`, etc."]
+
+### PR Size Validation
+
+**Before creating each PR, verify size**:
+```bash
+git diff --stat main  # Check line count
+```
+
+**Size Limits** (from CLAUDE.md):
+- ✅ Ideal: ≤ 500 lines
+- ⚠️ Maximum: ≤ 1,500 lines
+- ❌ Too large: > 3,000 lines (must split)
+
+If any PR exceeds limits, split into smaller increments.

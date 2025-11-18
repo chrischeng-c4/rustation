@@ -124,6 +124,22 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Suggest next steps if implementation cannot proceed
    - **IMPORTANT** For completed tasks, make sure to mark the task off as [X] in the tasks file.
 
+8a. Pull Request Size Management:
+   - **After completing each user story phase**, check PR size before committing:
+     ```bash
+     git diff --stat main  # Check line count
+     ```
+   - **PR Size Limits** (see CLAUDE.md):
+     - Ideal: 500 lines
+     - Maximum: 1,500 lines
+     - Too large: 3,000+ lines (must split)
+   - **Create separate PRs per user story**:
+     - Complete US1 → Commit → Create PR #1 → Merge
+     - Complete US2 → Commit → Create PR #2 → Merge
+     - Complete US3 → Commit → Create PR #3 → Merge
+   - **DO NOT** combine multiple user stories in one PR
+   - If a single user story exceeds 1,500 lines, break into sub-components
+
 9. Completion validation:
    - Verify all required tasks are completed
    - Check that implemented features match the original specification

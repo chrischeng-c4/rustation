@@ -257,6 +257,15 @@ Before marking a task complete:
 - [ ] Formatting applied
 - [ ] Tests pass
 
+### Pull Request Size (Before Creating PR)
+- [ ] Checked line count: `git diff --stat main`
+- [ ] PR size ≤ 1,500 lines (ideal: ≤ 500)
+- [ ] If >1,500 lines: split by user story or component
+- [ ] Each PR contains ONE user story only (not multiple)
+- [ ] PR is independently reviewable and mergeable
+- [ ] Commits follow conventional format
+- [ ] See CLAUDE.md "Pull Request Size Control" for details
+
 ## When Things Don't Align
 
 If during implementation you discover:

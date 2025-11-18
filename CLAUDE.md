@@ -164,6 +164,86 @@ Spec-driven development ensures:
 
 **This is non-negotiable for the rush project.**
 
+## Pull Request Size Control
+
+**CRITICAL: Keep PRs small and reviewable.**
+
+### PR Size Guidelines
+
+**Maximum limits:**
+- **500 lines of changes** - Ideal for quick review
+- **1,500 lines of changes** - Maximum recommended
+- **3,000+ lines** - Too large, must be split up
+
+**When implementing features with specs/plans/tasks:**
+- Create **separate PRs for each user story** or major component
+- Do NOT combine multiple user stories into one PR
+- Each PR should be independently reviewable and mergeable
+
+### Breaking Up Large Features
+
+**Example - Tab Completion (Bad: 5,612 lines in one PR):**
+```
+❌ Single PR: US1 + US2 + US3 + tests + docs (5,612 lines)
+   → Too large for review, takes forever, hard to discuss
+```
+
+**Example - Tab Completion (Good: 3 smaller PRs):**
+```
+✅ PR #1: US1 - Command Completion (~1,200 lines)
+   → Implement, test, document command completion only
+
+✅ PR #2: US2 - Path Completion (~1,500 lines)
+   → Implement, test, document path completion only
+
+✅ PR #3: US3 - Flag Completion (~1,300 lines)
+   → Implement, test, document flag completion only
+```
+
+### When to Create a PR
+
+Create a PR when:
+1. ✅ A single user story is complete with tests
+2. ✅ A logical component is independently functional
+3. ✅ Changes are under 1,500 lines
+4. ✅ All tests pass and code is clean
+
+Do NOT create a PR when:
+1. ❌ Multiple user stories are bundled together
+2. ❌ Changes exceed 3,000 lines (split it up first)
+3. ❌ Feature is incomplete or tests are missing
+
+### Commit and Merge Strategy
+
+**For features with multiple user stories:**
+1. Complete US1 with tests
+2. Commit and create PR #1
+3. Merge PR #1 to main
+4. Create branch for US2 from updated main
+5. Complete US2 with tests
+6. Commit and create PR #2
+7. Repeat for remaining user stories
+
+**Benefits:**
+- Each PR is reviewable in 10-15 minutes
+- Easier to discuss and provide feedback
+- Can merge incrementally (ship value faster)
+- Easier to revert if issues found
+
+### Enforcement
+
+Before creating a PR, check:
+```bash
+git diff main --stat | tail -1
+```
+
+If the last line shows > 1,500 insertions/deletions:
+- **STOP** - PR is too large
+- Split into smaller logical PRs
+- Follow the user story boundaries from tasks.md
+
+**No exceptions.** Large PRs slow down development and review.
+
 ## Common Commands
 
 ### Building

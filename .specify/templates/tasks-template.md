@@ -249,3 +249,33 @@ With multiple developers:
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
+
+### Pull Request Strategy
+
+**CRITICAL: Create separate PRs for each user story to keep changes reviewable.**
+
+**PR Size Limits** (see CLAUDE.md for details):
+- **Ideal**: 500 lines of changes
+- **Maximum**: 1,500 lines
+- **Too large**: 3,000+ lines - must split
+
+**Workflow for Multi-Story Features**:
+1. Complete Phase 1 (Setup) + Phase 2 (Foundational)
+2. Commit and create **PR #1** for foundation
+3. Merge PR #1 to main
+4. Create branch for User Story 1 from updated main
+5. Complete User Story 1 (Phase 3)
+6. Commit and create **PR #2** for US1 only
+7. Merge PR #2 to main
+8. Repeat for each remaining user story (US2, US3, etc.)
+
+**Before Creating PR**:
+- Check line count: `git diff --stat main`
+- If >1,500 lines, split by user story or logical component
+- Each PR should be independently reviewable and mergeable
+
+**Benefits**:
+- Faster code review cycles
+- Easier to discuss specific changes
+- Can merge incrementally (deliver value sooner)
+- Simpler rollback if issues found
