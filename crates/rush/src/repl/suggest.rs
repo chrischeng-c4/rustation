@@ -4,8 +4,8 @@
 // autosuggestions based on command history. Suggestions are displayed as
 // grayed-out text after the cursor and can be accepted with Right Arrow.
 
-use reedline::{Hinter, History, SearchQuery};
 use nu_ansi_term::{Color, Style};
+use reedline::{Hinter, History, SearchQuery};
 
 /// Provides history-based autosuggestions for the rush shell.
 ///
@@ -54,10 +54,7 @@ impl RushHinter {
     /// let hinter = RushHinter::new();
     /// ```
     pub fn new() -> Self {
-        Self {
-            current_hint: String::new(),
-            style: Style::new().fg(Color::DarkGray).dimmed(),
-        }
+        Self { current_hint: String::new(), style: Style::new().fg(Color::DarkGray).dimmed() }
     }
 }
 
@@ -105,10 +102,7 @@ impl Hinter for RushHinter {
 
         // Search history for most recent match
         self.current_hint = history
-            .search(SearchQuery::last_with_prefix(
-                line.to_string(),
-                history.session(),
-            ))
+            .search(SearchQuery::last_with_prefix(line.to_string(), history.session()))
             .unwrap_or_default()
             .first()
             .and_then(|entry| {

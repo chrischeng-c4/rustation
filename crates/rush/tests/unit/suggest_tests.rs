@@ -77,12 +77,12 @@ mod tests {
         history.add("cargo build");
 
         // Should match "git" prefix
-        let result = hinter.hint("git", 3, &history);
-        assert!(result.is_some(), "Should find match for 'git'");
+        let result = hinter.handle("git", 3, &history, false, "");
+        assert!(!result.is_empty(), "Should find match for 'git'");
 
         // Should not match non-existent prefix
-        let result = hinter.hint("xyz", 3, &history);
-        assert_eq!(result, None, "Should not match 'xyz'");
+        let result = hinter.handle("xyz", 3, &history, false, "");
+        assert_eq!(result, "", "Should not match 'xyz'");
     }
 
     #[test]
@@ -92,10 +92,10 @@ mod tests {
         history.add("git status"); // Older
         history.add("git stash"); // Newer
 
-        let result = hinter.hint("git s", 5, &history);
+        let result = hinter.handle("git s", 5, &history, false, "");
         assert_eq!(
             result,
-            Some("tash".to_string()),
+            "tash",
             "Should suggest 'tash' from most recent 'git stash'"
         );
     }
@@ -107,16 +107,16 @@ mod tests {
         history.add("git status");
 
         // Cursor at end: should suggest
-        let result = hinter.hint("git s", 5, &history);
-        assert!(result.is_some(), "Should suggest when cursor at end");
+        let result = hinter.handle("git s", 5, &history, false, "");
+        assert!(!result.is_empty(), "Should suggest when cursor at end");
 
         // Cursor in middle: should not suggest
-        let result = hinter.hint("git s", 3, &history);
-        assert_eq!(result, None, "Should not suggest when cursor in middle");
+        let result = hinter.handle("git s", 3, &history, false, "");
+        assert_eq!(result, "", "Should not suggest when cursor in middle");
 
         // Cursor at start: should not suggest
-        let result = hinter.hint("git s", 0, &history);
-        assert_eq!(result, None, "Should not suggest when cursor at start");
+        let result = hinter.handle("git s", 0, &history, false, "");
+        assert_eq!(result, "", "Should not suggest when cursor at start");
     }
 
     #[test]
@@ -126,8 +126,8 @@ mod tests {
         history.add("git status");
 
         // Empty input should not suggest
-        let result = hinter.hint("", 0, &history);
-        assert_eq!(result, None, "Should not suggest for empty input");
+        let result = hinter.handle("", 0, &history, false, "");
+        assert_eq!(result, "", "Should not suggest for empty input");
     }
 
     #[test]
@@ -137,8 +137,8 @@ mod tests {
         history.add("git status");
 
         // No match for "cargo"
-        let result = hinter.hint("cargo", 5, &history);
-        assert_eq!(result, None, "Should not suggest when no match");
+        let result = hinter.handle("cargo", 5, &history, false, "");
+        assert_eq!(result, "", "Should not suggest when no match");
     }
 
     #[test]
@@ -146,8 +146,8 @@ mod tests {
         let mut hinter = RushHinter::new();
         let history = MockHistory::new(); // Empty
 
-        let result = hinter.hint("git s", 5, &history);
-        assert_eq!(result, None, "Should handle empty history gracefully");
+        let result = hinter.handle("git s", 5, &history, false, "");
+        assert_eq!(result, "", "Should handle empty history gracefully");
     }
 
     #[test]
@@ -157,8 +157,8 @@ mod tests {
         history.add("git status");
 
         // Exact match should not be suggested
-        let result = hinter.hint("git status", 10, &history);
-        assert_eq!(result, None, "Should not suggest exact matches");
+        let result = hinter.handle("git status", 10, &history, false, "");
+        assert_eq!(result, "", "Should not suggest exact matches");
     }
 
     #[test]
@@ -167,10 +167,10 @@ mod tests {
         let mut history = MockHistory::new();
         history.add("cargo build --release");
 
-        let result = hinter.hint("cargo b", 7, &history);
+        let result = hinter.handle("cargo b", 7, &history, false, "");
         assert_eq!(
             result,
-            Some("uild --release".to_string()),
+            "uild --release",
             "Should return suffix only"
         );
     }
@@ -183,17 +183,17 @@ mod tests {
         history.add("git commit -m 'fix: bug'");
 
         // Should handle quotes
-        let result = hinter.hint("echo \"", 6, &history);
+        let result = hinter.handle("echo \"", 6, &history, false, "");
         assert_eq!(
             result,
-            Some("hello world\"".to_string()),
+            "hello world\"",
             "Should handle double quotes"
         );
 
-        let result = hinter.hint("git commit -m '", 15, &history);
+        let result = hinter.handle("git commit -m '", 15, &history, false, "");
         assert_eq!(
             result,
-            Some("fix: bug'".to_string()),
+            "fix: bug'",
             "Should handle single quotes"
         );
     }

@@ -63,38 +63,38 @@ mod tests {
         history.add("git status");
 
         // Simulate user typing "git s" character by character
-        let result1 = hinter.hint("g", 1, &history);
+        let result1 = hinter.handle("g", 1, &history, false, "");
         assert_eq!(
             result1,
-            Some("it status".to_string()),
+            "it status",
             "After 'g': should suggest 'it status'"
         );
 
-        let result2 = hinter.hint("gi", 2, &history);
+        let result2 = hinter.handle("gi", 2, &history, false, "");
         assert_eq!(
             result2,
-            Some("t status".to_string()),
+            "t status",
             "After 'gi': should suggest 't status'"
         );
 
-        let result3 = hinter.hint("git", 3, &history);
+        let result3 = hinter.handle("git", 3, &history, false, "");
         assert_eq!(
             result3,
-            Some(" status".to_string()),
+            " status",
             "After 'git': should suggest ' status'"
         );
 
-        let result4 = hinter.hint("git ", 4, &history);
+        let result4 = hinter.handle("git ", 4, &history, false, "");
         assert_eq!(
             result4,
-            Some("status".to_string()),
+            "status",
             "After 'git ': should suggest 'status'"
         );
 
-        let result5 = hinter.hint("git s", 5, &history);
+        let result5 = hinter.handle("git s", 5, &history, false, "");
         assert_eq!(
             result5,
-            Some("tatus".to_string()),
+            "tatus",
             "After 'git s': should suggest 'tatus'"
         );
     }
@@ -112,18 +112,18 @@ mod tests {
         history.add("cargo test");
 
         // Should suggest most recent "cargo" command
-        let result = hinter.hint("cargo", 5, &history);
+        let result = hinter.handle("cargo", 5, &history, false, "");
         assert_eq!(
             result,
-            Some(" test".to_string()),
+            " test",
             "Should suggest most recent cargo command"
         );
 
         // Should suggest most recent "git" command
-        let result = hinter.hint("git", 3, &history);
+        let result = hinter.handle("git", 3, &history, false, "");
         assert_eq!(
             result,
-            Some(" push".to_string()),
+            " push",
             "Should suggest most recent git command"
         );
     }
@@ -135,8 +135,8 @@ mod tests {
         history.add("ls");
 
         // Typing "ls" should not suggest anything (exact match)
-        let result = hinter.hint("ls", 2, &history);
-        assert_eq!(result, None, "Should not suggest for exact match");
+        let result = hinter.handle("ls", 2, &history, false, "");
+        assert_eq!(result, "", "Should not suggest for exact match");
     }
 
     #[test]
@@ -147,18 +147,18 @@ mod tests {
         history.add("git stash");
 
         // Type "git st"
-        let result = hinter.hint("git st", 6, &history);
+        let result = hinter.handle("git st", 6, &history, false, "");
         assert_eq!(
             result,
-            Some("ash".to_string()),
+            "ash",
             "Should suggest 'ash' for 'git st'"
         );
 
         // Simulate backspace to "git s"
-        let result = hinter.hint("git s", 5, &history);
+        let result = hinter.handle("git s", 5, &history, false, "");
         assert_eq!(
             result,
-            Some("tash".to_string()),
+            "tash",
             "After backspace: should suggest 'tash' for 'git s'"
         );
     }
@@ -169,16 +169,15 @@ mod tests {
         let mut history = TestHistory::new();
         history.add("cargo build --release --features \"feature1 feature2 feature3\" --target x86_64-apple-darwin");
 
-        let result = hinter.hint("cargo b", 7, &history);
-        assert!(result.is_some(), "Should suggest for long command");
+        let result = hinter.handle("cargo b", 7, &history, false, "");
+        assert!(!result.is_empty(), "Should suggest for long command");
 
-        let suggestion = result.unwrap();
         assert!(
-            suggestion.starts_with("uild --release"),
+            result.starts_with("uild --release"),
             "Should start with correct suffix"
         );
         assert!(
-            suggestion.contains("features"),
+            result.contains("features"),
             "Should include features in suggestion"
         );
     }
@@ -198,12 +197,12 @@ mod tests {
 
         // Should still find suggestion quickly
         let start = std::time::Instant::now();
-        let result = hinter.hint("git", 3, &history);
+        let result = hinter.handle("git", 3, &history, false, "");
         let duration = start.elapsed();
 
         assert_eq!(
             result,
-            Some(" status".to_string()),
+            " status",
             "Should find suggestion with many entries"
         );
 
