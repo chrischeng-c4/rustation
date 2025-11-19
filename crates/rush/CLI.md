@@ -296,6 +296,75 @@ rush -c "git status"
 rush --no-highlight --no-suggestions
 ```
 
+## Shell Features
+
+### Pipe Operator
+
+Rush supports Unix-style command composition using the pipe operator (`|`). Data flows from each command's stdout to the next command's stdin.
+
+**Basic Syntax:**
+```bash
+command1 | command2
+```
+
+**Examples:**
+
+```bash
+# Filter file listings
+> ls | grep txt
+file1.txt
+file2.txt
+
+# Count files in directory
+> ls | wc -l
+      42
+
+# Search and count
+> cat error.log | grep ERROR | wc -l
+       5
+
+# Multi-stage filtering
+> ls -la | grep "\.rs$" | head -5
+-rw-r--r--  1 user  staff  1234 Nov 19 main.rs
+-rw-r--r--  1 user  staff   567 Nov 19 lib.rs
+...
+
+# Data transformation pipeline
+> echo "test data" | tr a-z A-Z | cat
+TEST DATA
+```
+
+**Behavior:**
+- **Exit codes**: Returns the exit code of the last command
+  ```bash
+  > true | false     # Returns 1 (from false)
+  > false | true     # Returns 0 (from true)
+  ```
+
+- **Error handling**: Fails fast if any command can't be spawned
+  ```bash
+  > echo test | nonexistent_cmd
+  rush: command not found: nonexistent_cmd
+  ```
+
+- **Concurrent execution**: Commands run concurrently, not sequentially
+  - Pipes provide automatic backpressure
+  - No manual buffering required
+
+- **Binary-safe**: Pipes preserve all data including null bytes and binary content
+
+**Performance:**
+- Parsing: ~0.5 microseconds per pipeline
+- Execution overhead: ~2-4ms for typical pipelines
+
+**Limitations:**
+- No output redirection (`>`, `>>`) yet - planned for future release
+- No background execution (`&`) yet - planned for future release
+- Pipes inside quotes are treated as literal text:
+  ```bash
+  > echo "cmd1 | cmd2"    # Prints: cmd1 | cmd2
+  ```
+
 ## Log File Locations
 
 ### Default Locations

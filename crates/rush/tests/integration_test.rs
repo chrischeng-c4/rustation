@@ -415,7 +415,8 @@ fn test_flag_completion_with_arguments_before() {
     // Main validation: doesn't crash
 }
 
-// Autosuggestions integration tests
+// Integration tests by feature
 mod integration {
     pub mod autosuggestions_tests;
+    pub mod pipe_tests;
 }

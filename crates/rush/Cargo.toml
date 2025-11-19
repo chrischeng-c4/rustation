@@ -63,4 +63,6 @@ criterion = "0.5"
 # Temporary files for testing
 tempfile = "3.8"
 
-# Benchmarks will be added in Phase 10 (Polish)
+[[bench]]
+name = "pipeline_bench"
+harness = false

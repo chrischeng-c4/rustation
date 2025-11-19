@@ -23,13 +23,18 @@ Rush is currently in **alpha testing**. Core features work, but some functionali
   - Command names from PATH
   - File and directory paths
   - Flags for common commands (git, cargo, ls, grep, cat, find, etc.)
+- **Pipe operator** - Unix-style command composition with `|`
+  - Chain commands together: `ls | grep txt`
+  - Multi-command pipelines: `cat file | grep error | wc -l`
+  - Binary-safe data flow with concurrent execution
+  - ~0.5μs parsing, ~2-4ms overhead
 - **Exit code tracking** - Track and display last command status
 - **Signal handling** - Ctrl+C (cancel), Ctrl+D (exit)
 - **Comprehensive CLI** - Verbose logging, config inspection, health checks
 
 ### 🚧 Planned (v0.2.0+)
-- Pipes and redirections
-- Job control & background execution
+- Output redirections (`>`, `>>`, `2>`)
+- Job control & background execution (`&`, `fg`, `bg`)
 - Configuration file support
 - Custom prompts
 
