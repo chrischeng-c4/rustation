@@ -24,7 +24,9 @@ enum Token {
 /// Parse a command line into program, arguments, and redirections
 ///
 /// Returns (program, args, redirections) tuple
-pub fn parse_command_with_redirections(line: &str) -> Result<(String, Vec<String>, Vec<super::Redirection>)> {
+pub fn parse_command_with_redirections(
+    line: &str,
+) -> Result<(String, Vec<String>, Vec<super::Redirection>)> {
     use super::{Redirection, RedirectionType};
 
     let tokens = tokenize_with_redirections(line)?;
@@ -47,7 +49,7 @@ pub fn parse_command_with_redirections(line: &str) -> Result<(String, Vec<String
                 // Redirection operator must be followed by a file path
                 if i + 1 >= tokens.len() {
                     return Err(RushError::Execution(
-                        "Redirection operator missing file path".to_string()
+                        "Redirection operator missing file path".to_string(),
                     ));
                 }
 
@@ -63,7 +65,7 @@ pub fn parse_command_with_redirections(line: &str) -> Result<(String, Vec<String
                     i += 2; // Skip operator and path
                 } else {
                     return Err(RushError::Execution(
-                        "Redirection operator must be followed by file path".to_string()
+                        "Redirection operator must be followed by file path".to_string(),
                     ));
                 }
             }
@@ -223,13 +225,16 @@ fn tokenize_with_redirections(line: &str) -> Result<Vec<Token>> {
 fn tokenize(line: &str) -> Result<Vec<String>> {
     let tokens = tokenize_with_redirections(line)?;
     // Convert Token::Word to String, filter out redirection operators
-    Ok(tokens.into_iter().filter_map(|t| {
-        if let Token::Word(s) = t {
-            Some(s)
-        } else {
-            None
-        }
-    }).collect())
+    Ok(tokens
+        .into_iter()
+        .filter_map(|t| {
+            if let Token::Word(s) = t {
+                Some(s)
+            } else {
+                None
+            }
+        })
+        .collect())
 }
 
 /// Original tokenize implementation kept for reference
@@ -499,7 +504,8 @@ mod tests {
     // parse_command_with_redirections tests
     #[test]
     fn test_parse_with_output_redirection() {
-        let (program, args, redirs) = parse_command_with_redirections("ls -la > files.txt").unwrap();
+        let (program, args, redirs) =
+            parse_command_with_redirections("ls -la > files.txt").unwrap();
         assert_eq!(program, "ls");
         assert_eq!(args, vec!["-la"]);
         assert_eq!(redirs.len(), 1);
@@ -509,7 +515,8 @@ mod tests {
 
     #[test]
     fn test_parse_with_append_redirection() {
-        let (program, args, redirs) = parse_command_with_redirections("echo line >> log.txt").unwrap();
+        let (program, args, redirs) =
+            parse_command_with_redirections("echo line >> log.txt").unwrap();
         assert_eq!(program, "echo");
         assert_eq!(args, vec!["line"]);
         assert_eq!(redirs.len(), 1);
@@ -539,12 +546,16 @@ mod tests {
     fn test_parse_redirect_missing_path() {
         let result = parse_command_with_redirections("echo test >");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("missing file path"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("missing file path"));
     }
 
     #[test]
     fn test_parse_quoted_operators_literal() {
-        let (program, args, redirs) = parse_command_with_redirections("echo \"test > file\"").unwrap();
+        let (program, args, redirs) =
+            parse_command_with_redirections("echo \"test > file\"").unwrap();
         assert_eq!(program, "echo");
         assert_eq!(args, vec!["test > file"]);
         assert_eq!(redirs.len(), 0); // No redirections, it's in quotes

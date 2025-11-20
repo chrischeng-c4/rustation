@@ -4,7 +4,7 @@ use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 use std::process::{Command as StdCommand, Stdio};
 
-use super::parser::{parse_command_line, parse_command_with_redirections};
+use super::parser::parse_command_with_redirections;
 use super::{Redirection, RedirectionType};
 use crate::error::{Result, RushError};
 
@@ -141,8 +141,7 @@ impl CommandExecutor {
         cmd.stderr(Stdio::inherit());
 
         // Execute the command
-        match cmd.spawn()
-        {
+        match cmd.spawn() {
             Ok(mut child) => {
                 let pid = child.id();
                 tracing::trace!(pid, "Process spawned");
@@ -208,14 +207,12 @@ mod tests {
 
     #[test]
     fn test_executor_new() {
-        let executor = CommandExecutor::new();
-        drop(executor);
+        let _executor = CommandExecutor::new();
     }
 
     #[test]
     fn test_executor_default() {
-        let executor = CommandExecutor::default();
-        drop(executor);
+        let _executor = CommandExecutor::default();
     }
 
     #[test]

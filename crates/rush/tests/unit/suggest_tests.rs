@@ -1,7 +1,10 @@
 // Unit tests for RushHinter (autosuggestions)
 
+use reedline::{
+    CommandLineSearch, Hinter, History, HistoryItem, HistoryItemId, HistorySessionId,
+    Result as ReedlineResult, SearchQuery,
+};
 use rush::repl::suggest::RushHinter;
-use reedline::{Hinter, History, HistoryItem, HistoryItemId, HistorySessionId, SearchQuery, Result as ReedlineResult, CommandLineSearch};
 
 /// Mock history implementation for testing
 struct MockHistory {
@@ -11,10 +14,7 @@ struct MockHistory {
 
 impl MockHistory {
     fn new() -> Self {
-        Self {
-            entries: Vec::new(),
-            next_id: 1,
-        }
+        Self { entries: Vec::new(), next_id: 1 }
     }
 
     fn add(&mut self, cmd: impl Into<String>) {
@@ -49,7 +49,9 @@ impl History for MockHistory {
             .iter()
             .find(|item| item.id == Some(id))
             .cloned()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Item not found").into())
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "Item not found").into()
+            })
     }
 
     fn count(&self, query: SearchQuery) -> ReedlineResult<i64> {
@@ -64,7 +66,8 @@ impl History for MockHistory {
             None => String::new(),
         };
 
-        let results: Vec<HistoryItem> = self.entries
+        let results: Vec<HistoryItem> = self
+            .entries
             .iter()
             .filter(|item| {
                 if prefix.is_empty() {
@@ -73,13 +76,17 @@ impl History for MockHistory {
                     item.command_line.starts_with(&prefix)
                 }
             })
-            .rev()  // Most recent first
+            .rev() // Most recent first
             .cloned()
             .collect();
         Ok(results)
     }
 
-    fn update(&mut self, id: HistoryItemId, updater: &dyn Fn(HistoryItem) -> HistoryItem) -> ReedlineResult<()> {
+    fn update(
+        &mut self,
+        id: HistoryItemId,
+        updater: &dyn Fn(HistoryItem) -> HistoryItem,
+    ) -> ReedlineResult<()> {
         if let Some(item) = self.entries.iter_mut().find(|item| item.id == Some(id)) {
             *item = updater(item.clone());
         }
@@ -146,11 +153,7 @@ mod tests {
         history.add("git stash"); // Newer
 
         let result = hinter.handle("git s", 5, &history, false, "");
-        assert_eq!(
-            result,
-            "tash",
-            "Should suggest 'tash' from most recent 'git stash'"
-        );
+        assert_eq!(result, "tash", "Should suggest 'tash' from most recent 'git stash'");
     }
 
     #[test]
@@ -221,11 +224,7 @@ mod tests {
         history.add("cargo build --release");
 
         let result = hinter.handle("cargo b", 7, &history, false, "");
-        assert_eq!(
-            result,
-            "uild --release",
-            "Should return suffix only"
-        );
+        assert_eq!(result, "uild --release", "Should return suffix only");
     }
 
     #[test]
@@ -237,17 +236,9 @@ mod tests {
 
         // Should handle quotes
         let result = hinter.handle("echo \"", 6, &history, false, "");
-        assert_eq!(
-            result,
-            "hello world\"",
-            "Should handle double quotes"
-        );
+        assert_eq!(result, "hello world\"", "Should handle double quotes");
 
         let result = hinter.handle("git commit -m '", 15, &history, false, "");
-        assert_eq!(
-            result,
-            "fix: bug'",
-            "Should handle single quotes"
-        );
+        assert_eq!(result, "fix: bug'", "Should handle single quotes");
     }
 }
