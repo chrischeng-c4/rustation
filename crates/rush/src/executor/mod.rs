@@ -31,10 +31,17 @@ pub struct Command {
     /// Chaining operators (&&, ||, ;, |)
     pub operators: Vec<Operator>,
 
-    /// Output redirections (>, >>) - legacy field
+    /// Output redirections (>, >>) - DEPRECATED: Use redirections field instead
+    ///
+    /// This field is kept for backward compatibility but should not be used.
+    /// Use the `redirections` field for all I/O redirection operations.
+    #[deprecated(since = "0.2.0", note = "Use redirections field for all I/O redirections")]
     pub redirects: Vec<Redirect>,
 
-    /// I/O redirections (>, >>, <) - new implementation
+    /// I/O redirections (>, >>, <) - current implementation
+    ///
+    /// Supports stdin (<), stdout (>), and stdout append (>>) redirections.
+    /// Future: Will support stderr (2>), fd redirection (2>&1), etc.
     pub redirections: Vec<Redirection>,
 }
 

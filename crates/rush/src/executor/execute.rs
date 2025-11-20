@@ -11,9 +11,13 @@ use crate::error::{Result, RushError};
 /// Simple command executor
 ///
 /// Executes commands by spawning processes and waiting for completion.
-/// For MVP, this handles basic command execution without:
+///
+/// Currently supports:
+/// - I/O redirections (>, >>, <)
+/// - Command execution with proper exit codes
+///
+/// Not yet implemented:
 /// - Pipes
-/// - Redirections
 /// - Job control
 /// - Background execution
 ///
@@ -130,15 +134,14 @@ impl CommandExecutor {
                 eprintln!("rush: {}", e);
                 return Ok(1);
             }
+            // stderr always inherits unless explicitly redirected
+            cmd.stderr(Stdio::inherit());
         } else {
-            // No redirections - use inherited stdio
+            // No redirections - use inherited stdio for all streams
             cmd.stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit());
         }
-
-        // Note: stderr always inherits unless explicitly redirected
-        cmd.stderr(Stdio::inherit());
 
         // Execute the command
         match cmd.spawn() {
