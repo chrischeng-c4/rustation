@@ -31,8 +31,11 @@ pub struct Command {
     /// Chaining operators (&&, ||, ;, |)
     pub operators: Vec<Operator>,
 
-    /// Output redirections (>, >>)
+    /// Output redirections (>, >>) - legacy field
     pub redirects: Vec<Redirect>,
+
+    /// I/O redirections (>, >>, <) - new implementation
+    pub redirections: Vec<Redirection>,
 }
 
 impl Command {
@@ -46,7 +49,17 @@ impl Command {
             background: false,
             operators: Vec::new(),
             redirects: Vec::new(),
+            redirections: Vec::new(),
         }
+    }
+
+    /// Validates command including redirections
+    pub fn validate(&self) -> crate::error::Result<()> {
+        // Validate each redirection
+        for redir in &self.redirections {
+            redir.validate()?;
+        }
+        Ok(())
     }
 }
 
@@ -81,6 +94,42 @@ pub enum RedirectMode {
     Overwrite,
     /// >> - append
     Append,
+}
+
+/// Type of I/O redirection operation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RedirectionType {
+    /// Output redirection (>) - truncate and write to file
+    Output,
+    /// Append redirection (>>) - append to file
+    Append,
+    /// Input redirection (<) - read from file
+    Input,
+}
+
+/// A single redirection operation with type and target file path
+#[derive(Debug, Clone, PartialEq)]
+pub struct Redirection {
+    /// Type of redirection (>, >>, or <)
+    pub redir_type: RedirectionType,
+    /// File path for redirection target/source
+    pub file_path: String,
+}
+
+impl Redirection {
+    /// Creates a new redirection
+    pub fn new(redir_type: RedirectionType, file_path: String) -> Self {
+        Self { redir_type, file_path }
+    }
+
+    /// Validates that the redirection is well-formed
+    pub fn validate(&self) -> crate::error::Result<()> {
+        use crate::error::RushError;
+        if self.file_path.is_empty() {
+            return Err(RushError::Execution("Empty file path for redirection".to_string()));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -207,5 +256,42 @@ mod tests {
         let redirect2 = redirect1.clone();
 
         assert_eq!(redirect1, redirect2);
+    }
+
+    #[test]
+    fn test_redirection_type_variants() {
+        let output = RedirectionType::Output;
+        let append = RedirectionType::Append;
+        let input = RedirectionType::Input;
+
+        assert_ne!(output, append);
+        assert_ne!(output, input);
+        assert_ne!(append, input);
+    }
+
+    #[test]
+    fn test_redirection_new() {
+        let redir = Redirection::new(RedirectionType::Output, "output.txt".to_string());
+        assert_eq!(redir.redir_type, RedirectionType::Output);
+        assert_eq!(redir.file_path, "output.txt");
+    }
+
+    #[test]
+    fn test_redirection_validate_valid() {
+        let redir = Redirection::new(RedirectionType::Output, "file.txt".to_string());
+        assert!(redir.validate().is_ok());
+    }
+
+    #[test]
+    fn test_redirection_validate_empty_path() {
+        let redir = Redirection::new(RedirectionType::Output, "".to_string());
+        assert!(redir.validate().is_err());
+    }
+
+    #[test]
+    fn test_redirection_clone() {
+        let redir1 = Redirection::new(RedirectionType::Append, "log.txt".to_string());
+        let redir2 = redir1.clone();
+        assert_eq!(redir1, redir2);
     }
 }

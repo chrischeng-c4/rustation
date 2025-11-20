@@ -54,6 +54,9 @@ pub mod error {
 
         #[error("REPL error: {0}")]
         Repl(String),
+
+        #[error("Redirection error: {0}")]
+        Redirection(String),
     }
 
     pub type Result<T> = std::result::Result<T, RushError>;

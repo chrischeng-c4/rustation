@@ -1,8 +1,11 @@
 //! Command execution implementation
 
+use std::fs::{File, OpenOptions};
+use std::io::ErrorKind;
 use std::process::{Command as StdCommand, Stdio};
 
-use super::parser::parse_command_line;
+use super::parser::{parse_command_line, parse_command_with_redirections};
+use super::{Redirection, RedirectionType};
 use crate::error::{Result, RushError};
 
 /// Simple command executor
@@ -23,10 +26,71 @@ impl CommandExecutor {
         Self
     }
 
+    /// Apply redirections to a command before spawning
+    fn apply_redirections(&self, cmd: &mut StdCommand, redirections: &[Redirection]) -> Result<()> {
+        for redir in redirections {
+            match redir.redir_type {
+                RedirectionType::Output => {
+                    // Create/truncate file for output redirection
+                    let file = File::create(&redir.file_path).map_err(|e| {
+                        let msg = match e.kind() {
+                            ErrorKind::PermissionDenied => {
+                                format!("{}: permission denied", redir.file_path)
+                            }
+                            ErrorKind::IsADirectory => {
+                                format!("{}: is a directory", redir.file_path)
+                            }
+                            _ => format!("{}: {}", redir.file_path, e),
+                        };
+                        RushError::Redirection(msg)
+                    })?;
+                    cmd.stdout(Stdio::from(file));
+                }
+                RedirectionType::Append => {
+                    // Open file in append mode
+                    let file = OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&redir.file_path)
+                        .map_err(|e| {
+                            let msg = match e.kind() {
+                                ErrorKind::PermissionDenied => {
+                                    format!("{}: permission denied", redir.file_path)
+                                }
+                                ErrorKind::IsADirectory => {
+                                    format!("{}: is a directory", redir.file_path)
+                                }
+                                _ => format!("{}: {}", redir.file_path, e),
+                            };
+                            RushError::Redirection(msg)
+                        })?;
+                    cmd.stdout(Stdio::from(file));
+                }
+                RedirectionType::Input => {
+                    // Open file for input redirection
+                    let file = File::open(&redir.file_path).map_err(|e| {
+                        let msg = match e.kind() {
+                            ErrorKind::NotFound => {
+                                format!("{}: file not found", redir.file_path)
+                            }
+                            ErrorKind::PermissionDenied => {
+                                format!("{}: permission denied", redir.file_path)
+                            }
+                            _ => format!("{}: {}", redir.file_path, e),
+                        };
+                        RushError::Redirection(msg)
+                    })?;
+                    cmd.stdin(Stdio::from(file));
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Execute a command line and return the exit code
     ///
     /// # Arguments
-    /// * `line` - The command line to execute (e.g., "ls -la")
+    /// * `line` - The command line to execute (e.g., "ls -la" or "ls > files.txt")
     ///
     /// # Returns
     /// * `Ok(exit_code)` - The command's exit code (0 for success)
@@ -38,8 +102,8 @@ impl CommandExecutor {
             return Ok(0);
         }
 
-        // Parse command line into program and arguments (handles quotes)
-        let (program, args) = match parse_command_line(line) {
+        // Parse command line into program, arguments, and redirections
+        let (program, args, redirections) = match parse_command_with_redirections(line) {
             Ok(parsed) => parsed,
             Err(e) => {
                 tracing::warn!(error = %e, "Command parsing failed");
@@ -51,16 +115,33 @@ impl CommandExecutor {
         tracing::debug!(
             program = %program,
             args = ?args,
+            redirections = ?redirections,
             "Executing command"
         );
 
+        // Build command
+        let mut cmd = StdCommand::new(&program);
+        cmd.args(&args);
+
+        // Apply redirections if any
+        if !redirections.is_empty() {
+            if let Err(e) = self.apply_redirections(&mut cmd, &redirections) {
+                tracing::error!(error = %e, "Redirection failed");
+                eprintln!("rush: {}", e);
+                return Ok(1);
+            }
+        } else {
+            // No redirections - use inherited stdio
+            cmd.stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit());
+        }
+
+        // Note: stderr always inherits unless explicitly redirected
+        cmd.stderr(Stdio::inherit());
+
         // Execute the command
-        match StdCommand::new(&program)
-            .args(&args)
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
+        match cmd.spawn()
         {
             Ok(mut child) => {
                 let pid = child.id();
