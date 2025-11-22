@@ -108,6 +108,77 @@ pub fn parse_command_with_redirections(
     Ok((program, args, redirections))
 }
 
+/// Extract redirections from a list of arguments (used for pipeline segments)
+///
+/// Takes a list of arguments that may contain redirection operators as strings
+/// (>, >>, <) and extracts them, returning clean args and redirections.
+///
+/// # Arguments
+/// * `args` - Arguments that may contain redirection operators as strings
+///
+/// # Returns
+/// * `(clean_args, redirections)` - Args without redirection operators, and list of redirections
+pub fn extract_redirections_from_args(
+    args: &[String],
+) -> Result<(Vec<String>, Vec<super::Redirection>)> {
+    use super::{Redirection, RedirectionType};
+
+    let mut clean_args = Vec::new();
+    let mut redirections = Vec::new();
+    let mut i = 0;
+
+    while i < args.len() {
+        match args[i].as_str() {
+            ">" => {
+                // Output redirection - next arg is the file path
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Redirection operator missing file path".to_string(),
+                    ));
+                }
+                redirections.push(Redirection::new(
+                    RedirectionType::Output,
+                    args[i + 1].clone(),
+                ));
+                i += 2; // Skip operator and path
+            }
+            ">>" => {
+                // Append redirection - next arg is the file path
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Redirection operator missing file path".to_string(),
+                    ));
+                }
+                redirections.push(Redirection::new(
+                    RedirectionType::Append,
+                    args[i + 1].clone(),
+                ));
+                i += 2; // Skip operator and path
+            }
+            "<" => {
+                // Input redirection - next arg is the file path
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Redirection operator missing file path".to_string(),
+                    ));
+                }
+                redirections.push(Redirection::new(
+                    RedirectionType::Input,
+                    args[i + 1].clone(),
+                ));
+                i += 2; // Skip operator and path
+            }
+            _ => {
+                // Regular argument
+                clean_args.push(args[i].clone());
+                i += 1;
+            }
+        }
+    }
+
+    Ok((clean_args, redirections))
+}
+
 /// Parse a command line into program and arguments
 ///
 /// Handles quoted strings and basic escaping.

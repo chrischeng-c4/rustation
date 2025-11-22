@@ -1,13 +1,8 @@
 //! Command execution implementation
 
-use std::fs::{File, OpenOptions};
-use std::io::ErrorKind;
-use std::process::{Command as StdCommand, Stdio};
-
 use super::parser::parse_pipeline;
 use super::pipeline::PipelineExecutor;
-use super::{Redirection, RedirectionType};
-use crate::error::{Result, RushError};
+use crate::error::Result;
 
 /// Simple command executor
 ///
@@ -38,66 +33,6 @@ impl CommandExecutor {
         }
     }
 
-    /// Apply redirections to a command before spawning
-    fn apply_redirections(&self, cmd: &mut StdCommand, redirections: &[Redirection]) -> Result<()> {
-        for redir in redirections {
-            match redir.redir_type {
-                RedirectionType::Output => {
-                    // Create/truncate file for output redirection
-                    let file = File::create(&redir.file_path).map_err(|e| {
-                        let msg = match e.kind() {
-                            ErrorKind::PermissionDenied => {
-                                format!("{}: permission denied", redir.file_path)
-                            }
-                            ErrorKind::IsADirectory => {
-                                format!("{}: is a directory", redir.file_path)
-                            }
-                            _ => format!("{}: {}", redir.file_path, e),
-                        };
-                        RushError::Redirection(msg)
-                    })?;
-                    cmd.stdout(Stdio::from(file));
-                }
-                RedirectionType::Append => {
-                    // Open file in append mode
-                    let file = OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(&redir.file_path)
-                        .map_err(|e| {
-                            let msg = match e.kind() {
-                                ErrorKind::PermissionDenied => {
-                                    format!("{}: permission denied", redir.file_path)
-                                }
-                                ErrorKind::IsADirectory => {
-                                    format!("{}: is a directory", redir.file_path)
-                                }
-                                _ => format!("{}: {}", redir.file_path, e),
-                            };
-                            RushError::Redirection(msg)
-                        })?;
-                    cmd.stdout(Stdio::from(file));
-                }
-                RedirectionType::Input => {
-                    // Open file for input redirection
-                    let file = File::open(&redir.file_path).map_err(|e| {
-                        let msg = match e.kind() {
-                            ErrorKind::NotFound => {
-                                format!("{}: file not found", redir.file_path)
-                            }
-                            ErrorKind::PermissionDenied => {
-                                format!("{}: permission denied", redir.file_path)
-                            }
-                            _ => format!("{}: {}", redir.file_path, e),
-                        };
-                        RushError::Redirection(msg)
-                    })?;
-                    cmd.stdin(Stdio::from(file));
-                }
-            }
-        }
-        Ok(())
-    }
 
     /// Execute a command line and return the exit code
     ///
