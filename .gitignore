@@ -48,3 +48,5 @@ perf.data.old
 # Spec-Kit directories (.specify/ and .claude/) are tracked
 # They contain project specifications, slash commands, and configuration
 # Note: Be careful not to commit credentials if added to .claude/
+
+.claude/settings.local.json
