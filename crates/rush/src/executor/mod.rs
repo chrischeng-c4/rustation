@@ -107,21 +107,22 @@ pub enum RedirectMode {
 
 /// A complete pipeline parsed from user input
 ///
-/// For User Story 1, this supports exactly two commands connected by a pipe.
+/// Supports single commands and multi-command pipelines (User Stories 1 & 2).
 ///
-/// Example: "echo hello | grep hello" becomes:
+/// Example: "ls -la | grep txt | wc -l" becomes:
 /// ```ignore
 /// Pipeline {
 ///     segments: [
-///         PipelineSegment { program: "echo", args: ["hello"], index: 0 },
-///         PipelineSegment { program: "grep", args: ["hello"], index: 1 },
+///         PipelineSegment { program: "ls", args: ["-la"], index: 0 },
+///         PipelineSegment { program: "grep", args: ["txt"], index: 1 },
+///         PipelineSegment { program: "wc", args: ["-l"], index: 2 },
 ///     ],
-///     raw_input: "echo hello | grep hello",
+///     raw_input: "ls -la | grep txt | wc -l",
 /// }
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pipeline {
-    /// Individual commands in the pipeline (US1: exactly 2 commands)
+    /// Individual commands in the pipeline (1 to N commands)
     pub segments: Vec<PipelineSegment>,
 
     /// Original user input for error messages and logging
@@ -146,19 +147,13 @@ impl Pipeline {
 
     /// Validate pipeline structure
     ///
-    /// For US1: Ensures exactly 1 or 2 commands (single command or basic pipeline)
+    /// Ensures pipeline has at least one command and all segments are valid.
+    /// Supports any number of commands (User Stories 1 & 2).
     ///
     /// Returns Ok(()) if valid, Err with reason if invalid.
     pub fn validate(&self) -> Result<()> {
         if self.is_empty() {
             return Err(crate::error::RushError::Execution("Empty pipeline".to_string()));
-        }
-
-        // US1: Only support 1 or 2 commands
-        if self.len() > 2 {
-            return Err(crate::error::RushError::Execution(
-                "Multi-command pipelines (3+ commands) not yet supported".to_string(),
-            ));
         }
 
         for segment in &self.segments {
