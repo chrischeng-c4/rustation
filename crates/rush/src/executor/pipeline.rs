@@ -77,19 +77,97 @@ impl PipelineExecutor {
 
     /// Execute a single command (no pipes)
     fn execute_single(&self, segment: &PipelineSegment) -> Result<i32> {
+        use super::parser::extract_redirections_from_args;
+        use std::fs::{File, OpenOptions};
+        use std::io::ErrorKind;
+
+        // Extract redirections from args
+        let (clean_args, redirections) = extract_redirections_from_args(&segment.args)?;
+
         tracing::debug!(
             program = %segment.program,
-            args = ?segment.args,
+            args = ?clean_args,
+            redirections = ?redirections,
             "Executing single command"
         );
 
-        match Command::new(&segment.program)
-            .args(&segment.args)
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-        {
+        let mut cmd = Command::new(&segment.program);
+        cmd.args(&clean_args);
+
+        // Apply redirections if any
+        if !redirections.is_empty() {
+            for redir in &redirections {
+                match redir.redir_type {
+                    super::RedirectionType::Output => {
+                        // Create/truncate file for output redirection
+                        let file = File::create(&redir.file_path).map_err(|e| {
+                            let msg = match e.kind() {
+                                ErrorKind::PermissionDenied => {
+                                    format!("{}: permission denied", redir.file_path)
+                                }
+                                ErrorKind::IsADirectory => {
+                                    format!("{}: is a directory", redir.file_path)
+                                }
+                                _ => format!("{}: {}", redir.file_path, e),
+                            };
+                            tracing::error!(error = %msg, "Output redirection failed");
+                            eprintln!("rush: {}", msg);
+                            RushError::Redirection(msg)
+                        })?;
+                        cmd.stdout(Stdio::from(file));
+                    }
+                    super::RedirectionType::Append => {
+                        // Open file in append mode
+                        let file = OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&redir.file_path)
+                            .map_err(|e| {
+                                let msg = match e.kind() {
+                                    ErrorKind::PermissionDenied => {
+                                        format!("{}: permission denied", redir.file_path)
+                                    }
+                                    ErrorKind::IsADirectory => {
+                                        format!("{}: is a directory", redir.file_path)
+                                    }
+                                    _ => format!("{}: {}", redir.file_path, e),
+                                };
+                                tracing::error!(error = %msg, "Append redirection failed");
+                                eprintln!("rush: {}", msg);
+                                RushError::Redirection(msg)
+                            })?;
+                        cmd.stdout(Stdio::from(file));
+                    }
+                    super::RedirectionType::Input => {
+                        // Open file for input redirection
+                        let file = File::open(&redir.file_path).map_err(|e| {
+                            let msg = match e.kind() {
+                                ErrorKind::NotFound => {
+                                    format!("{}: file not found", redir.file_path)
+                                }
+                                ErrorKind::PermissionDenied => {
+                                    format!("{}: permission denied", redir.file_path)
+                                }
+                                _ => format!("{}: {}", redir.file_path, e),
+                            };
+                            tracing::error!(error = %msg, "Input redirection failed");
+                            eprintln!("rush: {}", msg);
+                            RushError::Redirection(msg)
+                        })?;
+                        cmd.stdin(Stdio::from(file));
+                    }
+                }
+            }
+            // If we have redirections, stderr still inherits unless redirected
+            cmd.stderr(Stdio::inherit());
+        } else {
+            // No redirections - use inherited stdio for all streams
+            cmd.stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit());
+        }
+
+        match cmd.spawn() {
             Ok(mut child) => {
                 let pid = child.id();
                 tracing::trace!(pid, "Process spawned");

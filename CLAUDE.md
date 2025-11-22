@@ -578,6 +578,111 @@ Before any rush-related work:
 
 When user asks to work on rush, immediately check and enforce SDD.
 
+## MCP Integration: Sequential Thinking for Complex Tasks
+
+**Configuration**: This project uses the Sequential Thinking MCP server (configured in `.mcp.json`) to enable structured reasoning for complex development tasks.
+
+### When to Use Sequential Thinking
+
+The Sequential Thinking MCP provides tools for breaking down complex problems into structured reasoning steps. Use it for:
+
+**Spec-Driven Development Phases:**
+- **Planning** (`/speckit.plan`) - Architecture decisions, technology choices, design tradeoffs
+- **Task Generation** (`/speckit.tasks`) - Breaking features into granular, ordered tasks
+- **Implementation** (`/speckit.implement`) - Complex multi-step implementations
+- **Debugging** - Systematic root cause analysis for hard-to-diagnose issues
+- **Code Review** - Structured evaluation of code changes
+
+**Technical Decision Making:**
+- Choosing between alternative approaches (e.g., sync vs async, architecture patterns)
+- Evaluating performance tradeoffs
+- Assessing security implications
+- Planning refactoring strategies
+
+**Complex Problem Solving:**
+- Multi-layered bugs requiring systematic investigation
+- Integration challenges across multiple modules
+- Performance optimization requiring measurement and iteration
+- Compatibility issues with dependencies or platforms
+
+### How Sequential Thinking Works
+
+The MCP server provides tools that enable:
+
+1. **Structured Thinking** - Break problems into clear reasoning steps
+2. **Multi-Step Planning** - Plan complex operations before execution
+3. **Decision Documentation** - Capture reasoning for future reference
+4. **Systematic Analysis** - Methodical evaluation of alternatives
+
+### Integration with Spec-Driven Workflow
+
+Sequential Thinking complements the spec-driven workflow:
+
+```
+Constitution → Specification → [SEQUENTIAL THINKING] → Plan → Tasks → Implement
+                                        ↓
+                    Architecture decisions, design choices,
+                    tradeoff analysis, technology evaluation
+```
+
+### Example Use Cases
+
+**During `/speckit.plan`:**
+- Use sequential thinking to evaluate parser design alternatives
+- Analyze performance implications of different data structures
+- Plan error handling strategies systematically
+
+**During `/speckit.tasks`:**
+- Break complex features into dependency-ordered tasks
+- Identify potential implementation risks early
+- Plan test coverage systematically
+
+**During `/speckit.implement`:**
+- Approach complex implementations with clear reasoning steps
+- Debug failures systematically
+- Make informed decisions when specs are ambiguous
+
+### Best Practices
+
+**DO:**
+- ✅ Use for complex technical decisions with multiple alternatives
+- ✅ Use when debugging non-obvious issues
+- ✅ Use for planning multi-step implementations
+- ✅ Document reasoning for future maintainers
+
+**DON'T:**
+- ❌ Use for trivial decisions (overhead not worth it)
+- ❌ Use as a substitute for specifications (specs come first!)
+- ❌ Over-analyze simple implementations
+- ❌ Let thinking replace action (balance analysis with progress)
+
+### Activating Sequential Thinking
+
+The MCP server loads automatically when Claude Code starts. You don't need to do anything special - Claude will use it when appropriate for complex reasoning tasks.
+
+**Manual Trigger**: If you want to explicitly request structured thinking, say:
+- "Use sequential thinking to evaluate..."
+- "Think through this step-by-step..."
+- "Break down this problem systematically..."
+
+### Configuration
+
+MCP configuration is in `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "description": "Enables structured reasoning and step-by-step problem solving"
+    }
+  }
+}
+```
+
+**Requires**: Node.js/npm installed (for `npx` command)
+**Restart**: Restart Claude Code after modifying `.mcp.json`
+
 ## Active Technologies
 - Rust 1.75+ (edition 2021) (001-rush-mvp)
 - Flat file for command history (~/.config/rush/history), TOML for optional config (~/.config/rush/rush.toml) (001-rush-mvp)
@@ -585,6 +690,7 @@ When user asks to work on rush, immediately check and enforce SDD.
 - In-memory caches for PATH executables and filesystem entries (no persistent storage) (002-tab-completion)
 - Rust 1.75+ (Rust 2021 edition) + reedline (line editing library with Hinter trait support) (003-autosuggestions)
 - File-based command history (existing FileBackedHistory from reedline) (003-autosuggestions)
+- File system operations (create, open, truncate, append files) (005-output-redirection)
 
 ## Recent Changes
 - 001-rush-mvp: Added Rust 1.75+ (edition 2021)

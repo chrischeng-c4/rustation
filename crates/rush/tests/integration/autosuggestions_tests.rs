@@ -1,7 +1,10 @@
 // Integration tests for autosuggestions feature
 
+use reedline::{
+    CommandLineSearch, Hinter, History, HistoryItem, HistoryItemId, HistorySessionId,
+    Result as ReedlineResult, SearchQuery,
+};
 use rush::repl::suggest::RushHinter;
-use reedline::{Hinter, History, HistoryItem, HistoryItemId, HistorySessionId, SearchQuery, Result as ReedlineResult, CommandLineSearch};
 
 /// Mock history for integration testing
 struct TestHistory {
@@ -11,10 +14,7 @@ struct TestHistory {
 
 impl TestHistory {
     fn new() -> Self {
-        Self {
-            entries: Vec::new(),
-            next_id: 1,
-        }
+        Self { entries: Vec::new(), next_id: 1 }
     }
 
     fn add(&mut self, cmd: impl Into<String>) {
@@ -49,7 +49,9 @@ impl History for TestHistory {
             .iter()
             .find(|item| item.id == Some(id))
             .cloned()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Item not found").into())
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "Item not found").into()
+            })
     }
 
     fn count(&self, query: SearchQuery) -> ReedlineResult<i64> {
@@ -64,7 +66,8 @@ impl History for TestHistory {
             None => String::new(),
         };
 
-        let results: Vec<HistoryItem> = self.entries
+        let results: Vec<HistoryItem> = self
+            .entries
             .iter()
             .filter(|item| {
                 if prefix.is_empty() {
@@ -73,13 +76,17 @@ impl History for TestHistory {
                     item.command_line.starts_with(&prefix)
                 }
             })
-            .rev()  // Most recent first
+            .rev() // Most recent first
             .cloned()
             .collect();
         Ok(results)
     }
 
-    fn update(&mut self, id: HistoryItemId, updater: &dyn Fn(HistoryItem) -> HistoryItem) -> ReedlineResult<()> {
+    fn update(
+        &mut self,
+        id: HistoryItemId,
+        updater: &dyn Fn(HistoryItem) -> HistoryItem,
+    ) -> ReedlineResult<()> {
         if let Some(item) = self.entries.iter_mut().find(|item| item.id == Some(id)) {
             *item = updater(item.clone());
         }
@@ -117,39 +124,19 @@ mod tests {
 
         // Simulate user typing "git s" character by character
         let result1 = hinter.handle("g", 1, &history, false, "");
-        assert_eq!(
-            result1,
-            "it status",
-            "After 'g': should suggest 'it status'"
-        );
+        assert_eq!(result1, "it status", "After 'g': should suggest 'it status'");
 
         let result2 = hinter.handle("gi", 2, &history, false, "");
-        assert_eq!(
-            result2,
-            "t status",
-            "After 'gi': should suggest 't status'"
-        );
+        assert_eq!(result2, "t status", "After 'gi': should suggest 't status'");
 
         let result3 = hinter.handle("git", 3, &history, false, "");
-        assert_eq!(
-            result3,
-            " status",
-            "After 'git': should suggest ' status'"
-        );
+        assert_eq!(result3, " status", "After 'git': should suggest ' status'");
 
         let result4 = hinter.handle("git ", 4, &history, false, "");
-        assert_eq!(
-            result4,
-            "status",
-            "After 'git ': should suggest 'status'"
-        );
+        assert_eq!(result4, "status", "After 'git ': should suggest 'status'");
 
         let result5 = hinter.handle("git s", 5, &history, false, "");
-        assert_eq!(
-            result5,
-            "tatus",
-            "After 'git s': should suggest 'tatus'"
-        );
+        assert_eq!(result5, "tatus", "After 'git s': should suggest 'tatus'");
     }
 
     #[test]
@@ -166,19 +153,11 @@ mod tests {
 
         // Should suggest most recent "cargo" command
         let result = hinter.handle("cargo", 5, &history, false, "");
-        assert_eq!(
-            result,
-            " test",
-            "Should suggest most recent cargo command"
-        );
+        assert_eq!(result, " test", "Should suggest most recent cargo command");
 
         // Should suggest most recent "git" command
         let result = hinter.handle("git", 3, &history, false, "");
-        assert_eq!(
-            result,
-            " push",
-            "Should suggest most recent git command"
-        );
+        assert_eq!(result, " push", "Should suggest most recent git command");
     }
 
     #[test]
@@ -201,19 +180,11 @@ mod tests {
 
         // Type "git st"
         let result = hinter.handle("git st", 6, &history, false, "");
-        assert_eq!(
-            result,
-            "ash",
-            "Should suggest 'ash' for 'git st'"
-        );
+        assert_eq!(result, "ash", "Should suggest 'ash' for 'git st'");
 
         // Simulate backspace to "git s"
         let result = hinter.handle("git s", 5, &history, false, "");
-        assert_eq!(
-            result,
-            "tash",
-            "After backspace: should suggest 'tash' for 'git s'"
-        );
+        assert_eq!(result, "tash", "After backspace: should suggest 'tash' for 'git s'");
     }
 
     #[test]
@@ -225,14 +196,8 @@ mod tests {
         let result = hinter.handle("cargo b", 7, &history, false, "");
         assert!(!result.is_empty(), "Should suggest for long command");
 
-        assert!(
-            result.starts_with("uild --release"),
-            "Should start with correct suffix"
-        );
-        assert!(
-            result.contains("features"),
-            "Should include features in suggestion"
-        );
+        assert!(result.starts_with("uild --release"), "Should start with correct suffix");
+        assert!(result.contains("features"), "Should include features in suggestion");
     }
 
     #[test]
@@ -253,11 +218,7 @@ mod tests {
         let result = hinter.handle("git", 3, &history, false, "");
         let duration = start.elapsed();
 
-        assert_eq!(
-            result,
-            " status",
-            "Should find suggestion with many entries"
-        );
+        assert_eq!(result, " status", "Should find suggestion with many entries");
 
         // Should complete in reasonable time (much less than 50ms)
         assert!(

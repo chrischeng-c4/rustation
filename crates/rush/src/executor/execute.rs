@@ -8,18 +8,19 @@ use crate::error::Result;
 ///
 /// Executes commands by spawning processes and waiting for completion.
 ///
-/// # User Story 1: Basic Two-Command Pipeline
+/// # Current Features
 ///
-/// Now supports pipes via PipelineExecutor for single commands and
-/// two-command pipelines (e.g., "echo hello | grep hello").
+/// - I/O redirections (>, >>, <)
+/// - Pipelines via PipelineExecutor (single and multi-command)
+/// - Command execution with proper exit codes
+/// - Signal handling (FR-009) for pipeline processes
 ///
 /// # Future Enhancements
 ///
 /// Not yet implemented:
-/// - Multi-command pipelines (3+ commands) - User Story 2
-/// - Redirections (>, >>, <) - Different feature
-/// - Job control (bg, fg, jobs) - Different feature
-/// - Background execution (&) - Different feature
+/// - Job control (bg, fg, jobs)
+/// - Background execution (&)
+/// - Combining redirections with pipelines
 pub struct CommandExecutor {
     pipeline_executor: PipelineExecutor,
 }
@@ -32,10 +33,14 @@ impl CommandExecutor {
         }
     }
 
+
     /// Execute a command line and return the exit code
     ///
     /// # Arguments
-    /// * `line` - The command line to execute (e.g., "ls -la" or "ls | grep txt")
+    /// * `line` - The command line to execute
+    ///   - Single command: "ls -la"
+    ///   - Pipeline: "ls | grep txt"
+    ///   - Redirection: "ls > files.txt" (parsed but not yet executed with redirections)
     ///
     /// # Returns
     /// * `Ok(exit_code)` - The command's exit code (0 for success)
@@ -47,7 +52,7 @@ impl CommandExecutor {
             return Ok(0);
         }
 
-        // Parse command line into pipeline (handles quotes and pipes)
+        // Parse command line into pipeline (handles quotes, pipes, and redirections)
         let pipeline = match parse_pipeline(line) {
             Ok(parsed) => parsed,
             Err(e) => {
@@ -80,14 +85,12 @@ mod tests {
 
     #[test]
     fn test_executor_new() {
-        let executor = CommandExecutor::new();
-        drop(executor);
+        let _executor = CommandExecutor::new();
     }
 
     #[test]
     fn test_executor_default() {
-        let executor = CommandExecutor::default();
-        drop(executor);
+        let _executor = CommandExecutor::default();
     }
 
     #[test]
