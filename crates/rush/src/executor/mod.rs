@@ -1,16 +1,38 @@
 //! Command execution and job control module
 //!
 //! Provides:
-//! - Command execution
+//! - Command execution (single commands and pipelines)
 //! - Job control (fg, bg, jobs)
 //! - Script execution
 //! - Signal handling
+//! - Pipeline support (`cmd1 | cmd2`)
+//!
+//! # Pipeline Execution (User Story 1: Basic Two-Command Pipeline)
+//!
+//! The executor supports basic Unix-style pipelines using the `|` operator to chain
+//! two commands. Data flows from the first command's stdout to the second command's stdin.
+//!
+//! ## Example
+//!
+//! ```ignore
+//! use rush::executor::execute::CommandExecutor;
+//!
+//! let executor = CommandExecutor::new();
+//!
+//! // Single command
+//! executor.execute("ls")?;
+//!
+//! // Two-command pipeline
+//! executor.execute("echo 'hello world' | grep hello")?;
+//! ```
 
 pub mod execute;
 pub mod job;
 pub mod parser;
+pub mod pipeline;
 pub mod script;
 
+use crate::error::Result;
 use std::path::PathBuf;
 
 /// A parsed command ready for execution
@@ -81,6 +103,121 @@ pub enum RedirectMode {
     Overwrite,
     /// >> - append
     Append,
+}
+
+/// A complete pipeline parsed from user input
+///
+/// For User Story 1, this supports exactly two commands connected by a pipe.
+///
+/// Example: "echo hello | grep hello" becomes:
+/// ```ignore
+/// Pipeline {
+///     segments: [
+///         PipelineSegment { program: "echo", args: ["hello"], index: 0 },
+///         PipelineSegment { program: "grep", args: ["hello"], index: 1 },
+///     ],
+///     raw_input: "echo hello | grep hello",
+/// }
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pipeline {
+    /// Individual commands in the pipeline (US1: exactly 2 commands)
+    pub segments: Vec<PipelineSegment>,
+
+    /// Original user input for error messages and logging
+    pub raw_input: String,
+}
+
+impl Pipeline {
+    /// Create a new pipeline from segments
+    pub fn new(segments: Vec<PipelineSegment>, raw_input: String) -> Self {
+        Self { segments, raw_input }
+    }
+
+    /// Number of commands in the pipeline
+    pub fn len(&self) -> usize {
+        self.segments.len()
+    }
+
+    /// Check if pipeline is empty
+    pub fn is_empty(&self) -> bool {
+        self.segments.is_empty()
+    }
+
+    /// Validate pipeline structure
+    ///
+    /// For US1: Ensures exactly 1 or 2 commands (single command or basic pipeline)
+    ///
+    /// Returns Ok(()) if valid, Err with reason if invalid.
+    pub fn validate(&self) -> Result<()> {
+        if self.is_empty() {
+            return Err(crate::error::RushError::Execution("Empty pipeline".to_string()));
+        }
+
+        // US1: Only support 1 or 2 commands
+        if self.len() > 2 {
+            return Err(crate::error::RushError::Execution(
+                "Multi-command pipelines (3+ commands) not yet supported".to_string(),
+            ));
+        }
+
+        for segment in &self.segments {
+            segment.validate()?;
+        }
+
+        Ok(())
+    }
+}
+
+/// One command in a pipeline
+///
+/// Example: In "ls -la | grep txt", the first segment is:
+/// ```ignore
+/// PipelineSegment {
+///     program: "ls",
+///     args: ["-la"],
+///     index: 0,
+/// }
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct PipelineSegment {
+    /// Command name (e.g., "ls", "grep")
+    pub program: String,
+
+    /// Command arguments (e.g., ["-la"], ["txt"])
+    pub args: Vec<String>,
+
+    /// Position in pipeline (0-indexed)
+    /// First command is 0, second is 1
+    pub index: usize,
+}
+
+impl PipelineSegment {
+    /// Create a new pipeline segment
+    pub fn new(program: String, args: Vec<String>, index: usize) -> Self {
+        Self { program, args, index }
+    }
+
+    /// Validate segment
+    pub fn validate(&self) -> Result<()> {
+        if self.program.is_empty() {
+            return Err(crate::error::RushError::Execution(format!(
+                "Empty program at position {}",
+                self.index
+            )));
+        }
+        Ok(())
+    }
+
+    /// Check if this is the first segment in a pipeline
+    pub fn is_first(&self) -> bool {
+        self.index == 0
+    }
+
+    /// Check if this is the last segment in a pipeline
+    pub fn is_last(&self, pipeline_len: usize) -> bool {
+        self.index == pipeline_len - 1
+    }
 }
 
 #[cfg(test)]

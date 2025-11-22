@@ -415,7 +415,7 @@ fn test_flag_completion_with_arguments_before() {
     // Main validation: doesn't crash
 }
 
-// TODO: Re-enable after fixing TestHistory trait implementation
-// mod integration {
-//     pub mod autosuggestions_tests;
-// }
+// Autosuggestions integration tests
+mod integration {
+    pub mod autosuggestions_tests;
+}

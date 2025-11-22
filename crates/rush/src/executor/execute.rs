@@ -1,32 +1,41 @@
 //! Command execution implementation
 
-use std::process::{Command as StdCommand, Stdio};
-
-use super::parser::parse_command_line;
-use crate::error::{Result, RushError};
+use super::parser::parse_pipeline;
+use super::pipeline::PipelineExecutor;
+use crate::error::Result;
 
 /// Simple command executor
 ///
 /// Executes commands by spawning processes and waiting for completion.
-/// For MVP, this handles basic command execution without:
-/// - Pipes
-/// - Redirections
-/// - Job control
-/// - Background execution
 ///
-/// These features will be added in later phases.
-pub struct CommandExecutor;
+/// # User Story 1: Basic Two-Command Pipeline
+///
+/// Now supports pipes via PipelineExecutor for single commands and
+/// two-command pipelines (e.g., "echo hello | grep hello").
+///
+/// # Future Enhancements
+///
+/// Not yet implemented:
+/// - Multi-command pipelines (3+ commands) - User Story 2
+/// - Redirections (>, >>, <) - Different feature
+/// - Job control (bg, fg, jobs) - Different feature
+/// - Background execution (&) - Different feature
+pub struct CommandExecutor {
+    pipeline_executor: PipelineExecutor,
+}
 
 impl CommandExecutor {
     /// Create a new command executor
     pub fn new() -> Self {
-        Self
+        Self {
+            pipeline_executor: PipelineExecutor::new(),
+        }
     }
 
     /// Execute a command line and return the exit code
     ///
     /// # Arguments
-    /// * `line` - The command line to execute (e.g., "ls -la")
+    /// * `line` - The command line to execute (e.g., "ls -la" or "ls | grep txt")
     ///
     /// # Returns
     /// * `Ok(exit_code)` - The command's exit code (0 for success)
@@ -38,8 +47,8 @@ impl CommandExecutor {
             return Ok(0);
         }
 
-        // Parse command line into program and arguments (handles quotes)
-        let (program, args) = match parse_command_line(line) {
+        // Parse command line into pipeline (handles quotes and pipes)
+        let pipeline = match parse_pipeline(line) {
             Ok(parsed) => parsed,
             Err(e) => {
                 tracing::warn!(error = %e, "Command parsing failed");
@@ -49,69 +58,13 @@ impl CommandExecutor {
         };
 
         tracing::debug!(
-            program = %program,
-            args = ?args,
-            "Executing command"
+            segments = pipeline.len(),
+            raw_input = %pipeline.raw_input,
+            "Executing command line"
         );
 
-        // Execute the command
-        match StdCommand::new(&program)
-            .args(&args)
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-        {
-            Ok(mut child) => {
-                let pid = child.id();
-                tracing::trace!(pid, "Process spawned");
-
-                // Wait for command to complete
-                match child.wait() {
-                    Ok(status) => {
-                        let exit_code = status.code().unwrap_or(1);
-                        tracing::info!(
-                            program = %program,
-                            exit_code,
-                            pid,
-                            "Process completed"
-                        );
-                        Ok(exit_code)
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            program = %program,
-                            error = %e,
-                            pid,
-                            "Failed to wait for process"
-                        );
-                        Err(RushError::Execution(format!("Failed to wait for command: {}", e)))
-                    }
-                }
-            }
-            Err(e) => {
-                // Command not found or execution failed
-                tracing::warn!(
-                    program = %program,
-                    error = %e,
-                    "Command not found or spawn failed"
-                );
-
-                // Provide helpful error message based on error kind
-                match e.kind() {
-                    std::io::ErrorKind::NotFound => {
-                        eprintln!("rush: command not found: {}", program);
-                    }
-                    std::io::ErrorKind::PermissionDenied => {
-                        eprintln!("rush: permission denied: {}", program);
-                    }
-                    _ => {
-                        eprintln!("rush: failed to execute {}: {}", program, e);
-                    }
-                }
-                Ok(127) // Command not found exit code
-            }
-        }
+        // Execute the pipeline
+        self.pipeline_executor.execute(&pipeline)
     }
 }
 
