@@ -163,3 +163,211 @@ impl Default for JobManager {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nix::unistd::Pid;
+
+    #[test]
+    fn test_job_status_display() {
+        assert_eq!(JobStatus::Running.to_string(), "Running");
+        assert_eq!(JobStatus::Stopped.to_string(), "Stopped");
+        assert_eq!(JobStatus::Done.to_string(), "Done");
+        assert_eq!(JobStatus::Failed.to_string(), "Failed");
+    }
+
+    #[test]
+    fn test_job_status_eq() {
+        assert_eq!(JobStatus::Running, JobStatus::Running);
+        assert_ne!(JobStatus::Running, JobStatus::Stopped);
+        assert_eq!(JobStatus::Done, JobStatus::Done);
+        assert_ne!(JobStatus::Done, JobStatus::Failed);
+    }
+
+    #[test]
+    fn test_job_creation() {
+        let pids = vec![Pid::from_raw(1234), Pid::from_raw(5678)];
+        let job = Job::new(1, Pid::from_raw(1234), "echo test".to_string(), pids.clone());
+
+        assert_eq!(job.id, 1);
+        assert_eq!(job.pgid, Pid::from_raw(1234));
+        assert_eq!(job.command, "echo test");
+        assert_eq!(job.pids, pids);
+        assert_eq!(job.status, JobStatus::Running);
+    }
+
+    #[test]
+    fn test_job_clone() {
+        let pids = vec![Pid::from_raw(1234)];
+        let job1 = Job::new(1, Pid::from_raw(1234), "test".to_string(), pids.clone());
+        let job2 = job1.clone();
+
+        assert_eq!(job1.id, job2.id);
+        assert_eq!(job1.pgid, job2.pgid);
+        assert_eq!(job1.command, job2.command);
+        assert_eq!(job1.status, job2.status);
+    }
+
+    #[test]
+    fn test_job_manager_new() {
+        let manager = JobManager::new();
+        assert_eq!(manager.jobs().count(), 0);
+    }
+
+    #[test]
+    fn test_job_manager_default() {
+        let manager = JobManager::default();
+        assert_eq!(manager.jobs().count(), 0);
+    }
+
+    #[test]
+    fn test_add_job() {
+        let mut manager = JobManager::new();
+        let pids = vec![Pid::from_raw(1234)];
+
+        let id1 = manager.add_job(Pid::from_raw(1234), "echo test".to_string(), pids.clone());
+        assert_eq!(id1, 1);
+        assert_eq!(manager.jobs().count(), 1);
+
+        let id2 = manager.add_job(Pid::from_raw(5678), "cat file".to_string(), pids.clone());
+        assert_eq!(id2, 2);
+        assert_eq!(manager.jobs().count(), 2);
+    }
+
+    #[test]
+    fn test_get_job() {
+        let mut manager = JobManager::new();
+        let pids = vec![Pid::from_raw(1234)];
+
+        let id = manager.add_job(Pid::from_raw(1234), "echo test".to_string(), pids.clone());
+
+        let job = manager.get_job(id);
+        assert!(job.is_some());
+        assert_eq!(job.unwrap().command, "echo test");
+
+        let missing = manager.get_job(999);
+        assert!(missing.is_none());
+    }
+
+    #[test]
+    fn test_get_job_mut() {
+        let mut manager = JobManager::new();
+        let pids = vec![Pid::from_raw(1234)];
+
+        let id = manager.add_job(Pid::from_raw(1234), "echo test".to_string(), pids.clone());
+
+        // Modify job status
+        let job = manager.get_job_mut(id).unwrap();
+        job.status = JobStatus::Stopped;
+
+        // Verify change persisted
+        let job = manager.get_job(id).unwrap();
+        assert_eq!(job.status, JobStatus::Stopped);
+    }
+
+    #[test]
+    fn test_remove_job() {
+        let mut manager = JobManager::new();
+        let pids = vec![Pid::from_raw(1234)];
+
+        let id = manager.add_job(Pid::from_raw(1234), "echo test".to_string(), pids.clone());
+        assert_eq!(manager.jobs().count(), 1);
+
+        let removed = manager.remove_job(id);
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().command, "echo test");
+        assert_eq!(manager.jobs().count(), 0);
+
+        // Removing again returns None
+        let missing = manager.remove_job(id);
+        assert!(missing.is_none());
+    }
+
+    #[test]
+    fn test_jobs_iterator() {
+        let mut manager = JobManager::new();
+        let pids = vec![Pid::from_raw(1234)];
+
+        manager.add_job(Pid::from_raw(1234), "cmd1".to_string(), pids.clone());
+        manager.add_job(Pid::from_raw(5678), "cmd2".to_string(), pids.clone());
+        manager.add_job(Pid::from_raw(9012), "cmd3".to_string(), pids.clone());
+
+        let count = manager.jobs().count();
+        assert_eq!(count, 3);
+
+        let commands: Vec<String> = manager.jobs().map(|j| j.command.clone()).collect();
+        assert!(commands.contains(&"cmd1".to_string()));
+        assert!(commands.contains(&"cmd2".to_string()));
+        assert!(commands.contains(&"cmd3".to_string()));
+    }
+
+    #[test]
+    fn test_cleanup_no_finished_jobs() {
+        let mut manager = JobManager::new();
+        let pids = vec![Pid::from_raw(1234)];
+
+        manager.add_job(Pid::from_raw(1234), "cmd1".to_string(), pids.clone());
+        manager.add_job(Pid::from_raw(5678), "cmd2".to_string(), pids.clone());
+
+        let cleaned = manager.cleanup();
+        assert_eq!(cleaned.len(), 0);
+        assert_eq!(manager.jobs().count(), 2);
+    }
+
+    #[test]
+    fn test_cleanup_done_jobs() {
+        let mut manager = JobManager::new();
+        let pids = vec![Pid::from_raw(1234)];
+
+        let id1 = manager.add_job(Pid::from_raw(1234), "cmd1".to_string(), pids.clone());
+        let id2 = manager.add_job(Pid::from_raw(5678), "cmd2".to_string(), pids.clone());
+        let id3 = manager.add_job(Pid::from_raw(9012), "cmd3".to_string(), pids.clone());
+
+        // Mark some jobs as done
+        manager.get_job_mut(id1).unwrap().status = JobStatus::Done;
+        manager.get_job_mut(id3).unwrap().status = JobStatus::Failed;
+
+        let cleaned = manager.cleanup();
+        assert_eq!(cleaned.len(), 2);
+        assert_eq!(manager.jobs().count(), 1);
+
+        // Verify only running job remains
+        let remaining = manager.get_job(id2).unwrap();
+        assert_eq!(remaining.command, "cmd2");
+        assert_eq!(remaining.status, JobStatus::Running);
+    }
+
+    #[test]
+    fn test_cleanup_all_jobs() {
+        let mut manager = JobManager::new();
+        let pids = vec![Pid::from_raw(1234)];
+
+        let id1 = manager.add_job(Pid::from_raw(1234), "cmd1".to_string(), pids.clone());
+        let id2 = manager.add_job(Pid::from_raw(5678), "cmd2".to_string(), pids.clone());
+
+        manager.get_job_mut(id1).unwrap().status = JobStatus::Done;
+        manager.get_job_mut(id2).unwrap().status = JobStatus::Failed;
+
+        let cleaned = manager.cleanup();
+        assert_eq!(cleaned.len(), 2);
+        assert_eq!(manager.jobs().count(), 0);
+    }
+
+    #[test]
+    fn test_update_status_skips_non_running_jobs() {
+        let mut manager = JobManager::new();
+        let pids = vec![Pid::from_raw(99999)]; // Non-existent PID
+
+        let id = manager.add_job(Pid::from_raw(99999), "cmd".to_string(), pids);
+
+        // Mark as done
+        manager.get_job_mut(id).unwrap().status = JobStatus::Done;
+
+        // update_status should skip it
+        manager.update_status();
+
+        // Status should remain Done
+        assert_eq!(manager.get_job(id).unwrap().status, JobStatus::Done);
+    }
+}
