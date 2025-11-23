@@ -996,4 +996,173 @@ mod tests {
         assert_eq!(pipeline.segments[1].redirections[0].redir_type, RedirectionType::Output);
         assert_eq!(pipeline.segments[1].redirections[0].file_path, "result.txt");
     }
+
+    // Tests for parse_command_with_redirections error paths
+    #[test]
+    fn test_parse_command_with_redirections_invalid_redirect_target() {
+        // Redirection operator followed by another redirection operator
+        let result = parse_command_with_redirections("echo > >");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("must be followed by file path"));
+    }
+
+    #[test]
+    fn test_parse_command_with_redirections_trailing_redirect() {
+        // Redirection operator at end of command
+        let result = parse_command_with_redirections("echo test >");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("missing file path"));
+    }
+
+    #[test]
+    fn test_parse_command_with_redirections_success() {
+        // Valid redirection
+        let result = parse_command_with_redirections("echo test > file.txt");
+        assert!(result.is_ok());
+        let (program, args, redirects) = result.unwrap();
+        assert_eq!(program, "echo");
+        assert_eq!(args, vec!["test"]);
+        assert_eq!(redirects.len(), 1);
+    }
+
+    // Tests for extract_redirections_from_args
+    #[test]
+    fn test_extract_redirections_output() {
+        let args = vec![">".to_string(), "file.txt".to_string()];
+        let (clean_args, redirections) = extract_redirections_from_args(&args).unwrap();
+        assert!(clean_args.is_empty());
+        assert_eq!(redirections.len(), 1);
+        assert_eq!(redirections[0].redir_type, RedirectionType::Output);
+        assert_eq!(redirections[0].file_path, "file.txt");
+    }
+
+    #[test]
+    fn test_extract_redirections_append() {
+        let args = vec![">>".to_string(), "file.txt".to_string()];
+        let (clean_args, redirections) = extract_redirections_from_args(&args).unwrap();
+        assert!(clean_args.is_empty());
+        assert_eq!(redirections.len(), 1);
+        assert_eq!(redirections[0].redir_type, RedirectionType::Append);
+    }
+
+    #[test]
+    fn test_extract_redirections_input() {
+        let args = vec!["<".to_string(), "file.txt".to_string()];
+        let (clean_args, redirections) = extract_redirections_from_args(&args).unwrap();
+        assert!(clean_args.is_empty());
+        assert_eq!(redirections.len(), 1);
+        assert_eq!(redirections[0].redir_type, RedirectionType::Input);
+    }
+
+    #[test]
+    fn test_extract_redirections_mixed_with_args() {
+        let args = vec![
+            "arg1".to_string(),
+            ">".to_string(),
+            "out.txt".to_string(),
+            "arg2".to_string(),
+        ];
+        let (clean_args, redirections) = extract_redirections_from_args(&args).unwrap();
+        assert_eq!(clean_args, vec!["arg1", "arg2"]);
+        assert_eq!(redirections.len(), 1);
+        assert_eq!(redirections[0].file_path, "out.txt");
+    }
+
+    #[test]
+    fn test_extract_redirections_missing_path_output() {
+        let args = vec![">".to_string()];
+        let result = extract_redirections_from_args(&args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("missing file path"));
+    }
+
+    #[test]
+    fn test_extract_redirections_missing_path_append() {
+        let args = vec![">>".to_string()];
+        let result = extract_redirections_from_args(&args);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_extract_redirections_missing_path_input() {
+        let args = vec!["<".to_string()];
+        let result = extract_redirections_from_args(&args);
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_pipeline edge cases
+    #[test]
+    fn test_parse_pipeline_empty_after_pipe() {
+        let result = parse_pipeline("echo test |");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Empty command after pipe"));
+    }
+
+    #[test]
+    fn test_parse_pipeline_double_pipe() {
+        let result = parse_pipeline("echo test | | cat");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_pipeline_redirect_at_end() {
+        let result = parse_pipeline("echo test >");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("missing file path"));
+    }
+
+    #[test]
+    fn test_parse_pipeline_background_flag() {
+        let pipeline = parse_pipeline("sleep 10 &").unwrap();
+        assert_eq!(pipeline.segments.len(), 1);
+        assert!(pipeline.background);
+        assert_eq!(pipeline.segments[0].program, "sleep");
+        assert_eq!(pipeline.segments[0].args, vec!["10"]);
+    }
+
+    // Tokenization edge cases
+    #[test]
+    fn test_tokenize_unclosed_quote_double_new() {
+        let result = tokenize_with_redirections("echo \"hello");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unclosed"));
+    }
+
+    #[test]
+    fn test_tokenize_unclosed_quote_single_new() {
+        let result = tokenize_with_redirections("echo 'hello");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unclosed"));
+    }
+
+    #[test]
+    fn test_tokenize_trailing_escape_new() {
+        let result = tokenize_with_redirections("echo hello\\");
+        assert!(result.is_err());
+        // Just check it's an error - the message may vary
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tokenize_complex_escapes() {
+        let tokens = tokenize_with_redirections("echo \\> \\< \\| \\&").unwrap();
+        // Escaped operators should become words
+        assert!(matches!(tokens[0], Token::Word(_)));
+        assert_eq!(tokens.len(), 5); // echo + 4 escaped operators
+    }
+
+    #[test]
+    fn test_tokenize_mixed_quotes() {
+        let tokens = tokenize_with_redirections("echo \"single'quote\" 'double\"quote'").unwrap();
+        assert_eq!(tokens.len(), 3); // echo + 2 quoted strings
+    }
+
+    #[test]
+    fn test_tokenize_escaped_backslash() {
+        let tokens = tokenize_with_redirections("echo \\\\test").unwrap();
+        assert_eq!(tokens.len(), 2);
+        if let Token::Word(w) = &tokens[1] {
+            assert_eq!(w, "\\test");
+        }
+    }
 }
