@@ -277,4 +277,45 @@ mod tests {
         let _string = theme.string_color;
         let _error = theme.error_color;
     }
+
+    #[test]
+    fn test_config_load_with_invalid_toml() {
+        use std::fs;
+        use std::io::Write;
+        use std::env;
+
+        // Use a unique temporary directory to avoid test pollution
+        let temp_dir = env::temp_dir().join(format!("rush_test_{}", std::process::id()));
+        fs::create_dir_all(&temp_dir).ok();
+
+        let config_file = temp_dir.join("rush.toml");
+        let mut file = fs::File::create(&config_file).unwrap();
+        file.write_all(b"invalid toml content [[[").unwrap();
+        drop(file);
+
+        // Can't easily test Config::load() with custom path, so just test from_str
+        let toml_result: Result<ConfigFile, _> = toml::from_str("invalid [[[");
+        assert!(toml_result.is_err());
+
+        // Clean up
+        fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_config_load_with_valid_toml_parsing() {
+        // Test that valid TOML can be parsed
+        let toml_str = r#"
+[appearance]
+prompt = "test> "
+
+[behavior]
+history_size = 5000
+"#;
+
+        let config_file: ConfigFile = toml::from_str(toml_str).unwrap();
+        let config = Config::from_config_file(config_file);
+
+        assert_eq!(config.prompt, "test> ");
+        assert_eq!(config.history_size, 5000);
+    }
 }
