@@ -273,4 +273,52 @@ mod tests {
         assert!(result3.is_ok());
         assert_eq!(result3.unwrap(), 0);
     }
+
+    #[test]
+    fn test_execute_parse_error() {
+        let mut executor = CommandExecutor::new();
+        // Unclosed quote should cause parse error
+        let result = executor.execute("echo \"unclosed");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1); // Parse error returns 1
+    }
+
+    #[test]
+    fn test_execute_builtin_jobs() {
+        let mut executor = CommandExecutor::new();
+        // jobs is a builtin command
+        let result = executor.execute("jobs");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_check_background_jobs_empty() {
+        let mut executor = CommandExecutor::new();
+        // Should not panic with no jobs
+        executor.check_background_jobs();
+    }
+
+    #[test]
+    fn test_check_background_jobs_with_finished_job() {
+        use crate::executor::job::JobStatus;
+        use nix::unistd::Pid;
+
+        let mut executor = CommandExecutor::new();
+
+        // Add a job and mark it as done
+        let manager = executor.job_manager_mut();
+        let id = manager.add_job(
+            Pid::from_raw(99999),
+            "test command".to_string(),
+            vec![Pid::from_raw(99999)],
+        );
+        manager.get_job_mut(id).unwrap().status = JobStatus::Done;
+
+        // check_background_jobs should clean it up and print status
+        executor.check_background_jobs();
+
+        // Job should be removed
+        assert!(executor.job_manager_mut().get_job(id).is_none());
+    }
 }
