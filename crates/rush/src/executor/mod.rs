@@ -454,4 +454,72 @@ mod tests {
         let redir2 = redir1.clone();
         assert_eq!(redir1, redir2);
     }
+
+    #[test]
+    fn test_command_validate_with_valid_redirections() {
+        let mut cmd = Command::new("echo".to_string(), vec!["test".to_string()]);
+        cmd.redirections.push(Redirection::new(RedirectionType::Output, "out.txt".to_string()));
+        assert!(cmd.validate().is_ok());
+    }
+
+    #[test]
+    fn test_command_validate_with_invalid_redirection() {
+        let mut cmd = Command::new("echo".to_string(), vec!["test".to_string()]);
+        cmd.redirections.push(Redirection::new(RedirectionType::Output, "".to_string()));
+        assert!(cmd.validate().is_err());
+    }
+
+    #[test]
+    fn test_pipeline_validate_empty() {
+        let pipeline = Pipeline::new(vec![], "".to_string(), false);
+        assert!(pipeline.validate().is_err());
+        assert!(pipeline.validate().unwrap_err().to_string().contains("Empty pipeline"));
+    }
+
+    #[test]
+    fn test_pipeline_validate_with_invalid_segment() {
+        let segment = PipelineSegment::new("".to_string(), vec![], 0, vec![]);
+        let pipeline = Pipeline::new(vec![segment], "invalid".to_string(), false);
+        assert!(pipeline.validate().is_err());
+    }
+
+    #[test]
+    fn test_pipeline_validate_valid() {
+        let segment = PipelineSegment::new("echo".to_string(), vec!["test".to_string()], 0, vec![]);
+        let pipeline = Pipeline::new(vec![segment], "echo test".to_string(), false);
+        assert!(pipeline.validate().is_ok());
+    }
+
+    #[test]
+    fn test_pipeline_segment_validate_empty_program() {
+        let segment = PipelineSegment::new("".to_string(), vec![], 0, vec![]);
+        assert!(segment.validate().is_err());
+        assert!(segment.validate().unwrap_err().to_string().contains("Empty program"));
+    }
+
+    #[test]
+    fn test_pipeline_segment_validate_with_invalid_redirection() {
+        let mut segment = PipelineSegment::new("echo".to_string(), vec![], 0, vec![]);
+        segment.redirections.push(Redirection::new(RedirectionType::Output, "".to_string()));
+        assert!(segment.validate().is_err());
+    }
+
+    #[test]
+    fn test_pipeline_segment_is_first() {
+        let segment = PipelineSegment::new("echo".to_string(), vec![], 0, vec![]);
+        assert!(segment.is_first());
+
+        let segment2 = PipelineSegment::new("cat".to_string(), vec![], 1, vec![]);
+        assert!(!segment2.is_first());
+    }
+
+    #[test]
+    fn test_pipeline_segment_is_last() {
+        let segment = PipelineSegment::new("echo".to_string(), vec![], 0, vec![]);
+        assert!(segment.is_last(1)); // Only segment in 1-segment pipeline
+        assert!(!segment.is_last(3)); // Not last in 3-segment pipeline
+
+        let segment2 = PipelineSegment::new("cat".to_string(), vec![], 2, vec![]);
+        assert!(segment2.is_last(3)); // Last in 3-segment pipeline
+    }
 }

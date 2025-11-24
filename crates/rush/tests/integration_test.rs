@@ -418,5 +418,5 @@ fn test_flag_completion_with_arguments_before() {
 // Autosuggestions integration tests
 mod integration {
     pub mod autosuggestions_tests;
-    pub mod redirection_test;
+    // pub mod redirection_test; // TODO: File doesn't exist yet
 }
