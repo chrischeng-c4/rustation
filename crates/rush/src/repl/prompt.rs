@@ -136,4 +136,62 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_render_prompt_left() {
+        use reedline::Prompt;
+
+        let prompt = RushPrompt::new(0);
+        let left = prompt.render_prompt_left();
+        // Should return empty string
+        assert_eq!(left, "");
+    }
+
+    #[test]
+    fn test_render_prompt_right() {
+        use reedline::Prompt;
+
+        let prompt = RushPrompt::new(0);
+        let right = prompt.render_prompt_right();
+        // Should return empty string
+        assert_eq!(right, "");
+    }
+
+    #[test]
+    fn test_render_prompt_multiline_indicator() {
+        use reedline::Prompt;
+
+        let prompt = RushPrompt::new(0);
+        let multiline = prompt.render_prompt_multiline_indicator();
+        // Should return empty string
+        assert_eq!(multiline, "");
+    }
+
+    #[test]
+    fn test_render_prompt_history_search_passing() {
+        use reedline::{Prompt, PromptHistorySearch, PromptHistorySearchStatus};
+
+        let prompt = RushPrompt::new(0);
+        let search = PromptHistorySearch {
+            term: "test".to_string(),
+            status: PromptHistorySearchStatus::Passing,
+        };
+        let rendered = prompt.render_prompt_history_search_indicator(search);
+        assert!(rendered.contains("test"));
+        assert!(rendered.contains("reverse-search"));
+    }
+
+    #[test]
+    fn test_render_prompt_history_search_failing() {
+        use reedline::{Prompt, PromptHistorySearch, PromptHistorySearchStatus};
+
+        let prompt = RushPrompt::new(0);
+        let search = PromptHistorySearch {
+            term: "test".to_string(),
+            status: PromptHistorySearchStatus::Failing,
+        };
+        let rendered = prompt.render_prompt_history_search_indicator(search);
+        assert!(rendered.contains("test"));
+        assert!(rendered.contains("failing"));
+    }
 }
