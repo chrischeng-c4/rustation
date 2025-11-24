@@ -370,4 +370,63 @@ mod tests {
         // Status should remain Done
         assert_eq!(manager.get_job(id).unwrap().status, JobStatus::Done);
     }
+
+    #[test]
+    fn test_update_status_handles_exited_process() {
+        use std::process::Command;
+        use std::thread;
+        use std::time::Duration;
+
+        // Spawn a process that exits quickly
+        let child = Command::new("true")
+            .spawn()
+            .expect("Failed to spawn true process");
+
+        let child_pid = child.id() as i32;
+
+        let mut manager = JobManager::new();
+        let pids = vec![Pid::from_raw(child_pid)];
+
+        let id = manager.add_job(Pid::from_raw(child_pid), "true".to_string(), pids);
+
+        // Give the process time to exit
+        thread::sleep(Duration::from_millis(100));
+
+        // update_status should mark it as Done when process exits (line 113-114)
+        manager.update_status();
+
+        // Status should now be Done because the process exited
+        let job = manager.get_job(id).expect("Job should still exist");
+        assert_eq!(job.status, JobStatus::Done);
+    }
+
+    #[test]
+    fn test_update_status_detects_still_alive_process() {
+        use std::process::Command;
+        use std::thread;
+        use std::time::Duration;
+
+        // Spawn a long-running process
+        let child = Command::new("sleep")
+            .arg("5")
+            .spawn()
+            .expect("Failed to spawn sleep process");
+
+        let child_pid = child.id() as i32;
+
+        let mut manager = JobManager::new();
+        let pids = vec![Pid::from_raw(child_pid)];
+
+        let id = manager.add_job(Pid::from_raw(child_pid), "sleep 5".to_string(), pids);
+
+        // Give the process a moment
+        thread::sleep(Duration::from_millis(50));
+
+        // update_status should keep it as Running if still alive (line 121-122)
+        manager.update_status();
+
+        // Status should still be Running because the process is still alive
+        let job = manager.get_job(id).expect("Job should still exist");
+        assert_eq!(job.status, JobStatus::Running);
+    }
 }
