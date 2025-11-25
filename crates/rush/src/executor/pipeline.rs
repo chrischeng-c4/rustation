@@ -851,4 +851,72 @@ mod tests {
         let result = execution.unwrap().wait_all();
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_pipeline_output_redirection_to_directory() {
+        // Test output redirection error in pipeline (lines 299-309)
+        let executor = PipelineExecutor::new();
+        let pipeline = parse_pipeline("echo test | cat > /tmp").unwrap();
+        let result = executor.execute(&pipeline);
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(e.to_string().contains("directory"));
+        }
+    }
+
+    #[test]
+    fn test_pipeline_append_redirection_to_directory() {
+        // Test append redirection error in pipeline (lines 320-330)
+        let executor = PipelineExecutor::new();
+        let pipeline = parse_pipeline("echo test | cat >> /tmp").unwrap();
+        let result = executor.execute(&pipeline);
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(e.to_string().contains("directory"));
+        }
+    }
+
+    #[test]
+    fn test_pipeline_input_redirection_not_found() {
+        // Test input redirection file not found in pipeline (lines 336-347)
+        let executor = PipelineExecutor::new();
+        let pipeline = parse_pipeline("cat < /nonexistent_file_12345 | grep test").unwrap();
+        let result = executor.execute(&pipeline);
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(e.to_string().contains("not found"));
+        }
+    }
+
+    #[test]
+    fn test_pipeline_with_output_redirection() {
+        // Test successful output redirection in pipeline
+        let executor = PipelineExecutor::new();
+        let out_file = "/tmp/rush_pipeline_out_test.txt";
+        let _ = std::fs::remove_file(out_file);
+
+        let pipeline = parse_pipeline(&format!("echo hello | cat > {}", out_file)).unwrap();
+        let result = executor.execute(&pipeline);
+        assert!(result.is_ok());
+
+        let content = std::fs::read_to_string(out_file).unwrap();
+        assert!(content.contains("hello"));
+
+        std::fs::remove_file(out_file).unwrap();
+    }
+
+    #[test]
+    fn test_pipeline_with_input_redirection() {
+        // Test successful input redirection in pipeline
+        let executor = PipelineExecutor::new();
+        let in_file = "/tmp/rush_pipeline_in_test.txt";
+
+        std::fs::write(in_file, "test input\n").unwrap();
+
+        let pipeline = parse_pipeline(&format!("cat < {} | cat", in_file)).unwrap();
+        let result = executor.execute(&pipeline);
+        assert!(result.is_ok());
+
+        std::fs::remove_file(in_file).unwrap();
+    }
 }
