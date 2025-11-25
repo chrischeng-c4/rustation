@@ -360,4 +360,93 @@ mod tests {
             Some("src/main.rs".to_string())
         );
     }
+
+    #[test]
+    fn test_expand_tilde_exact() {
+        let completer = PathCompleter::new();
+
+        // Just "~" should expand to home directory (line 108)
+        let expanded = completer.expand_tilde("~");
+        assert!(!expanded.starts_with("~"));
+        assert!(!expanded.is_empty());
+    }
+
+    #[test]
+    fn test_path_completer_default() {
+        let completer = PathCompleter::default();
+
+        #[cfg(target_os = "macos")]
+        assert!(!completer.case_sensitive);
+
+        #[cfg(not(target_os = "macos"))]
+        assert!(completer.case_sensitive);
+    }
+
+    #[test]
+    fn test_matches_prefix() {
+        let completer = PathCompleter::new();
+
+        #[cfg(target_os = "macos")]
+        {
+            // Case-insensitive on macOS
+            assert!(completer.matches_prefix("README.md", "readme"));
+            assert!(completer.matches_prefix("README.md", "README"));
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            // Case-sensitive on Linux
+            assert!(completer.matches_prefix("README.md", "README"));
+            assert!(!completer.matches_prefix("README.md", "readme"));
+        }
+    }
+
+    #[test]
+    fn test_list_directory_entries() {
+        let completer = PathCompleter::new();
+
+        // List entries from /tmp which should exist
+        let result = completer.list_directory_entries("/tmp/", "");
+        assert!(result.is_ok());
+        // /tmp might have entries
+    }
+
+    #[test]
+    fn test_list_directory_entries_nonexistent() {
+        let completer = PathCompleter::new();
+
+        // Nonexistent directory should return error
+        let result = completer.list_directory_entries("/nonexistent_dir_12345/", "");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_complete_returns_empty_for_first_word() {
+        let mut completer = PathCompleter::new();
+
+        // First word is command, not path
+        let suggestions = completer.complete("ls", 2);
+        assert!(suggestions.is_empty());
+    }
+
+    #[test]
+    fn test_complete_with_valid_path() {
+        let mut completer = PathCompleter::new();
+
+        // Complete in /tmp directory
+        let suggestions = completer.complete("ls /tmp/", 8);
+        // May or may not have entries, but should not panic
+        assert!(suggestions.len() <= 50);
+    }
+
+    #[test]
+    fn test_complete_with_tilde_path() {
+        let mut completer = PathCompleter::new();
+
+        // Complete in home directory
+        let suggestions = completer.complete("ls ~/", 5);
+        // Home directory should exist and potentially have entries
+        // Just verify it doesn't panic
+        let _ = suggestions.len();
+    }
 }

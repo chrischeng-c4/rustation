@@ -326,4 +326,174 @@ mod tests {
         assert_eq!(suggestions[0].value, "jobs");
         assert_eq!(suggestions[0].description, Some("List active jobs".to_string()));
     }
+
+    #[test]
+    fn test_no_completion_after_space() {
+        let mut completer = CommandCompleter::new();
+        // Set up cache
+        let mut cache = HashSet::new();
+        cache.insert("echo".to_string());
+        completer.cache = Some(cache);
+
+        // Cursor is after a space (in arguments), should return empty
+        let suggestions = completer.complete("echo te", 7);
+        assert!(suggestions.is_empty());
+    }
+
+    #[test]
+    fn test_empty_input_matches_all() {
+        let mut completer = CommandCompleter::new();
+        let mut cache = HashSet::new();
+        cache.insert("echo".to_string());
+        completer.cache = Some(cache);
+
+        // Empty partial matches all (starts_with("") is always true)
+        let suggestions = completer.complete("", 0);
+        // With only 1 command in cache, it should return 1 suggestion
+        assert_eq!(suggestions.len(), 1);
+    }
+
+    #[test]
+    fn test_no_matches() {
+        let mut completer = CommandCompleter::new();
+        let mut cache = HashSet::new();
+        cache.insert("echo".to_string());
+        cache.insert("cat".to_string());
+        completer.cache = Some(cache);
+
+        // Search for something that doesn't exist
+        let suggestions = completer.complete("zzz", 3);
+        assert!(suggestions.is_empty());
+    }
+
+    #[test]
+    fn test_too_many_matches_returns_empty() {
+        let mut completer = CommandCompleter::new();
+        // Create more than 50 commands that start with 'a'
+        let mut cache = HashSet::new();
+        for i in 0..60 {
+            cache.insert(format!("a{}", i));
+        }
+        completer.cache = Some(cache);
+
+        // Searching for 'a' should return empty because > 50 matches
+        let suggestions = completer.complete("a", 1);
+        assert!(suggestions.is_empty());
+    }
+
+    #[test]
+    fn test_exactly_50_matches_returns_all() {
+        let mut completer = CommandCompleter::new();
+        // Create exactly 50 commands
+        let mut cache = HashSet::new();
+        for i in 0..50 {
+            cache.insert(format!("b{:02}", i));
+        }
+        completer.cache = Some(cache);
+
+        // Searching for 'b' should return all 50
+        let suggestions = completer.complete("b", 1);
+        assert_eq!(suggestions.len(), 50);
+    }
+
+    #[test]
+    fn test_suggestion_has_correct_span() {
+        let mut completer = CommandCompleter::new();
+        let mut cache = HashSet::new();
+        cache.insert("echo".to_string());
+        completer.cache = Some(cache);
+
+        let suggestions = completer.complete("ec", 2);
+        assert!(!suggestions.is_empty());
+        assert_eq!(suggestions[0].span.start, 0);
+        assert_eq!(suggestions[0].span.end, 2);
+        assert!(suggestions[0].append_whitespace);
+    }
+
+    #[test]
+    fn test_multiple_builtin_descriptions() {
+        let mut completer = CommandCompleter::new();
+        let mut cache = HashSet::new();
+        cache.insert("cd".to_string());
+        cache.insert("exit".to_string());
+        cache.insert("quit".to_string());
+        cache.insert("fg".to_string());
+        cache.insert("bg".to_string());
+        cache.insert("history".to_string());
+        cache.insert("cat".to_string()); // No description
+        completer.cache = Some(cache);
+
+        // Test cd
+        let suggestions = completer.complete("cd", 2);
+        assert_eq!(suggestions[0].description, Some("Change directory".to_string()));
+
+        // Test exit
+        let suggestions = completer.complete("exit", 4);
+        assert_eq!(suggestions[0].description, Some("Exit the shell".to_string()));
+
+        // Test cat (no description)
+        let suggestions = completer.complete("cat", 3);
+        assert_eq!(suggestions[0].description, None);
+    }
+
+    #[test]
+    fn test_matches_prefix_case_sensitivity() {
+        let completer = CommandCompleter::new();
+
+        #[cfg(target_os = "macos")]
+        {
+            // Case-insensitive on macOS
+            assert!(completer.matches_prefix("Echo", "echo"));
+            assert!(completer.matches_prefix("echo", "ECHO"));
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            // Case-sensitive on Linux
+            assert!(completer.matches_prefix("echo", "echo"));
+            assert!(!completer.matches_prefix("Echo", "echo"));
+        }
+    }
+
+    #[test]
+    fn test_scan_path_finds_executables() {
+        let completer = CommandCompleter::new();
+        let executables = completer.scan_path();
+
+        // PATH should have at least some common executables
+        assert!(!executables.is_empty());
+
+        // Common system commands should be found
+        let has_common = executables.contains("ls")
+            || executables.contains("cat")
+            || executables.contains("echo")
+            || executables.contains("sh");
+        assert!(has_common, "Should find at least one common command");
+    }
+
+    #[test]
+    fn test_extract_partial_command() {
+        let completer = CommandCompleter::new();
+
+        // First word only
+        assert_eq!(
+            completer.extract_partial_command("echo", 4),
+            Some("echo".to_string())
+        );
+
+        // Partial first word
+        assert_eq!(
+            completer.extract_partial_command("ec", 2),
+            Some("ec".to_string())
+        );
+
+        // After space (in arguments) - should return None
+        assert_eq!(completer.extract_partial_command("echo test", 9), None);
+
+        // Empty
+        assert_eq!(
+            completer.extract_partial_command("", 0),
+            Some("".to_string())
+        );
+    }
 }
