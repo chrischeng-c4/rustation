@@ -108,7 +108,10 @@ mod feature_tests {
         let mut executor = CommandExecutor::new();
 
         // Set a variable
-        executor.env_manager_mut().set("MY_VAR".to_string(), "test_value".to_string()).unwrap();
+        executor
+            .env_manager_mut()
+            .set("MY_VAR".to_string(), "test_value".to_string())
+            .unwrap();
 
         // The variable should be available for expansion
         // (echo $MY_VAR will expand to "echo test_value")
@@ -138,7 +141,10 @@ mod feature_tests {
         let mut executor = CommandExecutor::new();
 
         // Set output directory variable
-        executor.env_manager_mut().set("TEST_DIR".to_string(), "/tmp".to_string()).unwrap();
+        executor
+            .env_manager_mut()
+            .set("TEST_DIR".to_string(), "/tmp".to_string())
+            .unwrap();
 
         let test_file = "/tmp/rush_env_test.txt";
         let _ = fs::remove_file(test_file);
@@ -161,7 +167,10 @@ mod feature_tests {
         let mut executor = CommandExecutor::new();
 
         // Add a test variable
-        executor.env_manager_mut().set("SET_TEST_VAR".to_string(), "set_value".to_string()).unwrap();
+        executor
+            .env_manager_mut()
+            .set("SET_TEST_VAR".to_string(), "set_value".to_string())
+            .unwrap();
 
         // Run set command (should succeed and list variables)
         let result = executor.execute("set");
@@ -174,7 +183,10 @@ mod feature_tests {
         let mut executor = CommandExecutor::new();
 
         // Set initial variable
-        executor.env_manager_mut().set("BASE".to_string(), "/home/user".to_string()).unwrap();
+        executor
+            .env_manager_mut()
+            .set("BASE".to_string(), "/home/user".to_string())
+            .unwrap();
 
         // Export with variable expansion
         let result = executor.execute("export FULL_PATH=$BASE/documents");

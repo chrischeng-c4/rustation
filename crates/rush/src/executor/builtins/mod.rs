@@ -3,6 +3,7 @@
 //! Handles execution of shell built-ins like `jobs`, `fg`, `bg`, `export`, `set`, etc.
 
 pub mod bg;
+pub mod cd;
 pub mod export;
 pub mod fg;
 pub mod jobs;
@@ -22,6 +23,7 @@ pub fn execute_builtin(
     args: &[String],
 ) -> Option<Result<i32>> {
     match command {
+        "cd" => Some(cd::execute(executor, args)),
         "jobs" => Some(jobs::execute(executor, args)),
         "fg" => Some(fg::execute(executor, args)),
         "bg" => Some(bg::execute(executor, args)),
