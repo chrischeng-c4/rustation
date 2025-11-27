@@ -233,8 +233,6 @@ impl PipelineExecutor {
             }
         }
     }
-
-
 }
 
 impl Default for PipelineExecutor {
@@ -387,10 +385,7 @@ impl MultiCommandExecution {
             children.push(child);
         }
 
-        Ok(Self {
-            children,
-            pipeline: pipeline.clone(),
-        })
+        Ok(Self { children, pipeline: pipeline.clone() })
     }
 
     /// Wait for all processes to complete and return last exit code

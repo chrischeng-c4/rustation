@@ -2,9 +2,9 @@
 //!
 //! Handles management of background jobs, process groups, and job status.
 
+use nix::unistd::Pid;
 use std::collections::HashMap;
 use std::fmt;
-use nix::unistd::Pid;
 
 /// Status of a job
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,13 +48,7 @@ pub struct Job {
 impl Job {
     /// Create a new job
     pub fn new(id: usize, pgid: Pid, command: String, pids: Vec<Pid>) -> Self {
-        Self {
-            id,
-            pgid,
-            command,
-            pids,
-            status: JobStatus::Running,
-        }
+        Self { id, pgid, command, pids, status: JobStatus::Running }
     }
 }
 
@@ -69,10 +63,7 @@ pub struct JobManager {
 impl JobManager {
     /// Create a new job manager
     pub fn new() -> Self {
-        Self {
-            jobs: HashMap::new(),
-            next_id: 1,
-        }
+        Self { jobs: HashMap::new(), next_id: 1 }
     }
 
     /// Add a new job
@@ -107,7 +98,7 @@ impl JobManager {
 
     /// Update status of all jobs by checking for process changes
     pub fn update_status(&mut self) {
-        use nix::sys::wait::{waitpid, WaitStatus, WaitPidFlag};
+        use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 
         for job in self.jobs.values_mut() {
             if job.status != JobStatus::Running && job.status != JobStatus::Stopped {
@@ -149,7 +140,7 @@ impl JobManager {
     /// Returns list of cleaned up jobs for notification
     pub fn cleanup(&mut self) -> Vec<Job> {
         let mut finished_ids = Vec::new();
-        
+
         for (id, job) in &self.jobs {
             if matches!(job.status, JobStatus::Done | JobStatus::Failed) {
                 finished_ids.push(*id);
@@ -162,7 +153,7 @@ impl JobManager {
                 removed_jobs.push(job);
             }
         }
-        
+
         removed_jobs
     }
 }

@@ -58,7 +58,10 @@ pub struct Command {
     ///
     /// This field is kept for backward compatibility but should not be used.
     /// Use the `redirections` field for all I/O redirection operations.
-    #[deprecated(since = "0.2.0", note = "Use redirections field for all I/O redirections")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use redirections field for all I/O redirections"
+    )]
     pub redirects: Vec<Redirect>,
 
     /// I/O redirections (>, >>, <) - current implementation

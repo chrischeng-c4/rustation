@@ -434,7 +434,7 @@ mod tests {
     fn test_flag_completion_suggestions_have_correct_format() {
         let mut completer = FlagCompleter::new();
         let suggestions = completer.complete("git --ver", 9);
-        
+
         assert!(!suggestions.is_empty());
         let suggestion = &suggestions[0];
         assert_eq!(suggestion.value, "--version");

@@ -31,12 +31,8 @@ pub struct CommandExecutor {
 impl CommandExecutor {
     /// Create a new command executor
     pub fn new() -> Self {
-        Self {
-            pipeline_executor: PipelineExecutor::new(),
-            job_manager: JobManager::new(),
-        }
+        Self { pipeline_executor: PipelineExecutor::new(), job_manager: JobManager::new() }
     }
-
 
     /// Execute a command line and return the exit code
     ///
@@ -69,7 +65,9 @@ impl CommandExecutor {
         // Check for built-ins (only if single command and not background)
         if pipeline.len() == 1 && !pipeline.background {
             let segment = &pipeline.segments[0];
-            if let Some(result) = super::builtins::execute_builtin(self, &segment.program, &segment.args) {
+            if let Some(result) =
+                super::builtins::execute_builtin(self, &segment.program, &segment.args)
+            {
                 return result;
             }
         }
@@ -93,16 +91,14 @@ impl CommandExecutor {
                 .into_iter()
                 .map(|id| Pid::from_raw(id as i32))
                 .collect();
-            
+
             // Use the process group of the first process as the job's PGID
             // In a real shell, we would setpgid here, but for MVP we trust the OS/spawn
             let pgid = pids.first().copied().unwrap_or_else(|| Pid::from_raw(0));
 
-            let job_id = self.job_manager.add_job(
-                pgid,
-                pipeline.raw_input.clone(),
-                pids.clone(),
-            );
+            let job_id = self
+                .job_manager
+                .add_job(pgid, pipeline.raw_input.clone(), pids.clone());
 
             // Print job info: [1] 12345
             if let Some(last_pid) = pids.last() {
@@ -125,7 +121,7 @@ impl CommandExecutor {
     pub fn check_background_jobs(&mut self) {
         self.job_manager.update_status();
         let finished_jobs = self.job_manager.cleanup();
-        
+
         for job in finished_jobs {
             println!("[{}] {} {}", job.id, job.status, job.command);
         }

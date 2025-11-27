@@ -143,10 +143,7 @@ pub fn extract_redirections_from_args(
                         "Redirection operator missing file path".to_string(),
                     ));
                 }
-                redirections.push(Redirection::new(
-                    RedirectionType::Output,
-                    args[i + 1].clone(),
-                ));
+                redirections.push(Redirection::new(RedirectionType::Output, args[i + 1].clone()));
                 i += 2; // Skip operator and path
             }
             ">>" => {
@@ -156,10 +153,7 @@ pub fn extract_redirections_from_args(
                         "Redirection operator missing file path".to_string(),
                     ));
                 }
-                redirections.push(Redirection::new(
-                    RedirectionType::Append,
-                    args[i + 1].clone(),
-                ));
+                redirections.push(Redirection::new(RedirectionType::Append, args[i + 1].clone()));
                 i += 2; // Skip operator and path
             }
             "<" => {
@@ -169,10 +163,7 @@ pub fn extract_redirections_from_args(
                         "Redirection operator missing file path".to_string(),
                     ));
                 }
-                redirections.push(Redirection::new(
-                    RedirectionType::Input,
-                    args[i + 1].clone(),
-                ));
+                redirections.push(Redirection::new(RedirectionType::Input, args[i + 1].clone()));
                 i += 2; // Skip operator and path
             }
             _ => {
@@ -629,7 +620,9 @@ fn split_into_segments(tokens: Vec<Token>) -> Result<Vec<PipelineSegment>> {
                 current_segment.push("<".to_string());
             }
             Token::Background => {
-                return Err(RushError::Execution("Background operator '&' must be at the end of the command".to_string()));
+                return Err(RushError::Execution(
+                    "Background operator '&' must be at the end of the command".to_string(),
+                ));
             }
         }
     }
