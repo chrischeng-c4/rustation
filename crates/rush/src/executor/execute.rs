@@ -5,6 +5,7 @@ use super::parser::parse_pipeline;
 use super::pipeline::PipelineExecutor;
 use crate::error::Result;
 use nix::unistd::Pid;
+use std::collections::HashMap;
 
 /// Simple command executor
 ///
@@ -56,8 +57,21 @@ impl CommandExecutor {
             return Ok(0);
         }
 
+        // Expand command substitutions FIRST (before parsing)
+        use super::substitution::expand_substitutions;
+        use std::env;
+        let env_map: HashMap<String, String> = env::vars().collect();
+        let line = match expand_substitutions(line, &env_map) {
+            Ok(expanded) => expanded,
+            Err(e) => {
+                tracing::warn!(error = %e, "Command substitution failed");
+                eprintln!("rush: {}", e);
+                return Ok(1);
+            }
+        };
+
         // Parse command line into pipeline (handles quotes, pipes, and redirections)
-        let pipeline = match parse_pipeline(line) {
+        let pipeline = match parse_pipeline(&line) {
             Ok(parsed) => parsed,
             Err(e) => {
                 tracing::warn!(error = %e, "Command parsing failed");

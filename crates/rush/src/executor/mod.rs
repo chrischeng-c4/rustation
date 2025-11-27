@@ -32,6 +32,7 @@ pub mod job;
 pub mod parser;
 pub mod pipeline;
 pub mod script;
+pub mod substitution;
 
 use crate::error::Result;
 use std::path::PathBuf;
