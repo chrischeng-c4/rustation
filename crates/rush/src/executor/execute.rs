@@ -1,5 +1,6 @@
 //! Command execution implementation
 
+use super::alias::AliasManager;
 use super::job::JobManager;
 use super::parser::parse_pipeline;
 use super::pipeline::PipelineExecutor;
@@ -26,6 +27,7 @@ use nix::unistd::Pid;
 pub struct CommandExecutor {
     pipeline_executor: PipelineExecutor,
     job_manager: JobManager,
+    alias_manager: AliasManager,
 }
 
 impl CommandExecutor {
@@ -34,9 +36,9 @@ impl CommandExecutor {
         Self {
             pipeline_executor: PipelineExecutor::new(),
             job_manager: JobManager::new(),
+            alias_manager: AliasManager::new(),
         }
     }
-
 
     /// Execute a command line and return the exit code
     ///
@@ -56,8 +58,22 @@ impl CommandExecutor {
             return Ok(0);
         }
 
+        // Expand aliases - check if the first word matches an alias
+        let line = {
+            let trimmed = line.trim_start();
+            let first_word = trimmed.split_whitespace().next().unwrap_or("");
+
+            if let Some(alias_value) = self.alias_manager.get(first_word) {
+                // Replace the alias name with its value
+                let rest = trimmed.strip_prefix(first_word).unwrap_or("");
+                format!("{}{}", alias_value, rest)
+            } else {
+                line.to_string()
+            }
+        };
+
         // Parse command line into pipeline (handles quotes, pipes, and redirections)
-        let pipeline = match parse_pipeline(line) {
+        let pipeline = match parse_pipeline(&line) {
             Ok(parsed) => parsed,
             Err(e) => {
                 tracing::warn!(error = %e, "Command parsing failed");
@@ -69,7 +85,9 @@ impl CommandExecutor {
         // Check for built-ins (only if single command and not background)
         if pipeline.len() == 1 && !pipeline.background {
             let segment = &pipeline.segments[0];
-            if let Some(result) = super::builtins::execute_builtin(self, &segment.program, &segment.args) {
+            if let Some(result) =
+                super::builtins::execute_builtin(self, &segment.program, &segment.args)
+            {
                 return result;
             }
         }
@@ -93,16 +111,14 @@ impl CommandExecutor {
                 .into_iter()
                 .map(|id| Pid::from_raw(id as i32))
                 .collect();
-            
+
             // Use the process group of the first process as the job's PGID
             // In a real shell, we would setpgid here, but for MVP we trust the OS/spawn
             let pgid = pids.first().copied().unwrap_or_else(|| Pid::from_raw(0));
 
-            let job_id = self.job_manager.add_job(
-                pgid,
-                pipeline.raw_input.clone(),
-                pids.clone(),
-            );
+            let job_id = self
+                .job_manager
+                .add_job(pgid, pipeline.raw_input.clone(), pids.clone());
 
             // Print job info: [1] 12345
             if let Some(last_pid) = pids.last() {
@@ -121,11 +137,21 @@ impl CommandExecutor {
         &mut self.job_manager
     }
 
+    /// Get mutable reference to alias manager (for builtins)
+    pub fn alias_manager_mut(&mut self) -> &mut AliasManager {
+        &mut self.alias_manager
+    }
+
+    /// Get immutable reference to alias manager
+    pub fn alias_manager(&self) -> &AliasManager {
+        &self.alias_manager
+    }
+
     /// Check for finished background jobs and print their status
     pub fn check_background_jobs(&mut self) {
         self.job_manager.update_status();
         let finished_jobs = self.job_manager.cleanup();
-        
+
         for job in finished_jobs {
             println!("[{}] {} {}", job.id, job.status, job.command);
         }

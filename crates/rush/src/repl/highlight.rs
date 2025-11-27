@@ -131,7 +131,7 @@ mod tests {
         // "ls" should be valid (Green)
         let style = RushHighlighter::get_style(&TokenType::Command, "ls");
         assert_eq!(style.foreground, Some(Color::Green));
-        
+
         // "invalid_cmd" should be invalid (Red)
         let style = RushHighlighter::get_style(&TokenType::Command, "invalid_cmd_xyz");
         assert_eq!(style.foreground, Some(Color::Red));

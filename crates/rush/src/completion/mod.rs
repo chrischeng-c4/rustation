@@ -133,9 +133,8 @@ mod tests {
         let mut registry = CompletionRegistry::new();
         // Should delegate to CommandCompleter for command completion
         // Try a common command prefix
-        let suggestions = registry.complete("ca", 2);
+        let _suggestions = registry.complete("ca", 2);
         // Should either find matches or return empty (depending on PATH)
         // Main thing is it doesn't crash
-        assert!(suggestions.len() >= 0);
     }
 }

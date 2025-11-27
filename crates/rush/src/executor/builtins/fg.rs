@@ -13,20 +13,23 @@ use std::io::stdin;
 /// Execute the 'fg' command
 pub fn execute(executor: &mut CommandExecutor, args: &[String]) -> Result<i32> {
     let manager = executor.job_manager_mut();
-    
+
     // Parse job ID or use default (last job)
     let job_id = if let Some(arg) = args.first() {
-        arg.parse::<usize>().map_err(|_| RushError::Execution("Invalid job ID".to_string()))?
+        arg.parse::<usize>()
+            .map_err(|_| RushError::Execution("Invalid job ID".to_string()))?
     } else {
         // Find last job
-        manager.jobs()
+        manager
+            .jobs()
             .max_by_key(|j| j.id)
             .map(|j| j.id)
             .ok_or_else(|| RushError::Execution("No current job".to_string()))?
     };
 
     // Get job
-    let job = manager.get_job_mut(job_id)
+    let job = manager
+        .get_job_mut(job_id)
         .ok_or_else(|| RushError::Execution(format!("Job {} not found", job_id)))?;
 
     let pgid = job.pgid;
@@ -50,7 +53,7 @@ pub fn execute(executor: &mut CommandExecutor, args: &[String]) -> Result<i32> {
     // We need to wait for ALL processes in the job
     // For MVP, we just wait for the last one or any that stops
     // A proper shell implementation is more complex here
-    
+
     let mut exit_code = 0;
     let mut stopped = false;
 

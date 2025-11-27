@@ -12,7 +12,7 @@ pub fn execute(executor: &mut CommandExecutor, _args: &[String]) -> Result<i32> 
 
     let manager = executor.job_manager_mut();
     let mut jobs: Vec<_> = manager.jobs().collect();
-    
+
     // Sort by ID for consistent output
     jobs.sort_by_key(|j| j.id);
 
