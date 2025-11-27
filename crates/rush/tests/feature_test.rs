@@ -257,4 +257,49 @@ mod feature_tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 0);
     }
+
+    #[test]
+    fn test_stderr_redirection() {
+        let mut executor = CommandExecutor::new();
+        let test_file = "/tmp/rush_stderr_test.txt";
+
+        // Clean up first
+        let _ = fs::remove_file(test_file);
+
+        // Run command that outputs to stderr (ls on nonexistent produces error)
+        // Using 2> to redirect stderr to file (no space between 2 and >)
+        let result = executor.execute("ls /nonexistent_path_12345 2>/tmp/rush_stderr_test.txt");
+        // Command fails but redirection should work
+        assert!(result.is_ok());
+
+        // Check that error was captured to file
+        let content = fs::read_to_string(test_file).unwrap_or_default();
+        assert!(
+            content.contains("No such file") || content.contains("nonexistent"),
+            "Expected error message in stderr file, got: {}",
+            content
+        );
+
+        // Clean up
+        let _ = fs::remove_file(test_file);
+    }
+
+    #[test]
+    fn test_both_output_redirection() {
+        let mut executor = CommandExecutor::new();
+        let test_file = "/tmp/rush_both_test.txt";
+
+        // Clean up first
+        let _ = fs::remove_file(test_file);
+
+        // Test &> which redirects both stdout and stderr
+        let result = executor.execute("echo hello &> /tmp/rush_both_test.txt");
+        assert!(result.is_ok());
+
+        let content = fs::read_to_string(test_file).unwrap_or_default();
+        assert!(content.contains("hello"));
+
+        // Clean up
+        let _ = fs::remove_file(test_file);
+    }
 }

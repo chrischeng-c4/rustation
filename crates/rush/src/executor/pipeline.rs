@@ -117,6 +117,10 @@ impl PipelineExecutor {
         cmd.env_clear().envs(env_map);
 
         // Apply redirections if any
+        // Track whether we've set up stderr to avoid overwriting
+        let mut stderr_set = false;
+        let mut stdout_file: Option<File> = None;
+
         if !redirections.is_empty() {
             for redir in redirections {
                 match redir.redir_type {
@@ -136,6 +140,11 @@ impl PipelineExecutor {
                             eprintln!("rush: {}", msg);
                             RushError::Redirection(msg)
                         })?;
+                        // Keep a copy for potential 2>&1
+                        stdout_file = Some(
+                            file.try_clone()
+                                .unwrap_or_else(|_| File::create(&redir.file_path).unwrap()),
+                        );
                         cmd.stdout(Stdio::from(file));
                     }
                     super::RedirectionType::Append => {
@@ -158,6 +167,12 @@ impl PipelineExecutor {
                                 eprintln!("rush: {}", msg);
                                 RushError::Redirection(msg)
                             })?;
+                        stdout_file = Some(file.try_clone().unwrap_or_else(|_| {
+                            OpenOptions::new()
+                                .append(true)
+                                .open(&redir.file_path)
+                                .unwrap()
+                        }));
                         cmd.stdout(Stdio::from(file));
                     }
                     super::RedirectionType::Input => {
@@ -178,10 +193,82 @@ impl PipelineExecutor {
                         })?;
                         cmd.stdin(Stdio::from(file));
                     }
+                    super::RedirectionType::StderrOutput => {
+                        // Create/truncate file for stderr redirection
+                        let file = File::create(&redir.file_path).map_err(|e| {
+                            let msg = format!("{}: {}", redir.file_path, e);
+                            tracing::error!(error = %msg, "Stderr redirection failed");
+                            eprintln!("rush: {}", msg);
+                            RushError::Redirection(msg)
+                        })?;
+                        cmd.stderr(Stdio::from(file));
+                        stderr_set = true;
+                    }
+                    super::RedirectionType::StderrAppend => {
+                        // Open file in append mode for stderr
+                        let file = OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&redir.file_path)
+                            .map_err(|e| {
+                                let msg = format!("{}: {}", redir.file_path, e);
+                                tracing::error!(error = %msg, "Stderr append failed");
+                                eprintln!("rush: {}", msg);
+                                RushError::Redirection(msg)
+                            })?;
+                        cmd.stderr(Stdio::from(file));
+                        stderr_set = true;
+                    }
+                    super::RedirectionType::StderrToStdout => {
+                        // Redirect stderr to wherever stdout is going
+                        if let Some(ref file) = stdout_file {
+                            cmd.stderr(Stdio::from(file.try_clone().map_err(|e| {
+                                RushError::Redirection(format!("Failed to dup stdout: {}", e))
+                            })?));
+                        } else {
+                            // stdout not redirected, stderr goes to inherited stdout
+                            cmd.stderr(Stdio::inherit());
+                        }
+                        stderr_set = true;
+                    }
+                    super::RedirectionType::BothOutput => {
+                        // Redirect both stdout and stderr to file
+                        let file = File::create(&redir.file_path).map_err(|e| {
+                            let msg = format!("{}: {}", redir.file_path, e);
+                            eprintln!("rush: {}", msg);
+                            RushError::Redirection(msg)
+                        })?;
+                        let file2 = file.try_clone().map_err(|e| {
+                            RushError::Redirection(format!("Failed to dup file: {}", e))
+                        })?;
+                        cmd.stdout(Stdio::from(file));
+                        cmd.stderr(Stdio::from(file2));
+                        stderr_set = true;
+                    }
+                    super::RedirectionType::BothAppend => {
+                        // Append both stdout and stderr to file
+                        let file = OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&redir.file_path)
+                            .map_err(|e| {
+                                let msg = format!("{}: {}", redir.file_path, e);
+                                eprintln!("rush: {}", msg);
+                                RushError::Redirection(msg)
+                            })?;
+                        let file2 = file.try_clone().map_err(|e| {
+                            RushError::Redirection(format!("Failed to dup file: {}", e))
+                        })?;
+                        cmd.stdout(Stdio::from(file));
+                        cmd.stderr(Stdio::from(file2));
+                        stderr_set = true;
+                    }
                 }
             }
-            // If we have redirections, stderr still inherits unless redirected
-            cmd.stderr(Stdio::inherit());
+            // If we have redirections but stderr wasn't explicitly set, inherit it
+            if !stderr_set {
+                cmd.stderr(Stdio::inherit());
+            }
         } else {
             // No redirections - use inherited stdio for all streams
             cmd.stdin(Stdio::inherit())
@@ -300,6 +387,8 @@ impl MultiCommandExecution {
             // Apply redirections first (they override default stdio setup)
             let mut has_output_redir = false;
             let mut has_input_redir = false;
+            let mut has_stderr_redir = false;
+            let mut stdout_file_for_dup: Option<File> = None;
 
             for redir in &segment.redirections {
                 match redir.redir_type {
@@ -317,6 +406,7 @@ impl MultiCommandExecution {
                             eprintln!("rush: {}", msg);
                             RushError::Redirection(msg)
                         })?;
+                        stdout_file_for_dup = file.try_clone().ok();
                         cmd.stdout(Stdio::from(file));
                         has_output_redir = true;
                     }
@@ -338,6 +428,7 @@ impl MultiCommandExecution {
                                 eprintln!("rush: {}", msg);
                                 RushError::Redirection(msg)
                             })?;
+                        stdout_file_for_dup = file.try_clone().ok();
                         cmd.stdout(Stdio::from(file));
                         has_output_redir = true;
                     }
@@ -358,7 +449,74 @@ impl MultiCommandExecution {
                         cmd.stdin(Stdio::from(file));
                         has_input_redir = true;
                     }
+                    super::RedirectionType::StderrOutput => {
+                        let file = File::create(&redir.file_path).map_err(|e| {
+                            let msg = format!("{}: {}", redir.file_path, e);
+                            eprintln!("rush: {}", msg);
+                            RushError::Redirection(msg)
+                        })?;
+                        cmd.stderr(Stdio::from(file));
+                        has_stderr_redir = true;
+                    }
+                    super::RedirectionType::StderrAppend => {
+                        let file = OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&redir.file_path)
+                            .map_err(|e| {
+                                let msg = format!("{}: {}", redir.file_path, e);
+                                eprintln!("rush: {}", msg);
+                                RushError::Redirection(msg)
+                            })?;
+                        cmd.stderr(Stdio::from(file));
+                        has_stderr_redir = true;
+                    }
+                    super::RedirectionType::StderrToStdout => {
+                        if let Some(ref file) = stdout_file_for_dup {
+                            if let Ok(dup) = file.try_clone() {
+                                cmd.stderr(Stdio::from(dup));
+                            }
+                        } else {
+                            cmd.stderr(Stdio::inherit());
+                        }
+                        has_stderr_redir = true;
+                    }
+                    super::RedirectionType::BothOutput => {
+                        let file = File::create(&redir.file_path).map_err(|e| {
+                            let msg = format!("{}: {}", redir.file_path, e);
+                            eprintln!("rush: {}", msg);
+                            RushError::Redirection(msg)
+                        })?;
+                        if let Ok(file2) = file.try_clone() {
+                            cmd.stderr(Stdio::from(file2));
+                        }
+                        cmd.stdout(Stdio::from(file));
+                        has_output_redir = true;
+                        has_stderr_redir = true;
+                    }
+                    super::RedirectionType::BothAppend => {
+                        let file = OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&redir.file_path)
+                            .map_err(|e| {
+                                let msg = format!("{}: {}", redir.file_path, e);
+                                eprintln!("rush: {}", msg);
+                                RushError::Redirection(msg)
+                            })?;
+                        if let Ok(file2) = file.try_clone() {
+                            cmd.stderr(Stdio::from(file2));
+                        }
+                        cmd.stdout(Stdio::from(file));
+                        has_output_redir = true;
+                        has_stderr_redir = true;
+                    }
                 }
+            }
+
+            // Set stderr to inherit if not redirected
+            if !has_stderr_redir {
+                cmd.stderr(Stdio::inherit());
             }
 
             // Configure stdin (only if not redirected)
@@ -382,9 +540,6 @@ impl MultiCommandExecution {
                     cmd.stdout(Stdio::piped());
                 }
             }
-
-            // All commands: stderr to terminal
-            cmd.stderr(Stdio::inherit());
 
             // Spawn the command
             let mut child = match cmd.spawn() {

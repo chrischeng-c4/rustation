@@ -142,14 +142,24 @@ pub enum RedirectionType {
     Append,
     /// Input redirection (<) - read from file
     Input,
+    /// Stderr output (2>) - truncate and write stderr to file
+    StderrOutput,
+    /// Stderr append (2>>) - append stderr to file
+    StderrAppend,
+    /// Stderr to stdout (2>&1) - redirect stderr to stdout
+    StderrToStdout,
+    /// Both stdout and stderr (&>) - redirect both to file
+    BothOutput,
+    /// Both stdout and stderr append (&>>) - append both to file
+    BothAppend,
 }
 
 /// A single redirection operation with type and target file path
 #[derive(Debug, Clone, PartialEq)]
 pub struct Redirection {
-    /// Type of redirection (>, >>, or <)
+    /// Type of redirection (>, >>, <, 2>, etc.)
     pub redir_type: RedirectionType,
-    /// File path for redirection target/source
+    /// File path for redirection target/source (empty for 2>&1)
     pub file_path: String,
 }
 
@@ -162,6 +172,10 @@ impl Redirection {
     /// Validates that the redirection is well-formed
     pub fn validate(&self) -> crate::error::Result<()> {
         use crate::error::RushError;
+        // 2>&1 doesn't need a file path
+        if self.redir_type == RedirectionType::StderrToStdout {
+            return Ok(());
+        }
         if self.file_path.is_empty() {
             return Err(RushError::Execution("Empty file path for redirection".to_string()));
         }

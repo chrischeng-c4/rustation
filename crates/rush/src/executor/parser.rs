@@ -31,6 +31,16 @@ enum Token {
     RedirectAppend,
     /// Input redirection (<)
     RedirectIn,
+    /// Stderr redirection (2>)
+    RedirectStderr,
+    /// Stderr append (2>>)
+    RedirectStderrAppend,
+    /// Stderr to stdout (2>&1)
+    RedirectStderrToStdout,
+    /// Both stdout and stderr (&>)
+    RedirectBoth,
+    /// Both stdout and stderr append (&>>)
+    RedirectBothAppend,
     /// Background execution (&)
     Background,
 }
@@ -59,7 +69,13 @@ pub fn parse_command_with_redirections(
                 words.push(w.clone());
                 i += 1;
             }
-            Token::RedirectOut | Token::RedirectAppend | Token::RedirectIn => {
+            Token::RedirectOut
+            | Token::RedirectAppend
+            | Token::RedirectIn
+            | Token::RedirectStderr
+            | Token::RedirectStderrAppend
+            | Token::RedirectBoth
+            | Token::RedirectBothAppend => {
                 // Redirection operator must be followed by a file path
                 if i + 1 >= tokens.len() {
                     return Err(RushError::Execution(
@@ -73,6 +89,10 @@ pub fn parse_command_with_redirections(
                         Token::RedirectOut => RedirectionType::Output,
                         Token::RedirectAppend => RedirectionType::Append,
                         Token::RedirectIn => RedirectionType::Input,
+                        Token::RedirectStderr => RedirectionType::StderrOutput,
+                        Token::RedirectStderrAppend => RedirectionType::StderrAppend,
+                        Token::RedirectBoth => RedirectionType::BothOutput,
+                        Token::RedirectBothAppend => RedirectionType::BothAppend,
                         _ => unreachable!(),
                     };
                     redirections.push(Redirection::new(redir_type, path.clone()));
@@ -82,6 +102,11 @@ pub fn parse_command_with_redirections(
                         "Redirection operator must be followed by file path".to_string(),
                     ));
                 }
+            }
+            Token::RedirectStderrToStdout => {
+                // 2>&1 doesn't need a file path
+                redirections.push(Redirection::new(RedirectionType::StderrToStdout, String::new()));
+                i += 1;
             }
             // Note: Pipe and Background tokens are never produced by tokenize_with_redirections
             // They are only created by tokenize_pipeline, which is used for parse_pipeline
@@ -244,16 +269,40 @@ fn tokenize_with_redirections(line: &str) -> Result<Vec<Token>> {
                 in_double_quote = !in_double_quote;
             }
             '>' if !in_single_quote && !in_double_quote => {
-                // Check for >> (append) operator
+                // Check if current token is "2" (stderr redirect)
+                let is_stderr = current_token == "2";
+                if is_stderr {
+                    current_token.clear();
+                }
+
+                // Push any other accumulated token
                 if !current_token.is_empty() || had_quotes {
                     tokens.push(Token::Word(current_token.clone()));
                     current_token.clear();
                     had_quotes = false;
                 }
 
+                // Check for >> (append) operator
                 if chars.peek() == Some(&'>') {
                     chars.next(); // Consume second >
-                    tokens.push(Token::RedirectAppend);
+                    if is_stderr {
+                        tokens.push(Token::RedirectStderrAppend);
+                    } else {
+                        tokens.push(Token::RedirectAppend);
+                    }
+                } else if is_stderr && chars.peek() == Some(&'&') {
+                    // Check for 2>&1 pattern
+                    chars.next(); // Consume &
+                    if chars.peek() == Some(&'1') {
+                        chars.next(); // Consume 1
+                        tokens.push(Token::RedirectStderrToStdout);
+                    } else {
+                        // Invalid: 2>&X where X != 1, treat as error or literal
+                        tokens.push(Token::RedirectStderr);
+                        tokens.push(Token::Word("&".to_string()));
+                    }
+                } else if is_stderr {
+                    tokens.push(Token::RedirectStderr);
                 } else {
                     tokens.push(Token::RedirectOut);
                 }
@@ -266,6 +315,27 @@ fn tokenize_with_redirections(line: &str) -> Result<Vec<Token>> {
                     had_quotes = false;
                 }
                 tokens.push(Token::RedirectIn);
+            }
+            '&' if !in_single_quote && !in_double_quote => {
+                // Check for &> or &>> (both stdout and stderr)
+                if !current_token.is_empty() || had_quotes {
+                    tokens.push(Token::Word(current_token.clone()));
+                    current_token.clear();
+                    had_quotes = false;
+                }
+
+                if chars.peek() == Some(&'>') {
+                    chars.next(); // Consume >
+                    if chars.peek() == Some(&'>') {
+                        chars.next(); // Consume second >
+                        tokens.push(Token::RedirectBothAppend);
+                    } else {
+                        tokens.push(Token::RedirectBoth);
+                    }
+                } else {
+                    // Plain & is background operator (handled elsewhere or ignored)
+                    tokens.push(Token::Word("&".to_string()));
+                }
             }
             ' ' | '\t' if !in_single_quote && !in_double_quote => {
                 // Whitespace outside quotes - end current token
@@ -426,16 +496,39 @@ fn tokenize_with_pipes(line: &str) -> Result<Vec<Token>> {
                 tokens.push(Token::Pipe);
             }
             '>' if !in_single_quote && !in_double_quote => {
+                // Check if current word is "2" (stderr redirect)
+                let is_stderr = current_word == "2";
+                if is_stderr {
+                    current_word.clear();
+                }
+
                 // Redirection operator outside quotes
                 if !current_word.is_empty() || had_quotes {
                     tokens.push(Token::Word(current_word.clone()));
                     current_word.clear();
                     had_quotes = false;
                 }
-                // Check for >> (append) operator
+
+                // Check for >> (append) or 2>&1
                 if chars.peek() == Some(&'>') {
                     chars.next(); // Consume second >
-                    tokens.push(Token::RedirectAppend);
+                    if is_stderr {
+                        tokens.push(Token::RedirectStderrAppend);
+                    } else {
+                        tokens.push(Token::RedirectAppend);
+                    }
+                } else if is_stderr && chars.peek() == Some(&'&') {
+                    // Check for 2>&1 pattern
+                    chars.next(); // Consume &
+                    if chars.peek() == Some(&'1') {
+                        chars.next(); // Consume 1
+                        tokens.push(Token::RedirectStderrToStdout);
+                    } else {
+                        tokens.push(Token::RedirectStderr);
+                        tokens.push(Token::Word("&".to_string()));
+                    }
+                } else if is_stderr {
+                    tokens.push(Token::RedirectStderr);
                 } else {
                     tokens.push(Token::RedirectOut);
                 }
@@ -450,13 +543,25 @@ fn tokenize_with_pipes(line: &str) -> Result<Vec<Token>> {
                 tokens.push(Token::RedirectIn);
             }
             '&' if !in_single_quote && !in_double_quote => {
-                // Background operator outside quotes
+                // Check for &> or &>> (both stdout and stderr)
                 if !current_word.is_empty() || had_quotes {
                     tokens.push(Token::Word(current_word.clone()));
                     current_word.clear();
                     had_quotes = false;
                 }
-                tokens.push(Token::Background);
+
+                if chars.peek() == Some(&'>') {
+                    chars.next(); // Consume >
+                    if chars.peek() == Some(&'>') {
+                        chars.next(); // Consume second >
+                        tokens.push(Token::RedirectBothAppend);
+                    } else {
+                        tokens.push(Token::RedirectBoth);
+                    }
+                } else {
+                    // Plain & is background operator
+                    tokens.push(Token::Background);
+                }
             }
             ' ' | '\t' if !in_single_quote && !in_double_quote => {
                 // Whitespace outside quotes - end word
@@ -544,7 +649,13 @@ fn split_into_segments(tokens: Vec<Token>) -> Result<Vec<PipelineSegment>> {
                 current_redirections.clear();
                 i += 1;
             }
-            Token::RedirectOut | Token::RedirectAppend | Token::RedirectIn => {
+            Token::RedirectOut
+            | Token::RedirectAppend
+            | Token::RedirectIn
+            | Token::RedirectStderr
+            | Token::RedirectStderrAppend
+            | Token::RedirectBoth
+            | Token::RedirectBothAppend => {
                 // Redirection operator must be followed by a file path
                 if i + 1 >= tokens.len() {
                     return Err(RushError::Execution(
@@ -558,6 +669,10 @@ fn split_into_segments(tokens: Vec<Token>) -> Result<Vec<PipelineSegment>> {
                         Token::RedirectOut => RedirectionType::Output,
                         Token::RedirectAppend => RedirectionType::Append,
                         Token::RedirectIn => RedirectionType::Input,
+                        Token::RedirectStderr => RedirectionType::StderrOutput,
+                        Token::RedirectStderrAppend => RedirectionType::StderrAppend,
+                        Token::RedirectBoth => RedirectionType::BothOutput,
+                        Token::RedirectBothAppend => RedirectionType::BothAppend,
                         _ => unreachable!(),
                     };
                     current_redirections.push(Redirection::new(redir_type, path.clone()));
@@ -567,6 +682,12 @@ fn split_into_segments(tokens: Vec<Token>) -> Result<Vec<PipelineSegment>> {
                         "Redirection operator must be followed by file path".to_string(),
                     ));
                 }
+            }
+            Token::RedirectStderrToStdout => {
+                // 2>&1 doesn't need a file path
+                current_redirections
+                    .push(Redirection::new(RedirectionType::StderrToStdout, String::new()));
+                i += 1;
             }
             Token::Background => {
                 return Err(RushError::Execution(
@@ -937,6 +1058,45 @@ mod tests {
         assert_eq!(tokens3[2], Token::RedirectOut);
     }
 
+    #[test]
+    fn test_tokenize_stderr_redirect() {
+        let tokens = tokenize_with_redirections("ls 2>err.txt").unwrap();
+        println!("Tokens for 'ls 2>err.txt': {:?}", tokens);
+        assert_eq!(tokens.len(), 3, "Expected 3 tokens, got {:?}", tokens);
+        assert_eq!(tokens[0], Token::Word("ls".to_string()));
+        assert_eq!(tokens[1], Token::RedirectStderr);
+        assert_eq!(tokens[2], Token::Word("err.txt".to_string()));
+    }
+
+    #[test]
+    fn test_tokenize_with_pipes_stderr_redirect() {
+        let tokens = tokenize_with_pipes("ls 2>err.txt").unwrap();
+        println!("Tokens from tokenize_with_pipes for 'ls 2>err.txt': {:?}", tokens);
+        assert_eq!(tokens.len(), 3, "Expected 3 tokens, got {:?}", tokens);
+        assert_eq!(tokens[0], Token::Word("ls".to_string()));
+        assert_eq!(tokens[1], Token::RedirectStderr);
+        assert_eq!(tokens[2], Token::Word("err.txt".to_string()));
+    }
+
+    #[test]
+    fn test_tokenize_stderr_to_stdout() {
+        let tokens = tokenize_with_redirections("ls 2>&1").unwrap();
+        println!("Tokens for 'ls 2>&1': {:?}", tokens);
+        assert_eq!(tokens.len(), 2, "Expected 2 tokens, got {:?}", tokens);
+        assert_eq!(tokens[0], Token::Word("ls".to_string()));
+        assert_eq!(tokens[1], Token::RedirectStderrToStdout);
+    }
+
+    #[test]
+    fn test_tokenize_both_redirect() {
+        let tokens = tokenize_with_redirections("ls &>out.txt").unwrap();
+        println!("Tokens for 'ls &>out.txt': {:?}", tokens);
+        assert_eq!(tokens.len(), 3, "Expected 3 tokens, got {:?}", tokens);
+        assert_eq!(tokens[0], Token::Word("ls".to_string()));
+        assert_eq!(tokens[1], Token::RedirectBoth);
+        assert_eq!(tokens[2], Token::Word("out.txt".to_string()));
+    }
+
     // parse_command_with_redirections tests
     #[test]
     fn test_parse_with_output_redirection() {
@@ -958,6 +1118,17 @@ mod tests {
         assert_eq!(redirs.len(), 1);
         assert_eq!(redirs[0].redir_type, RedirectionType::Append);
         assert_eq!(redirs[0].file_path, "log.txt");
+    }
+
+    #[test]
+    fn test_parse_with_stderr_redirection() {
+        let (program, args, redirs) = parse_command_with_redirections("ls /foo 2>err.txt").unwrap();
+        println!("Program: {}, Args: {:?}, Redirs: {:?}", program, args, redirs);
+        assert_eq!(program, "ls");
+        assert_eq!(args, vec!["/foo"]);
+        assert_eq!(redirs.len(), 1);
+        assert_eq!(redirs[0].redir_type, RedirectionType::StderrOutput);
+        assert_eq!(redirs[0].file_path, "err.txt");
     }
 
     #[test]
