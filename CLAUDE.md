@@ -609,6 +609,8 @@ When user asks to work on rush, immediately check and enforce SDD.
 
 ### When to Use Sequential Thinking
 
+**⚠️ IMPORTANT FOR AGENTS: Always try to use sequential thinking for non-trivial development tasks. This is not optional—it's a best practice for this repository.**
+
 The Sequential Thinking MCP provides tools for breaking down complex problems into structured reasoning steps. Use it for:
 
 **Spec-Driven Development Phases:**
@@ -683,12 +685,24 @@ Constitution → Specification → [SEQUENTIAL THINKING] → Plan → Tasks → 
 
 ### Activating Sequential Thinking
 
-The MCP server loads automatically when Claude Code starts. You don't need to do anything special - Claude will use it when appropriate for complex reasoning tasks.
+The MCP server loads automatically when Claude Code starts. Claude should use it proactively and aggressively for most development tasks.
+
+**Agent Guidance (IMPORTANT):**
+When working on rush development, **always try to use sequential thinking** for:
+- Any architectural decisions or design choices
+- Multi-step implementations or complex features
+- Debugging issues that are non-obvious
+- Making trade-off decisions between approaches
+- Planning task breakdown and dependency ordering
+- Code reviews for complex implementations
+
+This is NOT optional for complex work—use it as a default tool for reasoning through non-trivial problems.
 
 **Manual Trigger**: If you want to explicitly request structured thinking, say:
 - "Use sequential thinking to evaluate..."
 - "Think through this step-by-step..."
 - "Break down this problem systematically..."
+- Simply invoke the `mcp__sequential-thinking__sequentialthinking` tool directly
 
 ### Configuration
 

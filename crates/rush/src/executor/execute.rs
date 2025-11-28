@@ -1,6 +1,5 @@
 //! Command execution implementation
 
-use super::expansion::expand_variables;
 use super::job::JobManager;
 use super::parser::parse_pipeline;
 use super::pipeline::PipelineExecutor;
@@ -29,19 +28,12 @@ use nix::unistd::Pid;
 pub struct CommandExecutor {
     pipeline_executor: PipelineExecutor,
     job_manager: JobManager,
-    variable_manager: VariableManager,
-    last_exit_code: i32,
 }
 
 impl CommandExecutor {
     /// Create a new command executor
     pub fn new() -> Self {
-        Self {
-            pipeline_executor: PipelineExecutor::new(),
-            job_manager: JobManager::new(),
-            variable_manager: VariableManager::new(),
-            last_exit_code: 0,
-        }
+        Self { pipeline_executor: PipelineExecutor::new(), job_manager: JobManager::new() }
     }
 
     /// Execute a command line and return the exit code
@@ -81,10 +73,7 @@ impl CommandExecutor {
             if let Some(result) =
                 super::builtins::execute_builtin(self, &segment.program, &segment.args)
             {
-                // Store exit code for $? expansion
-                let exit_code = result?;
-                self.last_exit_code = exit_code;
-                return Ok(exit_code);
+                return result;
             }
         }
 
@@ -97,13 +86,10 @@ impl CommandExecutor {
         // Execute the pipeline
         let execution = match self.pipeline_executor.spawn(&pipeline) {
             Ok(execution) => execution,
-            Err(_) => {
-                self.last_exit_code = 127;
-                return Ok(127);
-            }
+            Err(_) => return Ok(127),
         };
 
-        let exit_code = if pipeline.background {
+        if pipeline.background {
             // Background execution
             let pids: Vec<Pid> = execution
                 .pids()
@@ -124,39 +110,16 @@ impl CommandExecutor {
                 println!("[{}] {}", job_id, last_pid);
             }
 
-            0
+            Ok(0)
         } else {
             // Foreground execution
-            execution.wait_all()?
-        };
-
-        self.last_exit_code = exit_code;
-        Ok(exit_code)
+            execution.wait_all()
+        }
     }
 
     /// Get mutable reference to job manager (for builtins)
     pub fn job_manager_mut(&mut self) -> &mut JobManager {
         &mut self.job_manager
-    }
-
-    /// Get mutable reference to variable manager (for builtins)
-    pub fn variable_manager_mut(&mut self) -> &mut VariableManager {
-        &mut self.variable_manager
-    }
-
-    /// Get reference to variable manager
-    pub fn variable_manager(&self) -> &VariableManager {
-        &self.variable_manager
-    }
-
-    /// Set the last exit code (for $? expansion)
-    pub fn set_last_exit_code(&mut self, code: i32) {
-        self.last_exit_code = code;
-    }
-
-    /// Get the last exit code
-    pub fn last_exit_code(&self) -> i32 {
-        self.last_exit_code
     }
 
     /// Check for finished background jobs and print their status
