@@ -161,7 +161,7 @@ fn expand_single_pattern(pattern: &str) -> Result<Vec<String>> {
 
     for entry in entries {
         if let Ok(entry) = entry {
-            if let Ok(metadata) = entry.metadata() {
+            if let Ok(_metadata) = entry.metadata() {
                 let filename = match entry.file_name().into_string() {
                     Ok(name) => name,
                     Err(_) => continue,

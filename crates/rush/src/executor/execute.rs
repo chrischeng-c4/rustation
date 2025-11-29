@@ -1,6 +1,7 @@
 //! Command execution implementation
 
 use super::expansion::expand_variables;
+use super::glob::glob_expand;
 use super::job::JobManager;
 use super::parser::parse_pipeline;
 use super::pipeline::PipelineExecutor;
@@ -65,8 +66,11 @@ impl CommandExecutor {
         // Expand variables in the command line
         let expanded_line = expand_variables(line, self);
 
+        // Expand glob patterns (*, ?, [abc]) in arguments
+        let globbed_line = glob_expand(&expanded_line)?;
+
         // Parse command line into pipeline (handles quotes, pipes, and redirections)
-        let pipeline = match parse_pipeline(&expanded_line) {
+        let pipeline = match parse_pipeline(&globbed_line) {
             Ok(parsed) => parsed,
             Err(e) => {
                 tracing::warn!(error = %e, "Command parsing failed");
