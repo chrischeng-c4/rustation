@@ -20,16 +20,11 @@ Each feature is organized in its own directory with:
 | 001 | Rush MVP | ✅ Complete | ✅ Merged | ✅ 107+ |
 | 002 | Tab Completion | ✅ Complete | ✅ Merged | ✅ 20+ |
 | 003 | Autosuggestions | ✅ Complete | ✅ Merged | ✅ 15+ |
+| 004 | Pipes | ✅ Complete | ✅ Merged | ✅ 10+ |
 | 005 | Output Redirection (>, >>, <) | ✅ Complete | ✅ Merged | ✅ 10+ |
+| 006 | Job Control | ✅ Complete | ✅ Merged | ✅ 26+ |
 | 013 | CD Builtin | ✅ Complete | ✅ Merged | ✅ 8+ |
 | 014 | Environment Variables | ✅ Complete | ✅ Merged | ✅ 20+ |
-
-### ✅ Documented + Complete Implementation
-
-| # | Feature | Status | Implementation | Tests | Note |
-|---|---------|--------|-----------------|-------|------|
-| 004 | Pipes | ✅ Complete | ✅ Merged | ✅ 10+ | Retrospective specs created |
-| 006 | Job Control | ⚠️ 60% | ⚠️ Merged (incomplete) | ⚠️ 3 | Needs Ctrl+Z + tests |
 
 ### ⏳ Planned (Specification Complete, Implementation Pending)
 
@@ -136,23 +131,21 @@ Each feature is organized in its own directory with:
 
 ---
 
-### 006: Job Control ⚠️ PARTIAL (RETROSPECTIVE SPECS)
+### 006: Job Control ✅ COMPLETE
 **User Stories**: 6 (Background &, jobs listing, fg/bg commands, Ctrl+Z suspension, status updates)
-**Implemented (60%)**:
-- Background execution with `&`
-- `jobs` command lists running jobs
-- `fg` command resumes in foreground
-- `bg` command resumes in background
-- Automatic job cleanup
+**Implemented Features**:
+- Background execution with `&` - Run commands in background
+- `jobs` command - List running/stopped jobs with status
+- `fg` command - Resume stopped job in foreground
+- `bg` command - Resume stopped job in background
+- Ctrl+Z (SIGTSTP) suspension - Stop foreground process, convert to background job
+- Automatic job cleanup - Clean up finished jobs
+- Process group management - Proper signal delivery to all processes
+- Enhanced integration tests - 26+ tests covering all job control workflows
 
-**Missing (40%)**:
-- Ctrl+Z (SIGTSTP) suspension ⚠️ CRITICAL
-- Comprehensive integration tests
-- Enhanced process group management
-
-**Status**: Partial implementation with specs, needs completion
+**Status**: Complete implementation with comprehensive test coverage
 **Files**: `006-job-control/`
-**Next Steps**: Implement Ctrl+Z and add tests (Phase 3)
+**Completion**: Phase 3 completed (Commit 232255d)
 
 ---
 
@@ -247,13 +240,12 @@ Each feature directory should contain spec.md and plan.md at minimum.
 ## Statistics
 
 **Completion Status**:
-- ✅ **6 features complete** (001-003, 005, 013-014)
-- ⚠️ **2 features documented but partial** (004 documented/complete, 006 documented/60% complete)
+- ✅ **8 features complete** (001-006, 013-014)
 - ⏳ **1 feature planned** (009 - spec ready)
 - 🔮 **5 features reserved** (007-008, 010-012)
 
 **Total Test Coverage** (approximate):
-- **155+ tests** across all implemented features
+- **216+ tests** across all implemented features
 - Focus on unit tests, integration tests, and edge cases
 
 **Lines of Code** (approximate):
@@ -287,5 +279,6 @@ For questions about:
 
 ---
 
-**Last Updated**: 2025-11-29
+**Last Updated**: 2025-11-30
 **Total Features Documented**: 9 (001-006, 009, 013-014)
+**Total Features Complete**: 8 (001-006, 013-014)

@@ -1,8 +1,9 @@
 # Specification: Job Control
 
 **Feature ID:** 006-job-control
-**Status:** Partially Complete (60% implemented, 40% remaining)
+**Status:** ✅ Complete (100% implemented)
 **Created:** 2025-11-29
+**Updated:** 2025-11-30
 **Original MVP Reference:** 001-rush-mvp spec.md, User Story 6
 
 ## Overview
@@ -179,13 +180,13 @@ $ bg 1
 
 ---
 
-### US5: Suspend with Ctrl+Z ❌ NOT IMPLEMENTED (CRITICAL)
+### US5: Suspend with Ctrl+Z ✅ IMPLEMENTED
 
 **As a** shell user
 **I want to** suspend the running foreground command with Ctrl+Z
 **So that** I can stop the process and resume later
 
-**Status**: ❌ NOT IMPLEMENTED
+**Status**: ✅ Complete (Implemented in Phase 3 - Commit 232255d)
 
 **Acceptance Criteria:**
 - Ctrl+Z suspends the foreground process
@@ -207,13 +208,29 @@ $ bg 1
 [1]+ Running    sleep 100
 ```
 
-**Why Not Implemented**:
-- Requires SIGTSTP signal handler in REPL
-- Need to stop foreground process group
-- Need to update job state
-- More complex than other builtins
+**Implementation Details** (Phase 3):
+- **Task 3.1**: Added SIGTSTP handler in PipelineExecutor
+  - Uses `waitpid()` with `WUNTRACED` flag to detect stopped processes
+  - Detects when foreground process receives SIGTSTP
+  - Returns stopped PIDs to caller
 
-**Implementation Plan**: See plan.md Phase 3
+- **Task 3.2**: Enhanced process group management
+  - Uses `setpgid()` to create process groups for foreground jobs
+  - Ensures Ctrl+Z reaches all processes in pipeline
+  - Process group leader is first process in pipeline
+
+- **Task 3.3 & 3.4**: Comprehensive testing
+  - 26 new unit tests for job control builtins
+  - 9 new integration tests for job control workflows
+  - Tests cover background execution, job listing, cleanup, mixed execution, exit codes
+
+**Implementation Status**:
+- ✅ SIGTSTP signal detected via waitpid
+- ✅ Process group management with setpgid
+- ✅ Stopped process converted to background job
+- ✅ Job state transitions (Running → Stopped)
+- ✅ User notifications printed
+- ✅ Comprehensive test coverage (206+ tests passing)
 
 ---
 
