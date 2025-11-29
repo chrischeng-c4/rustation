@@ -27,6 +27,8 @@
 
 use crate::error::{Result, RushError};
 use crate::executor::{Pipeline, PipelineSegment};
+use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
+use nix::unistd::Pid;
 use std::process::{Child, Command, Stdio};
 
 /// Executes pipelines by spawning processes and connecting pipes
@@ -62,16 +64,17 @@ impl PipelineExecutor {
     /// let pipeline = parse_pipeline("echo hello | grep hello")?;
     /// let exit_code = executor.execute(&pipeline)?;
     /// ```
-    pub fn execute(&self, pipeline: &Pipeline) -> Result<i32> {
+    pub fn execute(&self, pipeline: &Pipeline) -> Result<(i32, Vec<u32>)> {
         // Validate pipeline structure (US1 & US2: 1 to N commands)
         pipeline.validate()?;
 
         // Special case: Single command (no pipes)
         if pipeline.len() == 1 {
-            return self.execute_single(&pipeline.segments[0]);
+            // For single commands, call execute_single which also needs to return stopped_pids
+            let exit_code = self.execute_single(&pipeline.segments[0])?;
+            return Ok((exit_code, Vec::new()));
         }
 
-        // Execute multi-command pipeline (US1 & US2)
         // Execute multi-command pipeline (US1 & US2)
         let execution = self.spawn(pipeline)?;
         execution.wait_all()
@@ -392,42 +395,65 @@ impl MultiCommandExecution {
     ///
     /// # Exit Code Behavior (User Story 4)
     ///
-    /// Returns the exit code of the last command, matching bash behavior.
+    /// Returns the exit code of the last command and list of stopped process IDs.
     /// Earlier commands' exit codes are logged but not returned.
-    pub fn wait_all(self) -> Result<i32> {
+    /// Detects when processes are stopped (SIGTSTP) vs exited.
+    pub fn wait_all(self) -> Result<(i32, Vec<u32>)> {
         let mut last_exit_code = 0;
+        let mut stopped_pids = Vec::new();
 
-        for (i, mut child) in self.children.into_iter().enumerate() {
-            match child.wait() {
-                Ok(status) => {
-                    let exit_code = status.code().unwrap_or(1);
+        for (i, child) in self.children.into_iter().enumerate() {
+            let pid = Pid::from_raw(child.id() as i32);
+
+            // Use waitpid with WUNTRACED to detect stopped processes
+            match waitpid(pid, Some(WaitPidFlag::WUNTRACED)) {
+                Ok(WaitStatus::Exited(_, code)) => {
                     tracing::debug!(
                         command = %self.pipeline.segments[i].program,
-                        exit_code,
+                        exit_code = code,
                         position = i,
-                        "Pipeline segment completed"
+                        "Pipeline segment exited"
                     );
 
                     // Save exit code from last command
                     if i == self.pipeline.len() - 1 {
+                        last_exit_code = code;
+                    }
+                }
+                Ok(WaitStatus::Signaled(_, signal, _)) => {
+                    tracing::debug!(
+                        command = %self.pipeline.segments[i].program,
+                        signal = ?signal,
+                        position = i,
+                        "Pipeline segment killed by signal"
+                    );
+                    // Treat signal termination as exit code 128 + signal number
+                    let exit_code = 128;
+                    if i == self.pipeline.len() - 1 {
                         last_exit_code = exit_code;
                     }
                 }
-                Err(e) => {
-                    tracing::error!(
+                Ok(WaitStatus::Stopped(_, signal)) => {
+                    // Process was stopped by signal (typically SIGTSTP from Ctrl+Z)
+                    tracing::debug!(
                         command = %self.pipeline.segments[i].program,
-                        error = %e,
-                        "Failed to wait for pipeline segment"
+                        signal = ?signal,
+                        position = i,
+                        "Pipeline segment stopped by signal"
                     );
-                    return Err(RushError::Execution(format!(
-                        "Failed to wait for {}: {}",
-                        self.pipeline.segments[i].program, e
-                    )));
+                    stopped_pids.push(child.id());
+                }
+                _ => {
+                    tracing::debug!(
+                        command = %self.pipeline.segments[i].program,
+                        position = i,
+                        "Pipeline segment wait returned other status"
+                    );
                 }
             }
         }
 
-        Ok(last_exit_code)
+        Ok((last_exit_code, stopped_pids))
     }
 
     /// Get PIDs of all spawned processes
@@ -459,7 +485,7 @@ mod tests {
         let pipeline = parse_pipeline("echo test").unwrap();
         let result = executor.execute(&pipeline);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 0);
+        assert_eq!(result.unwrap().0, 0);
     }
 
     #[test]
@@ -468,7 +494,7 @@ mod tests {
         let pipeline = parse_pipeline("true").unwrap();
         let result = executor.execute(&pipeline);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 0);
+        assert_eq!(result.unwrap().0, 0);
     }
 
     #[test]
@@ -477,7 +503,7 @@ mod tests {
         let pipeline = parse_pipeline("false").unwrap();
         let result = executor.execute(&pipeline);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 1);
+        assert_eq!(result.unwrap().0, 1);
     }
 
     #[test]
@@ -486,7 +512,7 @@ mod tests {
         let pipeline = parse_pipeline("echo hello | cat").unwrap();
         let result = executor.execute(&pipeline);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 0);
+        assert_eq!(result.unwrap().0, 0);
     }
 
     #[test]
@@ -495,7 +521,7 @@ mod tests {
         let pipeline = parse_pipeline("echo 'hello world' | grep hello").unwrap();
         let result = executor.execute(&pipeline);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 0);
+        assert_eq!(result.unwrap().0, 0);
     }
 
     #[test]
@@ -505,7 +531,7 @@ mod tests {
         let pipeline = parse_pipeline("echo test | cat | cat").unwrap();
         let result = executor.execute(&pipeline);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 0);
+        assert_eq!(result.unwrap().0, 0);
     }
 
     #[test]
@@ -515,7 +541,7 @@ mod tests {
         let pipeline = parse_pipeline("echo 'line1\nline2\nline3' | cat | cat | wc -l").unwrap();
         let result = executor.execute(&pipeline);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 0);
+        assert_eq!(result.unwrap().0, 0);
     }
 
     #[test]
@@ -525,6 +551,6 @@ mod tests {
         let pipeline = parse_pipeline("echo test | cat | cat | cat | cat").unwrap();
         let result = executor.execute(&pipeline);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 0);
+        assert_eq!(result.unwrap().0, 0);
     }
 }

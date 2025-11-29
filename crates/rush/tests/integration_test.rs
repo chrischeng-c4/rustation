@@ -415,6 +415,148 @@ fn test_flag_completion_with_arguments_before() {
     // Main validation: doesn't crash
 }
 
+// Job Control Integration Tests
+// These tests verify job control functionality (background execution, job listing, etc.)
+
+use nix::unistd::Pid;
+use rush::executor::execute::CommandExecutor;
+use rush::executor::job::JobStatus;
+
+#[test]
+fn test_background_job_execution() {
+    let mut executor = CommandExecutor::new();
+    let result = executor.execute("echo test &");
+    assert!(result.is_ok(), "Background job execution should succeed");
+    assert_eq!(result.unwrap(), 0, "Background job should return exit code 0");
+
+    let manager = executor.job_manager_mut();
+    let jobs: Vec<_> = manager.jobs().collect();
+    assert!(!jobs.is_empty(), "At least one job should be created");
+    assert_eq!(jobs[0].status, JobStatus::Running, "Job should be in Running state");
+}
+
+#[test]
+fn test_multiple_background_jobs() {
+    let mut executor = CommandExecutor::new();
+
+    executor.execute("sleep 10 &").ok();
+    executor.execute("sleep 20 &").ok();
+    executor.execute("sleep 30 &").ok();
+
+    let manager = executor.job_manager_mut();
+    let mut jobs: Vec<_> = manager.jobs().collect();
+    assert_eq!(jobs.len(), 3, "Should have three background jobs");
+
+    // Sort by ID to ensure consistent order
+    jobs.sort_by_key(|j| j.id);
+    assert_eq!(jobs[0].id, 1);
+    assert_eq!(jobs[1].id, 2);
+    assert_eq!(jobs[2].id, 3);
+
+    for job in jobs {
+        assert_eq!(job.status, JobStatus::Running, "All jobs should be running");
+    }
+}
+
+#[test]
+fn test_jobs_command_lists_background_jobs() {
+    let mut executor = CommandExecutor::new();
+
+    executor.execute("sleep 10 &").ok();
+    executor.execute("echo test &").ok();
+
+    let result = executor.execute("jobs");
+    assert!(result.is_ok(), "jobs command should succeed");
+    assert_eq!(result.unwrap(), 0, "jobs command should return 0");
+}
+
+#[test]
+fn test_foreground_command_execution() {
+    let mut executor = CommandExecutor::new();
+
+    let result = executor.execute("true");
+    assert!(result.is_ok(), "Foreground command should succeed");
+    assert_eq!(result.unwrap(), 0, "true command should return 0");
+
+    let manager = executor.job_manager_mut();
+    let jobs: Vec<_> = manager.jobs().collect();
+    assert!(jobs.is_empty(), "Foreground commands should not create jobs");
+}
+
+#[test]
+fn test_job_cleanup() {
+    let mut executor = CommandExecutor::new();
+
+    executor.execute("sleep 5 &").ok();
+    executor.execute("sleep 10 &").ok();
+
+    let manager = executor.job_manager_mut();
+    assert_eq!(manager.jobs().count(), 2, "Should have two jobs before cleanup");
+
+    if let Some(job) = manager.get_job_mut(1) {
+        job.status = JobStatus::Done;
+    }
+
+    let cleaned = manager.cleanup();
+    assert_eq!(cleaned.len(), 1, "Should clean up one job");
+    assert_eq!(manager.jobs().count(), 1, "Should have one job after cleanup");
+}
+
+#[test]
+fn test_background_job_process_group() {
+    let mut executor = CommandExecutor::new();
+
+    executor.execute("sleep 100 &").ok();
+
+    let manager = executor.job_manager_mut();
+    let job = manager.get_job(1).expect("Job should exist");
+
+    assert_ne!(job.pgid.as_raw(), 0, "Job should have a process group ID");
+    assert!(!job.pids.is_empty(), "Job should have at least one PID");
+}
+
+#[test]
+fn test_background_job_doesnt_block_prompt() {
+    let mut executor = CommandExecutor::new();
+
+    executor.execute("sleep 10 &").ok();
+
+    let result = executor.execute("echo hello");
+    assert!(result.is_ok(), "Should be able to execute new command after bg job");
+    assert_eq!(result.unwrap(), 0, "New command should succeed");
+
+    let manager = executor.job_manager_mut();
+    let jobs: Vec<_> = manager.jobs().collect();
+    assert_eq!(jobs.len(), 1, "Background job should still exist");
+}
+
+#[test]
+fn test_mixed_foreground_background_execution() {
+    let mut executor = CommandExecutor::new();
+
+    executor.execute("true").ok();
+    executor.execute("sleep 10 &").ok();
+    executor.execute("echo test").ok();
+
+    let manager = executor.job_manager_mut();
+    let jobs: Vec<_> = manager.jobs().collect();
+    assert_eq!(jobs.len(), 1, "Only background job should be tracked");
+}
+
+#[test]
+fn test_exit_code_tracking() {
+    let mut executor = CommandExecutor::new();
+
+    executor.execute("true").ok();
+    assert_eq!(executor.last_exit_code(), 0, "Last exit code should be 0 for true");
+
+    executor.execute("false").ok();
+    assert_eq!(executor.last_exit_code(), 1, "Last exit code should be 1 for false");
+
+    executor.execute("echo test &").ok();
+    assert_eq!(executor.last_exit_code(), 0, "Background job should return 0");
+}
+
 // TODO: Re-enable after fixing TestHistory trait implementation
 // mod integration {
 //     pub mod autosuggestions_tests;

@@ -6,7 +6,7 @@ use super::parser::parse_pipeline;
 use super::pipeline::PipelineExecutor;
 use super::variables::VariableManager;
 use crate::error::Result;
-use nix::unistd::Pid;
+use nix::unistd::{setpgid, Pid};
 
 /// Simple command executor
 ///
@@ -111,9 +111,22 @@ impl CommandExecutor {
                 .map(|id| Pid::from_raw(id as i32))
                 .collect();
 
-            // Use the process group of the first process as the job's PGID
-            // In a real shell, we would setpgid here, but for MVP we trust the OS/spawn
-            let pgid = pids.first().copied().unwrap_or_else(|| Pid::from_raw(0));
+            // Create a new process group for the background job (Task 3.2)
+            // This ensures signals (like SIGTSTP) reach all processes in the job
+            let pgid = if let Some(&first_pid) = pids.first() {
+                // Create new process group with first process as group leader
+                // Allow this to fail gracefully - may have already been set by OS
+                let _ = setpgid(first_pid, first_pid);
+
+                // Add other processes to the same process group
+                for &pid in pids.iter().skip(1) {
+                    let _ = setpgid(pid, first_pid);
+                }
+
+                first_pid
+            } else {
+                Pid::from_raw(0)
+            };
 
             let job_id = self
                 .job_manager
@@ -126,8 +139,49 @@ impl CommandExecutor {
 
             0
         } else {
-            // Foreground execution
-            execution.wait_all()?
+            // Foreground execution (handles Ctrl+Z)
+            let (exit_code, stopped_pids) = execution.wait_all()?;
+
+            // Check if any process was stopped (Ctrl+Z)
+            if !stopped_pids.is_empty() {
+                // Convert stopped foreground process to background job
+                let pids: Vec<Pid> = stopped_pids
+                    .iter()
+                    .map(|&id| Pid::from_raw(id as i32))
+                    .collect();
+
+                // Create a process group for the stopped job (if not already)
+                let pgid = if let Some(&first_pid) = pids.first() {
+                    // Allow this to fail gracefully
+                    let _ = setpgid(first_pid, first_pid);
+
+                    // Add other processes to the same process group
+                    for &pid in pids.iter().skip(1) {
+                        let _ = setpgid(pid, first_pid);
+                    }
+
+                    first_pid
+                } else {
+                    Pid::from_raw(0)
+                };
+
+                let job_id =
+                    self.job_manager
+                        .add_job(pgid, pipeline.raw_input.clone(), pids.clone());
+
+                // Set job status to Stopped
+                if let Some(job) = self.job_manager_mut().get_job_mut(job_id) {
+                    job.status = crate::executor::job::JobStatus::Stopped;
+                }
+
+                // Print notification
+                println!("\n[{}] Stopped    {}", job_id, pipeline.raw_input);
+
+                // Don't return the exit code - the process is stopped, not finished
+                0
+            } else {
+                exit_code
+            }
         };
 
         self.last_exit_code = exit_code;
