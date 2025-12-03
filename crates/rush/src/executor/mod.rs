@@ -34,6 +34,7 @@ pub mod job;
 pub mod parser;
 pub mod pipeline;
 pub mod script;
+pub mod substitution;
 pub mod variables;
 
 use crate::error::Result;
