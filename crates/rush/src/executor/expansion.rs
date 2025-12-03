@@ -2,12 +2,16 @@
 //!
 //! Handles expansion of:
 //! - $VAR and ${VAR} - Variable references
+//! - ${arr[0]} - Array element access
+//! - ${arr[@]} - All array elements as separate words
+//! - ${arr[*]} - All array elements as one word
 //! - $$ - Shell process ID
 //! - $? - Last exit code
 //! - $0 - Shell name ("rush")
 //! - $# - Number of positional arguments
 //! - Escape sequences (\$ -> literal $)
 
+use crate::executor::arrays::{parse_array_ref, ArrayRefType};
 use crate::executor::execute::CommandExecutor;
 
 /// Expand variables in a command line string
@@ -69,11 +73,39 @@ pub fn expand_variables(input: &str, executor: &CommandExecutor) -> String {
                             // Just skip the digit
                         }
                         '{' => {
-                            // ${VARNAME} - extract until }
+                            // ${VARNAME} or ${arr[...]} - extract until }
                             chars.next(); // consume {
                             let var_name = extract_until(&mut chars, '}');
                             if !var_name.is_empty() {
-                                if let Some(value) = executor.variable_manager().get(&var_name) {
+                                // Check if this is an array reference
+                                if var_name.contains('[') {
+                                    // Try to parse as array reference: ${arr[0]}, ${arr[@]}, ${arr[*]}
+                                    let array_expr = format!("${{{}}}", var_name);
+                                    if let Ok(arr_ref) = parse_array_ref(&array_expr) {
+                                        match arr_ref.ref_type {
+                                            ArrayRefType::Index(idx) => {
+                                                // ${arr[0]} - single element
+                                                if let Some(value) = executor.variable_manager().array_get(&arr_ref.name, idx) {
+                                                    result.push_str(value);
+                                                }
+                                                // Out of bounds or non-existent array -> empty string
+                                            }
+                                            ArrayRefType::AllWords => {
+                                                // ${arr[@]} - all elements as space-separated words
+                                                if let Some(arr) = executor.variable_manager().get_array(&arr_ref.name) {
+                                                    result.push_str(&arr.join(" "));
+                                                }
+                                            }
+                                            ArrayRefType::AllAsOne => {
+                                                // ${arr[*]} - all elements as one word
+                                                if let Some(arr) = executor.variable_manager().get_array(&arr_ref.name) {
+                                                    result.push_str(&arr.join(" "));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Invalid array syntax -> empty string (silently)
+                                } else if let Some(value) = executor.variable_manager().get(&var_name) {
                                     result.push_str(value);
                                 }
                                 // Non-existent variables expand to empty string
@@ -304,5 +336,154 @@ mod tests {
         let result = expand_variables(input, &executor);
         // Empty variable name should expand to nothing
         assert_eq!(result, "echo ");
+    }
+
+    // ===== Array Expansion Tests =====
+
+    #[test]
+    fn test_array_index_zero() {
+        let mut executor = CommandExecutor::new();
+        executor
+            .variable_manager_mut()
+            .set_array("arr".to_string(), vec!["first".to_string(), "second".to_string(), "third".to_string()])
+            .unwrap();
+
+        let input = "echo ${arr[0]}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo first");
+    }
+
+    #[test]
+    fn test_array_index_nonzero() {
+        let mut executor = CommandExecutor::new();
+        executor
+            .variable_manager_mut()
+            .set_array("arr".to_string(), vec!["a".to_string(), "b".to_string(), "c".to_string()])
+            .unwrap();
+
+        let input = "echo ${arr[2]}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo c");
+    }
+
+    #[test]
+    fn test_array_index_out_of_bounds() {
+        let mut executor = CommandExecutor::new();
+        executor
+            .variable_manager_mut()
+            .set_array("arr".to_string(), vec!["only".to_string()])
+            .unwrap();
+
+        let input = "echo ${arr[99]}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo ");
+    }
+
+    #[test]
+    fn test_array_all_words() {
+        let mut executor = CommandExecutor::new();
+        executor
+            .variable_manager_mut()
+            .set_array("arr".to_string(), vec!["one".to_string(), "two".to_string(), "three".to_string()])
+            .unwrap();
+
+        let input = "echo ${arr[@]}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo one two three");
+    }
+
+    #[test]
+    fn test_array_all_as_one() {
+        let mut executor = CommandExecutor::new();
+        executor
+            .variable_manager_mut()
+            .set_array("arr".to_string(), vec!["one".to_string(), "two".to_string(), "three".to_string()])
+            .unwrap();
+
+        let input = "echo ${arr[*]}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo one two three");
+    }
+
+    #[test]
+    fn test_array_nonexistent() {
+        let executor = CommandExecutor::new();
+
+        let input = "echo ${nonexistent[@]}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo ");
+    }
+
+    #[test]
+    fn test_array_empty() {
+        let mut executor = CommandExecutor::new();
+        executor
+            .variable_manager_mut()
+            .set_array("arr".to_string(), vec![])
+            .unwrap();
+
+        let input = "echo ${arr[@]}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo ");
+    }
+
+    #[test]
+    fn test_array_single_element() {
+        let mut executor = CommandExecutor::new();
+        executor
+            .variable_manager_mut()
+            .set_array("arr".to_string(), vec!["single".to_string()])
+            .unwrap();
+
+        let input = "echo ${arr[@]}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo single");
+    }
+
+    #[test]
+    fn test_array_mixed_with_regular_vars() {
+        let mut executor = CommandExecutor::new();
+        executor
+            .variable_manager_mut()
+            .set("prefix".to_string(), "PREFIX".to_string())
+            .unwrap();
+        executor
+            .variable_manager_mut()
+            .set_array("arr".to_string(), vec!["a".to_string(), "b".to_string()])
+            .unwrap();
+        executor
+            .variable_manager_mut()
+            .set("suffix".to_string(), "SUFFIX".to_string())
+            .unwrap();
+
+        let input = "${prefix} ${arr[@]} ${suffix}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "PREFIX a b SUFFIX");
+    }
+
+    #[test]
+    fn test_array_with_spaces_in_elements() {
+        let mut executor = CommandExecutor::new();
+        executor
+            .variable_manager_mut()
+            .set_array("arr".to_string(), vec!["hello world".to_string(), "foo bar".to_string()])
+            .unwrap();
+
+        let input = "echo ${arr[@]}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo hello world foo bar");
+    }
+
+    #[test]
+    fn test_multiple_array_refs() {
+        let mut executor = CommandExecutor::new();
+        executor
+            .variable_manager_mut()
+            .set_array("arr".to_string(), vec!["x".to_string(), "y".to_string(), "z".to_string()])
+            .unwrap();
+
+        let input = "${arr[0]}+${arr[1]}+${arr[2]}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "x+y+z");
     }
 }
