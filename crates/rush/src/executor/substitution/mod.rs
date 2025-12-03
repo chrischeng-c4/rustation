@@ -12,7 +12,8 @@ pub mod executor;
 pub mod expander;
 pub mod lexer;
 
-use crate::error::{Result, RushError};
+// Re-export public API
+pub use expander::{contains_substitution, expand_and_split, expand_substitutions};
 
 /// Represents a substitution token in the input stream
 #[derive(Debug, Clone, PartialEq, Eq)]
