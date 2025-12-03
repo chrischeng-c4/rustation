@@ -64,4 +64,7 @@ criterion = "0.5"
 # Temporary files for testing
 tempfile = "3.8"
 
+# Serial test execution for tests that share global state (like current directory)
+serial_test = "3.2"
+
 # Benchmarks will be added in Phase 10 (Polish)
