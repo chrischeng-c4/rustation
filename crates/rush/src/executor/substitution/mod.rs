@@ -9,6 +9,7 @@
 //! 5. Expander: Replace $(...) with captured output
 
 pub mod executor;
+pub mod expander;
 pub mod lexer;
 
 use crate::error::{Result, RushError};
