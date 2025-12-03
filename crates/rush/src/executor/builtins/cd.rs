@@ -114,6 +114,7 @@ fn change_directory(target: &PathBuf) -> Result<i32> {
 mod tests {
     use super::*;
     use crate::executor::execute::CommandExecutor;
+    use serial_test::serial;
     use std::env;
 
     /// Helper to save and restore directory after test
@@ -134,6 +135,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_cd_to_tmp() {
         let _guard = DirGuard::new();
         let mut executor = CommandExecutor::new();
@@ -144,36 +146,40 @@ mod tests {
         assert_eq!(result.unwrap(), 0);
 
         // Verify we're in /tmp (or /private/tmp on macOS)
-        let current = env::current_dir().unwrap();
-        let current_str = current.to_string_lossy();
-        assert!(
-            current_str.ends_with("tmp"),
-            "Expected to be in tmp directory, got: {}",
-            current_str
-        );
+        // Use canonicalize to handle symlinks
+        let current = env::current_dir().unwrap().canonicalize().unwrap();
+        let expected = PathBuf::from("/tmp").canonicalize().unwrap();
+        assert_eq!(current, expected, "Expected to be in tmp directory");
     }
 
     #[test]
+    #[serial]
     fn test_cd_parent_directory() {
         let _guard = DirGuard::new();
         let mut executor = CommandExecutor::new();
 
-        // First cd to /tmp
+        // First cd to /tmp (use canonicalized path for comparison)
         execute(&mut executor, &vec!["/tmp".to_string()]).unwrap();
-        let before = env::current_dir().unwrap();
+        let before = env::current_dir().unwrap().canonicalize().unwrap();
 
         // Then cd ..
         let result = execute(&mut executor, &vec!["..".to_string()]);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 0);
 
-        // Should be in parent directory
-        let current = env::current_dir().unwrap();
+        // Should be in parent directory (canonicalize for consistent comparison)
+        let current = env::current_dir().unwrap().canonicalize().unwrap();
         assert_ne!(current, before, "Should have moved to parent directory");
-        assert!(before.starts_with(&current), "Before should start with current parent");
+        assert!(
+            before.starts_with(&current),
+            "Before ({}) should start with current parent ({})",
+            before.display(),
+            current.display()
+        );
     }
 
     #[test]
+    #[serial]
     fn test_cd_home_no_args() {
         let _guard = DirGuard::new();
         let mut executor = CommandExecutor::new();
@@ -195,6 +201,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_cd_tilde() {
         let _guard = DirGuard::new();
         let mut executor = CommandExecutor::new();
@@ -238,6 +245,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_cd_current_directory() {
         let _guard = DirGuard::new();
         let mut executor = CommandExecutor::new();
@@ -245,27 +253,28 @@ mod tests {
         // First cd to /tmp for a known location
         execute(&mut executor, &vec!["/tmp".to_string()]).unwrap();
 
-        // Get current directory
-        let before = env::current_dir().unwrap();
+        // Get current directory (canonicalize for consistent comparison)
+        let before = env::current_dir().unwrap().canonicalize().unwrap();
 
         // cd . should stay in current directory
         let result = execute(&mut executor, &vec![".".to_string()]);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 0);
 
-        // Should still be in same directory
-        let after = env::current_dir().unwrap();
+        // Should still be in same directory (canonicalize for consistent comparison)
+        let after = env::current_dir().unwrap().canonicalize().unwrap();
         assert_eq!(before, after);
     }
 
     #[test]
+    #[serial]
     fn test_cd_dash_with_oldpwd() {
         let _guard = DirGuard::new();
         let mut executor = CommandExecutor::new();
 
-        // First cd to /tmp
+        // First cd to /tmp (canonicalize for consistent comparison on macOS)
         execute(&mut executor, &vec!["/tmp".to_string()]).unwrap();
-        let first_dir = env::current_dir().unwrap();
+        let first_dir = env::current_dir().unwrap().canonicalize().unwrap();
 
         // Then cd to /
         execute(&mut executor, &vec!["/".to_string()]).unwrap();
@@ -275,12 +284,13 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 0);
 
-        // Verify we're back in /tmp (or /private/tmp)
-        let current = env::current_dir().unwrap();
+        // Verify we're back in /tmp (or /private/tmp) - canonicalize for comparison
+        let current = env::current_dir().unwrap().canonicalize().unwrap();
         assert_eq!(current, first_dir, "cd - should return to previous directory");
     }
 
     #[test]
+    #[serial]
     fn test_oldpwd_and_pwd_updated() {
         let _guard = DirGuard::new();
         let mut executor = CommandExecutor::new();

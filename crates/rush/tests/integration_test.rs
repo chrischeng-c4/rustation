@@ -607,3 +607,175 @@ fn test_glob_expand_preserves_non_matching() {
 // mod integration {
 //     pub mod autosuggestions_tests;
 // }
+
+// === Array Variables Integration Tests (Feature 011) ===
+
+/// T023: Test sparse arrays (accessing indices with gaps)
+/// Note: Current implementation uses dense Vec<String>, so sparse arrays
+/// are not directly supported. Out-of-bounds access returns empty string.
+#[test]
+fn test_array_out_of_bounds_access() {
+    let mut executor = CommandExecutor::new();
+
+    // Create a small array
+    executor.variable_manager_mut()
+        .set_array("arr".to_string(), vec!["a".to_string(), "b".to_string()])
+        .unwrap();
+
+    // Access within bounds
+    let result = executor.execute("echo ${arr[0]}");
+    assert!(result.is_ok());
+
+    // Access out of bounds (should return empty, not error)
+    let result = executor.execute("echo ${arr[99]}");
+    assert!(result.is_ok(), "Out of bounds access should not error");
+}
+
+#[test]
+fn test_array_negative_index_parsing() {
+    // Negative indices are rejected at parse time
+    use rush::executor::arrays::parse_array_ref;
+
+    let result = parse_array_ref("${arr[-1]}");
+    assert!(result.is_err(), "Negative indices should be rejected");
+}
+
+#[test]
+fn test_array_invalid_index_parsing() {
+    use rush::executor::arrays::parse_array_ref;
+
+    // Non-numeric indices (except @ and *) should be rejected
+    let result = parse_array_ref("${arr[abc]}");
+    assert!(result.is_err(), "Non-numeric indices should be rejected");
+
+    let result = parse_array_ref("${arr[1.5]}");
+    assert!(result.is_err(), "Floating point indices should be rejected");
+}
+
+/// T024: Test nested arrays in substitutions
+/// Note: Nested variable expansion (${arr[${i}]}) is not currently supported.
+/// This test documents current behavior.
+#[test]
+fn test_array_basic_expansion() {
+    let mut executor = CommandExecutor::new();
+
+    // Create array and test basic expansion
+    executor.variable_manager_mut()
+        .set_array("colors".to_string(), vec!["red".to_string(), "green".to_string(), "blue".to_string()])
+        .unwrap();
+
+    // Direct index access works
+    let result = executor.execute("echo ${colors[1]}");
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_array_all_elements_expansion() {
+    let mut executor = CommandExecutor::new();
+
+    executor.variable_manager_mut()
+        .set_array("items".to_string(), vec!["one".to_string(), "two".to_string(), "three".to_string()])
+        .unwrap();
+
+    // ${arr[@]} expansion
+    let result = executor.execute("echo ${items[@]}");
+    assert!(result.is_ok());
+
+    // ${arr[*]} expansion
+    let result = executor.execute("echo ${items[*]}");
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_array_length_expansion() {
+    let mut executor = CommandExecutor::new();
+
+    executor.variable_manager_mut()
+        .set_array("nums".to_string(), vec!["1".to_string(), "2".to_string(), "3".to_string(), "4".to_string()])
+        .unwrap();
+
+    // Array length should be 4
+    // Note: ${#arr[@]} syntax would need parser support
+    assert_eq!(executor.variable_manager().array_length("nums"), Some(4));
+}
+
+#[test]
+fn test_array_empty_access() {
+    let mut executor = CommandExecutor::new();
+
+    // Create empty array
+    executor.variable_manager_mut()
+        .set_array("empty".to_string(), vec![])
+        .unwrap();
+
+    // Access any index should return empty
+    let result = executor.execute("echo ${empty[0]}");
+    assert!(result.is_ok(), "Empty array access should not error");
+
+    // Length should be 0
+    assert_eq!(executor.variable_manager().array_length("empty"), Some(0));
+}
+
+#[test]
+fn test_array_nonexistent_returns_empty() {
+    let executor = CommandExecutor::new();
+
+    // Accessing nonexistent array should return None/empty
+    assert_eq!(executor.variable_manager().get_array("nonexistent"), None);
+    assert_eq!(executor.variable_manager().array_get("nonexistent", 0), None);
+    assert_eq!(executor.variable_manager().array_length("nonexistent"), None);
+}
+
+#[test]
+fn test_array_with_special_characters() {
+    let mut executor = CommandExecutor::new();
+
+    // Array with special characters in values
+    executor.variable_manager_mut()
+        .set_array("special".to_string(), vec![
+            "hello world".to_string(),
+            "foo\tbar".to_string(),
+            "a=b".to_string(),
+        ])
+        .unwrap();
+
+    // Should be able to access without error
+    assert_eq!(executor.variable_manager().array_get("special", 0), Some("hello world"));
+    assert_eq!(executor.variable_manager().array_get("special", 2), Some("a=b"));
+}
+
+#[test]
+fn test_array_append_operation() {
+    let mut executor = CommandExecutor::new();
+
+    // Create initial array
+    executor.variable_manager_mut()
+        .set_array("arr".to_string(), vec!["a".to_string(), "b".to_string()])
+        .unwrap();
+
+    // Append to array
+    executor.variable_manager_mut()
+        .append_to_array("arr".to_string(), "c".to_string())
+        .unwrap();
+
+    // Verify length and content
+    assert_eq!(executor.variable_manager().array_length("arr"), Some(3));
+    assert_eq!(executor.variable_manager().array_get("arr", 2), Some("c"));
+}
+
+#[test]
+fn test_array_large_index() {
+    use rush::executor::arrays::parse_array_ref;
+
+    // Large indices should parse correctly
+    let result = parse_array_ref("${arr[999999]}");
+    assert!(result.is_ok(), "Large indices should be valid");
+
+    // Accessing large index on small array returns empty
+    let mut executor = CommandExecutor::new();
+    executor.variable_manager_mut()
+        .set_array("small".to_string(), vec!["only".to_string()])
+        .unwrap();
+
+    assert_eq!(executor.variable_manager().array_get("small", 999999), None);
+}
