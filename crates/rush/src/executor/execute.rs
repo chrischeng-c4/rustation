@@ -1,5 +1,6 @@
 //! Command execution implementation
 
+use super::aliases::AliasManager;
 use super::expansion::expand_variables;
 use super::glob::glob_expand;
 use super::job::JobManager;
@@ -31,6 +32,7 @@ pub struct CommandExecutor {
     pipeline_executor: PipelineExecutor,
     job_manager: JobManager,
     variable_manager: VariableManager,
+    alias_manager: AliasManager,
     last_exit_code: i32,
 }
 
@@ -41,6 +43,7 @@ impl CommandExecutor {
             pipeline_executor: PipelineExecutor::new(),
             job_manager: JobManager::new(),
             variable_manager: VariableManager::new(),
+            alias_manager: AliasManager::new(),
             last_exit_code: 0,
         }
     }
@@ -63,8 +66,11 @@ impl CommandExecutor {
             return Ok(0);
         }
 
+        // Expand aliases first (before variable expansion)
+        let aliased_line = self.alias_manager.expand(line);
+
         // Expand variables in the command line
-        let expanded_line = expand_variables(line, self);
+        let expanded_line = expand_variables(&aliased_line, self);
 
         // Expand glob patterns (*, ?, [abc]) in arguments
         let globbed_line = glob_expand(&expanded_line)?;
@@ -215,6 +221,16 @@ impl CommandExecutor {
     /// Get the last exit code
     pub fn last_exit_code(&self) -> i32 {
         self.last_exit_code
+    }
+
+    /// Get mutable reference to alias manager (for builtins)
+    pub fn alias_manager_mut(&mut self) -> &mut AliasManager {
+        &mut self.alias_manager
+    }
+
+    /// Get reference to alias manager
+    pub fn alias_manager(&self) -> &AliasManager {
+        &self.alias_manager
     }
 
     /// Check for finished background jobs and print their status

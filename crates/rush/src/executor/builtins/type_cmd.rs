@@ -13,7 +13,7 @@ use std::path::Path;
 /// List of all builtin commands
 const BUILTINS: &[&str] = &[
     "cd", "jobs", "fg", "bg", "echo", "true", "false", "test", "[", "printf", "pwd", "type",
-    "export", "set", "unset",
+    "export", "set", "unset", "alias", "unalias",
 ];
 
 /// Execute the `type` builtin command

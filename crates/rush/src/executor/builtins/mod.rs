@@ -1,7 +1,8 @@
 //! Built-in commands module
 //!
-//! Handles execution of shell built-ins like `jobs`, `fg`, `bg`, `cd`, `echo`, `test`, etc.
+//! Handles execution of shell built-ins like `jobs`, `fg`, `bg`, `cd`, `echo`, `test`, `alias`, etc.
 
+pub mod alias;
 pub mod bg;
 pub mod bracket;
 pub mod cd;
@@ -14,6 +15,7 @@ pub mod pwd;
 pub mod test;
 pub mod true_cmd;
 pub mod type_cmd;
+pub mod unalias;
 
 use crate::error::Result;
 use crate::executor::execute::CommandExecutor;
@@ -41,6 +43,8 @@ pub fn execute_builtin(
         "printf" => Some(printf::execute(executor, args)),
         "pwd" => Some(pwd::execute(executor, args)),
         "type" => Some(type_cmd::execute(executor, args)),
+        "alias" => Some(alias::execute(executor, args)),
+        "unalias" => Some(unalias::execute(executor, args)),
         _ => None,
     }
 }

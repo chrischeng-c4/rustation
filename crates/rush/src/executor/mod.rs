@@ -26,6 +26,7 @@
 //! executor.execute("echo 'hello world' | grep hello")?;
 //! ```
 
+pub mod aliases;
 pub mod arrays;
 pub mod builtins;
 pub mod execute;
