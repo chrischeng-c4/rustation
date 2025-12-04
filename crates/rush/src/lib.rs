@@ -57,6 +57,9 @@ pub mod error {
 
         #[error("Redirection error: {0}")]
         Redirection(String),
+
+        #[error("Exit requested with code: {0}")]
+        ExitRequest(i32),
     }
 
     pub type Result<T> = std::result::Result<T, RushError>;

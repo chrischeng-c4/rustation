@@ -251,12 +251,18 @@ fn execute_command_and_exit(cmd: &str, _config: &Config) {
 
     // Execute command directly without REPL
     use rush::executor::execute::CommandExecutor;
+    use rush::RushError;
     let mut executor = CommandExecutor::new();
 
     match executor.execute(cmd) {
         Ok(exit_code) => {
             tracing::info!(exit_code, "Single command completed");
             std::process::exit(exit_code);
+        }
+        Err(RushError::ExitRequest(code)) => {
+            // Exit builtin called
+            tracing::info!(exit_code = code, "Exit command executed");
+            std::process::exit(code);
         }
         Err(err) => {
             eprintln!("rush: error: {}", err);
