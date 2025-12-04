@@ -7,11 +7,13 @@ pub mod bg;
 pub mod bracket;
 pub mod cd;
 pub mod echo;
+pub mod exit;
 pub mod false_cmd;
 pub mod fg;
 pub mod jobs;
 pub mod printf;
 pub mod pwd;
+pub mod source;
 pub mod test;
 pub mod true_cmd;
 pub mod type_cmd;
@@ -45,6 +47,9 @@ pub fn execute_builtin(
         "type" => Some(type_cmd::execute(executor, args)),
         "alias" => Some(alias::execute(executor, args)),
         "unalias" => Some(unalias::execute(executor, args)),
+        "source" => Some(source::execute(executor, args)),
+        "." => Some(source::execute(executor, args)),
+        "exit" => Some(exit::execute(executor, args)),
         _ => None,
     }
 }
