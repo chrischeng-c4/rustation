@@ -35,6 +35,14 @@ enum Token {
     StderrOut,
     /// Stderr append redirection (2>>)
     StderrAppend,
+    /// Stderr to stdout (2>&1)
+    StderrToStdout,
+    /// Stdout to stderr (1>&2)
+    StdoutToStderr,
+    /// Heredoc (<<)
+    Heredoc,
+    /// Heredoc with tab stripping (<<-)
+    HeredocStrip,
     /// Background execution (&)
     Background,
 }
@@ -100,6 +108,34 @@ pub fn parse_command_with_redirections(
                 return Err(RushError::Execution(
                     "Background operator not supported in this context".to_string(),
                 ));
+            }
+            Token::StderrToStdout => {
+                redirections.push(Redirection::new(RedirectionType::StderrToStdout, String::new()));
+                i += 1;
+            }
+            Token::StdoutToStderr => {
+                redirections.push(Redirection::new(RedirectionType::StdoutToStderr, String::new()));
+                i += 1;
+            }
+            Token::Heredoc | Token::HeredocStrip => {
+                // Heredoc operator must be followed by a delimiter
+                if i + 1 >= tokens.len() {
+                    return Err(RushError::Execution(
+                        "Heredoc operator requires a delimiter".to_string(),
+                    ));
+                }
+
+                if let Token::Word(delimiter) = &tokens[i + 1] {
+                    let strip_tabs = matches!(&tokens[i], Token::HeredocStrip);
+                    // Note: heredoc content is not collected here - this legacy function
+                    // doesn't support heredocs. Use parse_with_heredocs() instead.
+                    redirections.push(Redirection::new_heredoc(delimiter.clone(), String::new(), strip_tabs));
+                    i += 2; // Skip operator and delimiter
+                } else {
+                    return Err(RushError::Execution(
+                        "Heredoc operator must be followed by delimiter".to_string(),
+                    ));
+                }
             }
         }
     }
@@ -191,6 +227,40 @@ pub fn extract_redirections_from_args(
                 }
                 redirections.push(Redirection::new(RedirectionType::Stderr(true), args[i + 1].clone()));
                 i += 2; // Skip operator and path
+            }
+            "2>&1" => {
+                // Stderr to stdout redirection
+                redirections.push(Redirection::new(RedirectionType::StderrToStdout, String::new()));
+                i += 1;
+            }
+            "1>&2" => {
+                // Stdout to stderr redirection
+                redirections.push(Redirection::new(RedirectionType::StdoutToStderr, String::new()));
+                i += 1;
+            }
+            "<<" => {
+                // Heredoc redirection - next arg is the delimiter
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Heredoc operator requires a delimiter".to_string(),
+                    ));
+                }
+                let delimiter = args[i + 1].clone();
+                // Create heredoc with empty content - content will be filled from segment.heredoc_contents
+                redirections.push(Redirection::new_heredoc(delimiter, String::new(), false));
+                i += 2; // Skip operator and delimiter
+            }
+            "<<-" => {
+                // Heredoc with tab stripping - next arg is the delimiter
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Heredoc operator requires a delimiter".to_string(),
+                    ));
+                }
+                let delimiter = args[i + 1].clone();
+                // Create heredoc with empty content - content will be filled from segment.heredoc_contents
+                redirections.push(Redirection::new_heredoc(delimiter, String::new(), true));
+                i += 2; // Skip operator and delimiter
             }
             _ => {
                 // Regular argument
@@ -315,13 +385,23 @@ fn tokenize_with_redirections(line: &str) -> Result<Vec<Token>> {
                 }
             }
             '<' if !in_single_quote && !in_double_quote => {
-                // Input redirection operator
+                // Check for << (heredoc) or < (input redirection)
                 if !current_token.is_empty() || had_quotes {
                     tokens.push(Token::Word(current_token.clone()));
                     current_token.clear();
                     had_quotes = false;
                 }
-                tokens.push(Token::RedirectIn);
+                if chars.peek() == Some(&'<') {
+                    chars.next(); // Consume second <
+                    if chars.peek() == Some(&'-') {
+                        chars.next(); // Consume -
+                        tokens.push(Token::HeredocStrip);
+                    } else {
+                        tokens.push(Token::Heredoc);
+                    }
+                } else {
+                    tokens.push(Token::RedirectIn);
+                }
             }
             ' ' | '\t' if !in_single_quote && !in_double_quote => {
                 // Whitespace outside quotes - end current token
@@ -571,13 +651,23 @@ fn tokenize_with_pipes(line: &str) -> Result<Vec<Token>> {
                 }
             }
             '<' if !in_single_quote && !in_double_quote => {
-                // Input redirection operator outside quotes
+                // Check for << (heredoc) or < (input redirection)
                 if !current_word.is_empty() || had_quotes {
                     tokens.push(Token::Word(current_word.clone()));
                     current_word.clear();
                     had_quotes = false;
                 }
-                tokens.push(Token::RedirectIn);
+                if chars.peek() == Some(&'<') {
+                    chars.next(); // Consume second <
+                    if chars.peek() == Some(&'-') {
+                        chars.next(); // Consume -
+                        tokens.push(Token::HeredocStrip);
+                    } else {
+                        tokens.push(Token::Heredoc);
+                    }
+                } else {
+                    tokens.push(Token::RedirectIn);
+                }
             }
             '&' if !in_single_quote && !in_double_quote => {
                 // Background operator outside quotes
@@ -674,6 +764,18 @@ fn split_into_segments(tokens: Vec<Token>) -> Result<Vec<PipelineSegment>> {
             Token::StderrAppend => {
                 current_segment.push("2>>".to_string());
             }
+            Token::StderrToStdout => {
+                current_segment.push("2>&1".to_string());
+            }
+            Token::StdoutToStderr => {
+                current_segment.push("1>&2".to_string());
+            }
+            Token::Heredoc => {
+                current_segment.push("<<".to_string());
+            }
+            Token::HeredocStrip => {
+                current_segment.push("<<-".to_string());
+            }
             Token::Background => {
                 return Err(RushError::Execution(
                     "Background operator '&' must be at the end of the command".to_string(),
@@ -698,6 +800,204 @@ fn split_into_segments(tokens: Vec<Token>) -> Result<Vec<PipelineSegment>> {
     segments.push(PipelineSegment::new(program, args, segments.len()));
 
     Ok(segments)
+}
+
+/// Information about a pending heredoc that needs content
+#[derive(Debug, Clone)]
+pub struct PendingHeredoc {
+    /// The delimiter that marks the end of heredoc content
+    pub delimiter: String,
+    /// Whether to strip leading tabs (<<- vs <<)
+    pub strip_tabs: bool,
+}
+
+/// Check if a command line contains heredocs that need content collection
+pub fn get_pending_heredocs(line: &str) -> Result<Vec<PendingHeredoc>> {
+    let tokens = tokenize_with_redirections(line)?;
+    let mut heredocs = Vec::new();
+    let mut i = 0;
+
+    while i < tokens.len() {
+        match &tokens[i] {
+            Token::Heredoc | Token::HeredocStrip => {
+                let strip_tabs = matches!(&tokens[i], Token::HeredocStrip);
+                if i + 1 < tokens.len() {
+                    if let Token::Word(delimiter) = &tokens[i + 1] {
+                        heredocs.push(PendingHeredoc {
+                            delimiter: delimiter.clone(),
+                            strip_tabs,
+                        });
+                        i += 2;
+                        continue;
+                    }
+                }
+                return Err(RushError::Execution(
+                    "Heredoc operator requires a delimiter".to_string(),
+                ));
+            }
+            _ => i += 1,
+        }
+    }
+
+    Ok(heredocs)
+}
+
+/// Collect heredoc content from lines until the delimiter is found
+pub fn collect_heredoc_content<'a, I>(
+    lines: &mut I,
+    delimiter: &str,
+    strip_tabs: bool,
+) -> Result<String>
+where
+    I: Iterator<Item = &'a str>,
+{
+    let mut content = String::new();
+
+    for line in lines {
+        let trimmed = if strip_tabs {
+            line.trim_start_matches('\t')
+        } else {
+            line
+        };
+
+        if trimmed == delimiter {
+            return Ok(content);
+        }
+
+        if strip_tabs {
+            content.push_str(line.trim_start_matches('\t'));
+        } else {
+            content.push_str(line);
+        }
+        content.push('\n');
+    }
+
+    Err(RushError::Execution(format!(
+        "Heredoc delimiter '{}' not found",
+        delimiter
+    )))
+}
+
+/// Parse a multi-line command that may contain heredocs
+pub fn parse_with_heredocs(input: &str) -> Result<(String, Vec<(String, String, bool)>)> {
+    let mut lines = input.lines();
+
+    let command_line = match lines.next() {
+        Some(line) => line.to_string(),
+        None => return Err(RushError::Execution("Empty input".to_string())),
+    };
+
+    let pending = get_pending_heredocs(&command_line)?;
+
+    if pending.is_empty() {
+        return Ok((command_line, Vec::new()));
+    }
+
+    let mut heredoc_contents = Vec::new();
+    for heredoc in pending {
+        let content = collect_heredoc_content(&mut lines, &heredoc.delimiter, heredoc.strip_tabs)?;
+        heredoc_contents.push((heredoc.delimiter, content, heredoc.strip_tabs));
+    }
+
+    Ok((command_line, heredoc_contents))
+}
+
+/// Extract redirections from args with heredoc content support
+pub fn extract_redirections_with_heredocs(
+    args: &[String],
+    heredoc_contents: &std::collections::HashMap<String, String>,
+) -> Result<(Vec<String>, Vec<super::Redirection>)> {
+    use super::{Redirection, RedirectionType};
+
+    let mut clean_args = Vec::new();
+    let mut redirections = Vec::new();
+    let mut i = 0;
+
+    while i < args.len() {
+        match args[i].as_str() {
+            ">" => {
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Redirection operator missing file path".to_string(),
+                    ));
+                }
+                redirections.push(Redirection::new(RedirectionType::Output, args[i + 1].clone()));
+                i += 2;
+            }
+            ">>" => {
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Redirection operator missing file path".to_string(),
+                    ));
+                }
+                redirections.push(Redirection::new(RedirectionType::Append, args[i + 1].clone()));
+                i += 2;
+            }
+            "<" => {
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Redirection operator missing file path".to_string(),
+                    ));
+                }
+                redirections.push(Redirection::new(RedirectionType::Input, args[i + 1].clone()));
+                i += 2;
+            }
+            "2>" => {
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Invalid redirection: 2> requires filename".to_string(),
+                    ));
+                }
+                redirections.push(Redirection::new(RedirectionType::Stderr(false), args[i + 1].clone()));
+                i += 2;
+            }
+            "2>>" => {
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Invalid redirection: 2>> requires filename".to_string(),
+                    ));
+                }
+                redirections.push(Redirection::new(RedirectionType::Stderr(true), args[i + 1].clone()));
+                i += 2;
+            }
+            "2>&1" => {
+                redirections.push(Redirection::new(RedirectionType::StderrToStdout, String::new()));
+                i += 1;
+            }
+            "1>&2" => {
+                redirections.push(Redirection::new(RedirectionType::StdoutToStderr, String::new()));
+                i += 1;
+            }
+            "<<" => {
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Heredoc operator requires a delimiter".to_string(),
+                    ));
+                }
+                let delimiter = args[i + 1].clone();
+                let content = heredoc_contents.get(&delimiter).cloned().unwrap_or_default();
+                redirections.push(Redirection::new_heredoc(delimiter, content, false));
+                i += 2;
+            }
+            "<<-" => {
+                if i + 1 >= args.len() {
+                    return Err(RushError::Execution(
+                        "Heredoc operator requires a delimiter".to_string(),
+                    ));
+                }
+                let delimiter = args[i + 1].clone();
+                let content = heredoc_contents.get(&delimiter).cloned().unwrap_or_default();
+                redirections.push(Redirection::new_heredoc(delimiter, content, true));
+                i += 2;
+            }
+            _ => {
+                clean_args.push(args[i].clone());
+                i += 1;
+            }
+        }
+    }
+
+    Ok((clean_args, redirections))
 }
 
 #[cfg(test)]
@@ -1007,5 +1307,134 @@ mod tests {
         assert_eq!(redirs[0].file_path, "out.txt");
         assert_eq!(redirs[1].redir_type, RedirectionType::Stderr(false));
         assert_eq!(redirs[1].file_path, "err.txt");
+    }
+
+    // Heredoc tokenization tests
+    #[test]
+    fn test_tokenize_heredoc() {
+        let tokens = tokenize_with_pipes("cat << EOF").unwrap();
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0], Token::Word("cat".to_string()));
+        assert_eq!(tokens[1], Token::Heredoc);
+        assert_eq!(tokens[2], Token::Word("EOF".to_string()));
+    }
+
+    #[test]
+    fn test_tokenize_heredoc_strip() {
+        let tokens = tokenize_with_pipes("cat <<- MARKER").unwrap();
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0], Token::Word("cat".to_string()));
+        assert_eq!(tokens[1], Token::HeredocStrip);
+        assert_eq!(tokens[2], Token::Word("MARKER".to_string()));
+    }
+
+    #[test]
+    fn test_get_pending_heredocs() {
+        let heredocs = get_pending_heredocs("cat << EOF").unwrap();
+        assert_eq!(heredocs.len(), 1);
+        assert_eq!(heredocs[0].delimiter, "EOF");
+        assert!(!heredocs[0].strip_tabs);
+    }
+
+    #[test]
+    fn test_get_pending_heredocs_strip_tabs() {
+        let heredocs = get_pending_heredocs("cat <<- MARKER").unwrap();
+        assert_eq!(heredocs.len(), 1);
+        assert_eq!(heredocs[0].delimiter, "MARKER");
+        assert!(heredocs[0].strip_tabs);
+    }
+
+    #[test]
+    fn test_collect_heredoc_content() {
+        let lines = "line1\nline2\nEOF\nextra";
+        let mut iter = lines.lines();
+        let content = collect_heredoc_content(&mut iter, "EOF", false).unwrap();
+        assert_eq!(content, "line1\nline2\n");
+    }
+
+    #[test]
+    fn test_collect_heredoc_content_strip_tabs() {
+        let lines = "\tline1\n\t\tline2\nEOF";
+        let mut iter = lines.lines();
+        let content = collect_heredoc_content(&mut iter, "EOF", true).unwrap();
+        // <<- strips ALL leading tabs from each line
+        assert_eq!(content, "line1\nline2\n");
+    }
+
+    #[test]
+    fn test_collect_heredoc_content_missing_delimiter() {
+        let lines = "line1\nline2\nno_delimiter";
+        let mut iter = lines.lines();
+        let result = collect_heredoc_content(&mut iter, "EOF", false);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_parse_with_heredocs() {
+        let input = "cat << EOF\nhello world\nEOF";
+        let (cmd_line, heredocs) = parse_with_heredocs(input).unwrap();
+        assert_eq!(cmd_line, "cat << EOF");
+        assert_eq!(heredocs.len(), 1);
+        assert_eq!(heredocs[0].0, "EOF"); // delimiter
+        assert_eq!(heredocs[0].1, "hello world\n"); // content
+        assert!(!heredocs[0].2); // strip_tabs = false
+    }
+
+    #[test]
+    fn test_parse_with_heredocs_strip_tabs() {
+        let input = "cat <<- END\n\thello\n\t\tworld\nEND";
+        let (cmd_line, heredocs) = parse_with_heredocs(input).unwrap();
+        assert_eq!(cmd_line, "cat <<- END");
+        assert_eq!(heredocs.len(), 1);
+        assert_eq!(heredocs[0].0, "END"); // delimiter
+        // <<- strips ALL leading tabs from each line
+        assert_eq!(heredocs[0].1, "hello\nworld\n"); // content (all leading tabs stripped)
+        assert!(heredocs[0].2); // strip_tabs = true
+    }
+
+    #[test]
+    fn test_extract_redirections_with_heredocs() {
+        use std::collections::HashMap;
+        let args = vec!["arg1".to_string(), "<<".to_string(), "EOF".to_string()];
+        let mut heredoc_contents = HashMap::new();
+        heredoc_contents.insert("EOF".to_string(), "test content\n".to_string());
+
+        let (clean_args, redirs) = extract_redirections_with_heredocs(&args, &heredoc_contents).unwrap();
+        assert_eq!(clean_args, vec!["arg1"]);
+        assert_eq!(redirs.len(), 1);
+        assert_eq!(redirs[0].redir_type, RedirectionType::Heredoc);
+        assert_eq!(redirs[0].file_path, "EOF");
+        assert_eq!(redirs[0].heredoc_content, Some("test content\n".to_string()));
+    }
+
+    #[test]
+    fn test_extract_redirections_from_args_heredoc() {
+        let args = vec!["arg1".to_string(), "<<".to_string(), "DELIMITER".to_string()];
+        let (clean_args, redirs) = extract_redirections_from_args(&args).unwrap();
+        assert_eq!(clean_args, vec!["arg1"]);
+        assert_eq!(redirs.len(), 1);
+        assert_eq!(redirs[0].redir_type, RedirectionType::Heredoc);
+        assert_eq!(redirs[0].file_path, "DELIMITER");
+        // Content is empty when using extract_redirections_from_args
+        assert_eq!(redirs[0].heredoc_content, Some(String::new()));
+    }
+
+    #[test]
+    fn test_extract_redirections_from_args_heredoc_strip() {
+        let args = vec!["<<-".to_string(), "MARKER".to_string()];
+        let (clean_args, redirs) = extract_redirections_from_args(&args).unwrap();
+        assert!(clean_args.is_empty());
+        assert_eq!(redirs.len(), 1);
+        assert_eq!(redirs[0].redir_type, RedirectionType::HeredocStrip);
+        assert_eq!(redirs[0].file_path, "MARKER");
+    }
+
+    #[test]
+    fn test_heredoc_missing_delimiter_error() {
+        let args = vec!["<<".to_string()];
+        let result = extract_redirections_from_args(&args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("delimiter"));
     }
 }

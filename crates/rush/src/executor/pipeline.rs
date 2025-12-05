@@ -97,12 +97,12 @@ impl PipelineExecutor {
 
     /// Execute a single command (no pipes)
     fn execute_single(&self, segment: &PipelineSegment) -> Result<i32> {
-        use super::parser::extract_redirections_from_args;
+        use super::parser::extract_redirections_with_heredocs;
         use std::fs::{File, OpenOptions};
-        use std::io::ErrorKind;
+        use std::io::{ErrorKind, Write};
 
-        // Extract redirections from args
-        let (clean_args, redirections) = extract_redirections_from_args(&segment.args)?;
+        // Extract redirections from args (including heredoc content from segment)
+        let (clean_args, redirections) = extract_redirections_with_heredocs(&segment.args, &segment.heredoc_contents)?;
 
         tracing::debug!(
             program = %segment.program,
@@ -209,6 +209,26 @@ impl PipelineExecutor {
                         cmd.stderr(Stdio::from(file));
                         has_stderr_redirection = true;
                     }
+                    super::RedirectionType::StderrToStdout | super::RedirectionType::StdoutToStderr => {
+                        // These are handled at a higher level since they require
+                        // coordinating between stdout and stderr
+                        // For now, we just skip these - they need special handling
+                        tracing::debug!("Combined redirection (2>&1/1>&2) handling in execute_single");
+                    }
+                    super::RedirectionType::Heredoc | super::RedirectionType::HeredocStrip => {
+                        // Heredoc: feed content to stdin via a pipe
+                        // Content is in redir.heredoc_content
+                        if let Some(ref content) = redir.heredoc_content {
+                            // We need to use piped stdin and write the heredoc content
+                            // This will be handled below by spawning with piped stdin
+                            cmd.stdin(Stdio::piped());
+                            tracing::debug!(
+                                delimiter = %redir.file_path,
+                                content_len = content.len(),
+                                "Heredoc redirection configured"
+                            );
+                        }
+                    }
                 }
             }
             // If we have redirections, set default stderr to inherit unless already redirected
@@ -226,6 +246,26 @@ impl PipelineExecutor {
             Ok(mut child) => {
                 let pid = child.id();
                 tracing::trace!(pid, "Process spawned");
+
+                // Write heredoc content to stdin if present
+                for redir in &redirections {
+                    if matches!(redir.redir_type, super::RedirectionType::Heredoc | super::RedirectionType::HeredocStrip) {
+                        if let Some(ref content) = redir.heredoc_content {
+                            if let Some(mut stdin) = child.stdin.take() {
+                                if let Err(e) = stdin.write_all(content.as_bytes()) {
+                                    tracing::error!(error = %e, "Failed to write heredoc content to stdin");
+                                    // Kill the child since we couldn't provide input
+                                    let _ = child.kill();
+                                    let _ = child.wait();
+                                    return Err(RushError::Execution(format!("Failed to write heredoc content: {}", e)));
+                                }
+                                // Close stdin to signal EOF (drop the owned value)
+                                drop(stdin);
+                                tracing::debug!(content_len = content.len(), "Heredoc content written to stdin");
+                            }
+                        }
+                    }
+                }
 
                 match child.wait() {
                     Ok(status) => {
@@ -317,15 +357,36 @@ impl MultiCommandExecution {
     /// - Last command: stdin from previous pipe, stdout to terminal
     /// - All commands: stderr to terminal
     fn spawn(pipeline: &Pipeline) -> Result<Self> {
+        use super::parser::extract_redirections_with_heredocs;
+        use std::io::Write;
+
         let mut children: Vec<Child> = Vec::with_capacity(pipeline.len());
         let mut prev_stdout: Option<std::process::ChildStdout> = None;
+        let mut heredoc_data: Vec<(usize, String)> = Vec::new(); // (child_index, content)
 
         for (i, segment) in pipeline.segments.iter().enumerate() {
+            // Extract redirections from args (including heredoc content from segment)
+            let (clean_args, redirections) = extract_redirections_with_heredocs(&segment.args, &segment.heredoc_contents)?;
+
             let mut cmd = Command::new(&segment.program);
-            cmd.args(&segment.args);
+            cmd.args(&clean_args);
+
+            // Check for heredoc redirections
+            let mut has_heredoc = false;
+            for redir in &redirections {
+                if matches!(redir.redir_type, super::RedirectionType::Heredoc | super::RedirectionType::HeredocStrip) {
+                    if let Some(ref content) = redir.heredoc_content {
+                        has_heredoc = true;
+                        heredoc_data.push((i, content.clone()));
+                    }
+                }
+            }
 
             // Configure stdin
-            if let Some(stdout) = prev_stdout.take() {
+            if has_heredoc && prev_stdout.is_none() {
+                // First command with heredoc: stdin from pipe (we'll write heredoc content)
+                cmd.stdin(Stdio::piped());
+            } else if let Some(stdout) = prev_stdout.take() {
                 // Middle/last command: stdin from previous command's stdout
                 cmd.stdin(stdout);
             } else {
@@ -421,6 +482,26 @@ impl MultiCommandExecution {
             }
 
             children.push(child);
+        }
+
+        // Write heredoc content to stdin of appropriate children
+        for (child_idx, content) in heredoc_data {
+            if let Some(child) = children.get_mut(child_idx) {
+                if let Some(mut stdin) = child.stdin.take() {
+                    if let Err(e) = stdin.write_all(content.as_bytes()) {
+                        tracing::error!(error = %e, child_idx, "Failed to write heredoc content to pipeline stdin");
+                        // Clean up all children on failure
+                        for mut c in children {
+                            let _ = c.kill();
+                            let _ = c.wait();
+                        }
+                        return Err(RushError::Execution(format!("Failed to write heredoc content: {}", e)));
+                    }
+                    // Close stdin to signal EOF (drop the owned value)
+                    drop(stdin);
+                    tracing::debug!(child_idx, content_len = content.len(), "Heredoc content written to pipeline stdin");
+                }
+            }
         }
 
         Ok(Self { children, pipeline: pipeline.clone() })

@@ -147,6 +147,14 @@ pub enum RedirectionType {
     /// Stderr redirection (2> or 2>>) - redirect stderr to file
     /// bool flag: false = 2> (truncate), true = 2>> (append)
     Stderr(bool),
+    /// Stderr to stdout (2>&1) - redirect stderr to same destination as stdout
+    StderrToStdout,
+    /// Stdout to stderr (1>&2) - redirect stdout to same destination as stderr
+    StdoutToStderr,
+    /// Heredoc (<<) - inline document as stdin
+    Heredoc,
+    /// Heredoc with tab stripping (<<-) - inline document with leading tabs stripped
+    HeredocStrip,
 }
 
 /// A single redirection operation with type and target file path
@@ -154,20 +162,36 @@ pub enum RedirectionType {
 pub struct Redirection {
     /// Type of redirection (>, >>, or <)
     pub redir_type: RedirectionType,
-    /// File path for redirection target/source
+    /// File path for redirection target/source (or delimiter for heredocs)
     pub file_path: String,
+    /// Content for heredoc redirections
+    pub heredoc_content: Option<String>,
 }
 
 impl Redirection {
     /// Creates a new redirection
     pub fn new(redir_type: RedirectionType, file_path: String) -> Self {
-        Self { redir_type, file_path }
+        Self { redir_type, file_path, heredoc_content: None }
+    }
+
+    /// Creates a new heredoc redirection with content
+    pub fn new_heredoc(delimiter: String, content: String, _strip_tabs: bool) -> Self {
+        Self {
+            redir_type: if _strip_tabs { RedirectionType::HeredocStrip } else { RedirectionType::Heredoc },
+            file_path: delimiter,
+            heredoc_content: Some(content),
+        }
     }
 
     /// Validates that the redirection is well-formed
     pub fn validate(&self) -> crate::error::Result<()> {
         use crate::error::RushError;
-        if self.file_path.is_empty() {
+        // Heredocs use file_path as delimiter, which can be empty for some edge cases
+        // StderrToStdout and StdoutToStderr don't need file paths
+        if self.file_path.is_empty() && !matches!(
+            self.redir_type,
+            RedirectionType::StderrToStdout | RedirectionType::StdoutToStderr
+        ) {
             return Err(RushError::Execution("Empty file path for redirection".to_string()));
         }
         Ok(())
@@ -257,12 +281,20 @@ pub struct PipelineSegment {
     /// Position in pipeline (0-indexed)
     /// First command is 0, second is 1
     pub index: usize,
+
+    /// Heredoc contents mapped by delimiter
+    pub heredoc_contents: std::collections::HashMap<String, String>,
 }
 
 impl PipelineSegment {
     /// Create a new pipeline segment
     pub fn new(program: String, args: Vec<String>, index: usize) -> Self {
-        Self { program, args, index }
+        Self { program, args, index, heredoc_contents: std::collections::HashMap::new() }
+    }
+
+    /// Add heredoc content for a delimiter
+    pub fn add_heredoc_content(&mut self, delimiter: String, content: String) {
+        self.heredoc_contents.insert(delimiter, content);
     }
 
     /// Validate segment
