@@ -1,6 +1,6 @@
 //! Built-in commands module
 //!
-//! Handles execution of shell built-ins like `jobs`, `fg`, `bg`, `cd`, `echo`, `test`, `alias`, etc.
+//! Handles execution of shell built-ins like `jobs`, `fg`, `bg`, `cd`, `echo`, `test`, `alias`, `source`, etc.
 
 pub mod alias;
 pub mod bg;
