@@ -7,6 +7,7 @@ pub mod bg;
 pub mod bracket;
 pub mod cd;
 pub mod echo;
+pub mod exit;
 pub mod false_cmd;
 pub mod fg;
 pub mod jobs;
@@ -48,6 +49,7 @@ pub fn execute_builtin(
         "unalias" => Some(unalias::execute(executor, args)),
         "source" => Some(source::execute(executor, args)),
         "." => Some(source::execute(executor, args)),
+        "exit" => Some(exit::execute(executor, args)),
         _ => None,
     }
 }

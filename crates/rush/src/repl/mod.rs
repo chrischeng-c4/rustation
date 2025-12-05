@@ -160,12 +160,6 @@ impl Repl {
                         continue;
                     }
 
-                    // Check for exit command
-                    if line == "exit" || line == "quit" {
-                        tracing::info!(exit_code = self.last_exit_code, "Exit command received");
-                        return Ok(self.last_exit_code);
-                    }
-
                     // Execute the command
                     match self.executor.execute(line) {
                         Ok(exit_code) => {
@@ -176,6 +170,11 @@ impl Repl {
                                 "Command completed"
                             );
                             self.last_exit_code = exit_code;
+                        }
+                        Err(crate::RushError::ExitRequest(code)) => {
+                            // Exit builtin requested shell termination
+                            tracing::info!(exit_code = code, "Exit command received");
+                            return Ok(code);
                         }
                         Err(err) => {
                             tracing::error!(
