@@ -1,6 +1,8 @@
-# Rush Shell Specifications (001-014)
+# Rush Shell Specifications (001-026 Planned)
 
 This directory contains specifications and implementation plans for rush shell features, organized by feature number.
+
+**Current Focus**: Control Flow Foundation (Features 017-026)
 
 ## Feature Directory Structure
 
@@ -26,6 +28,21 @@ Each feature is organized in its own directory with:
 | 009 | Globbing & Wildcards | ✅ Complete | ✅ Merged | ✅ 16+ |
 | 013 | CD Builtin | ✅ Complete | ✅ Merged | ✅ 8+ |
 | 014 | Environment Variables | ✅ Complete | ✅ Merged | ✅ 20+ |
+
+### 📋 In Progress (Specification Phase)
+
+| # | Feature | Spec | Plan | Tasks | GitHub |
+|---|---------|------|------|-------|--------|
+| 017 | if/then/else/elif/fi | ✅ | ✅ | ✅ (66 tasks) | #32 |
+| 018 | for/in/do/done loops | ✅ | ✅ | ✅ (58 tasks) | #33 |
+| 019 | while/until loops | ✅ | ⏳ | ⏳ | #37 |
+| 020 | case/esac patterns | ⏳ | ⏳ | ⏳ | #38 |
+| 021 | shell functions | ⏳ | ⏳ | ⏳ | #39 |
+| 022 | break statement | ⏳ | ⏳ | ⏳ | #40 |
+| 023 | continue statement | ⏳ | ⏳ | ⏳ | #41 |
+| 024 | return statement | ⏳ | ⏳ | ⏳ | #42 |
+| 025 | subshells | ⏳ | ⏳ | ⏳ | #43 |
+| 026 | command groups | ⏳ | ⏳ | ⏳ | #44 |
 
 ### 🔮 Reserved for Future Features
 
