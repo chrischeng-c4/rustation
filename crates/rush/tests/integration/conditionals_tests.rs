@@ -41,10 +41,38 @@ mod conditional_integration_tests {
     }
 
     #[test]
-    #[ignore] // Not implemented yet - will enable in Phase 4
     fn test_if_false_else_executes() {
-        // Should execute: if false; then echo "yes"; else echo "no"; fi
-        // Expected: "no" printed to stdout
+        // US2 Acceptance: if false; then ...; else ...; fi
+        // Expected: else block executes because condition is false
+        use rush::executor::execute::CommandExecutor;
+
+        let mut executor = CommandExecutor::new();
+        let exit_code = executor.execute("if false; then true; else true; fi");
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0, "Else block should execute and return 0");
+    }
+
+    #[test]
+    fn test_if_true_else_skips() {
+        // US2 Acceptance: if true; then ...; else ...; fi
+        // Expected: then block executes, else block skipped
+        use rush::executor::execute::CommandExecutor;
+
+        let mut executor = CommandExecutor::new();
+        let exit_code = executor.execute("if true; then true; else false; fi");
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0, "Then block should execute, else skipped");
+    }
+
+    #[test]
+    fn test_if_else_exit_code_propagation() {
+        // US2: Verify exit code from else block is returned
+        use rush::executor::execute::CommandExecutor;
+
+        let mut executor = CommandExecutor::new();
+        let exit_code = executor.execute("if false; then true; else false; fi");
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 1, "Should return exit code from else block");
     }
 
     #[test]

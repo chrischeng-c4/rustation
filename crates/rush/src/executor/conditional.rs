@@ -45,6 +45,7 @@ pub fn parse_compound_list(input: &str) -> Result<CompoundList> {
 ///
 /// Parses the POSIX if/then/fi construct from a raw input string.
 /// For User Story 1 (Phase 3), this handles basic if/then/fi without elif/else.
+/// For User Story 2 (Phase 4), this also handles if/then/else/fi.
 ///
 /// # Arguments
 /// * `input` - Raw input string containing the if statement (must start with "if")
@@ -72,17 +73,54 @@ pub fn parse_if_clause(input: &str) -> Result<IfBlock> {
 
     let after_then = &rest[then_pos + 4..].trim_start(); // Skip "then"
 
-    // Find "fi" keyword - everything between "then" and "fi" is the then block
-    let fi_pos = find_keyword_position(after_then, "fi")
-        .ok_or_else(|| RushError::Syntax("Expected 'fi' keyword to close if statement".to_string()))?;
+    // Look for either "else" or "fi" keyword
+    let else_pos = find_keyword_position(after_then, "else");
+    let fi_pos = find_keyword_position(after_then, "fi");
 
-    let then_str = after_then[..fi_pos].trim();
+    // Determine which comes first and parse accordingly
+    let (then_str, else_block) = match (else_pos, fi_pos) {
+        (Some(else_idx), Some(fi_idx)) if else_idx < fi_idx => {
+            // else comes before fi: if ... then ... else ... fi
+            let then_part = after_then[..else_idx].trim();
+            let after_else = &after_then[else_idx + 4..].trim_start(); // Skip "else"
+
+            // Find fi after else
+            let fi_after_else = find_keyword_position(after_else, "fi")
+                .ok_or_else(|| RushError::Syntax("Expected 'fi' keyword to close if statement".to_string()))?;
+
+            let else_part = after_else[..fi_after_else].trim();
+            let else_block = if else_part.is_empty() {
+                Some(CompoundList::empty())
+            } else {
+                Some(parse_compound_list(else_part)?)
+            };
+
+            (then_part, else_block)
+        }
+        (None, Some(fi_idx)) => {
+            // Only fi found, no else: if ... then ... fi
+            let then_part = after_then[..fi_idx].trim();
+            (then_part, None)
+        }
+        _ => {
+            // No valid fi found
+            return Err(RushError::Syntax("Expected 'fi' keyword to close if statement".to_string()));
+        }
+    };
 
     // Parse condition and then block
     let condition = parse_compound_list(condition_str)?;
     let then_block = parse_compound_list(then_str)?;
 
-    Ok(IfBlock::new(condition, then_block))
+    // Create if block
+    let mut if_block = IfBlock::new(condition, then_block);
+
+    // Set else block if present
+    if let Some(else_block) = else_block {
+        if_block.set_else(else_block);
+    }
+
+    Ok(if_block)
 }
 
 /// Find the position of a keyword in a string
@@ -167,15 +205,35 @@ pub fn execute_compound_list(compound_list: &CompoundList, executor: &mut super:
 
 /// Parse the optional else/elif part of an if statement
 ///
+/// For User Story 2 (Phase 4), this handles basic else clause without elif support.
+///
 /// # Arguments
-/// * `input` - Raw input string after the initial then block
+/// * `input` - Raw input string after the "fi" has been removed
 ///
 /// # Returns
 /// A tuple of (elif_clauses, else_block)
 pub fn parse_else_part(input: &str) -> Result<(Vec<ElifClause>, Option<CompoundList>)> {
-    // Placeholder for full implementation in Phase 4
-    // For now, return empty elif clauses and no else block
-    Ok((Vec::new(), None))
+    let trimmed = input.trim();
+
+    // Check if there's an else clause
+    if trimmed.is_empty() {
+        // No else clause
+        return Ok((Vec::new(), None));
+    }
+
+    // Look for else keyword
+    if !trimmed.starts_with("else") || (trimmed.len() > 4 && !trimmed.chars().nth(4).map_or(false, |c| c.is_whitespace())) {
+        // Not an else clause, no error (might be something else or end of input)
+        return Ok((Vec::new(), None));
+    }
+
+    // We have an else clause - everything after "else" is the else block
+    let after_else = &trimmed[4..].trim_start();
+
+    // Parse the else block as a compound list
+    let else_block = parse_compound_list(after_else)?;
+
+    Ok((Vec::new(), Some(else_block)))
 }
 
 #[cfg(test)]

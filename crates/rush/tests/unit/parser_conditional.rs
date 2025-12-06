@@ -47,6 +47,34 @@ mod conditional_parser_tests {
     }
 
     #[test]
+    fn test_parse_if_clause_with_else() {
+        // Test if/then/else/fi structure (US2)
+        let result = conditional::parse_if_clause("if true; then echo yes; else echo no; fi");
+        assert!(result.is_ok(), "Should parse if/else statement");
+        let if_block = result.unwrap();
+        assert!(!if_block.then_block.is_empty(), "Then block should not be empty");
+        assert!(if_block.else_block.is_some(), "Should have else block");
+    }
+
+    #[test]
+    fn test_parse_if_clause_else_only() {
+        // Test parsing when else block is present (US2)
+        let result = conditional::parse_if_clause("if false; then echo fail; else echo fallback; fi");
+        assert!(result.is_ok(), "Should parse with else block");
+        let if_block = result.unwrap();
+        assert!(if_block.else_block.is_some(), "Should have else block");
+    }
+
+    #[test]
+    fn test_parse_if_clause_empty_else_block() {
+        // Test empty else block (should be valid) (US2)
+        let result = conditional::parse_if_clause("if true; then true; else; fi");
+        assert!(result.is_ok(), "Should allow else block");
+        let if_block = result.unwrap();
+        assert!(if_block.else_block.is_some(), "Should have else block");
+    }
+
+    #[test]
     fn test_parse_compound_list_empty() {
         let result = conditional::parse_compound_list("");
         assert!(result.is_ok());
