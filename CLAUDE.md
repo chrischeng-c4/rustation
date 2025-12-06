@@ -309,11 +309,30 @@ gh pr create --title "title" --body "closes #{issue}"
 - tokio, serde, anyhow/thiserror, tracing
 
 ## Active Technologies
+
+### Core Infrastructure
 - Rust 1.75+ (edition 2021) (001-rush-mvp)
 - reedline 0.26+ (002-tab-completion, 003-autosuggestions)
 - File-based history (~/.config/rush/history)
-- Conditional control flow (017-conditionals): if/then/elif/else/fi with nested support
+
+### Control Flow Features (017-026)
+**Feature 017 - Conditionals (if/then/elif/else/fi)**
   - Recursive descent parser with keyword detection
   - Multiline REPL support with continuation prompts
   - Short-circuit evaluation
-  - 22 passing tests (11 integration, 11 unit)
+  - 22 integration tests
+
+**Features 018-019 - Loops (for/while/until)**
+  - Phase 2: Variable expansion ($VAR, ${VAR}), command substitution $(cmd), globbing (*, ?, [...])
+  - Phase 3: Pipe support in loop bodies (for | while | until)
+  - 148 integration tests (expansions, command substitution, globbing, pipes)
+  - Architectural pattern: raw_body field for pipe/redirection support
+
+**Feature 020+ - Case statements, functions, break/continue/return**
+  - Phase 2: Variable expansion, command substitution, globbing
+  - 20 integration tests
+
+### Test Coverage
+- Total: 752 passing tests (532 lib + 158 integration + 59 other + 3 doc)
+- Phase 2 (complete): 93 expansion/substitution/globbing tests
+- Phase 3 (partial): 10 pipe tests (5 for loops, 5 while/until loops)
