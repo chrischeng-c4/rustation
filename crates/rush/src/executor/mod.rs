@@ -41,6 +41,7 @@ pub mod loop_control;
 pub mod parser;
 pub mod pipeline;
 pub mod script;
+pub mod subshell;
 pub mod substitution;
 pub mod variables;
 pub mod while_loop;
@@ -537,6 +538,13 @@ pub struct ShellFunction {
     pub body: CompoundList,
     /// Function parameters (for future use)
     pub parameters: Vec<String>,
+}
+
+/// Subshell: command execution in a separate process
+#[derive(Debug, Clone, PartialEq)]
+pub struct Subshell {
+    /// Commands to execute in subshell
+    pub body: CompoundList,
 }
 
 /// A single pattern case with commands
