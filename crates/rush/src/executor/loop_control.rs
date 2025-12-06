@@ -33,6 +33,12 @@ pub fn is_continue_statement(input: &str) -> bool {
     trimmed == "continue" || (trimmed.starts_with("continue ") && trimmed[9..].trim().parse::<i32>().is_ok())
 }
 
+/// Check if a statement is a return statement
+pub fn is_return_statement(input: &str) -> bool {
+    let trimmed = input.trim();
+    trimmed == "return" || (trimmed.starts_with("return ") && trimmed[7..].trim().parse::<i32>().is_ok())
+}
+
 /// Execute a break statement
 pub fn execute_break(input: &str) -> Result<i32> {
     // Parse optional level parameter (for nested loops)
@@ -61,6 +67,21 @@ pub fn execute_continue(input: &str) -> Result<i32> {
     // Set the continue signal
     set_loop_signal(LoopSignal::Continue);
     Ok(0)
+}
+
+/// Execute a return statement
+pub fn execute_return(input: &str) -> Result<i32> {
+    // Parse optional exit code parameter
+    let trimmed = input.trim();
+    let exit_code: i32 = if trimmed == "return" {
+        0
+    } else {
+        trimmed[6..].trim().parse().unwrap_or(0)
+    };
+
+    // Set the return signal with exit code
+    set_loop_signal(LoopSignal::Return(exit_code));
+    Ok(exit_code)
 }
 
 /// Set the current loop signal
@@ -149,5 +170,30 @@ mod tests {
         let result = execute_continue("continue 1");
         assert!(result.is_ok());
         assert_eq!(get_loop_signal(), LoopSignal::Continue);
+    }
+
+    #[test]
+    fn test_is_return_statement() {
+        assert!(is_return_statement("return"));
+        assert!(is_return_statement("return 42"));
+        assert!(is_return_statement("  return  "));
+        assert!(!is_return_statement("returning"));
+        assert!(!is_return_statement("echo return"));
+    }
+
+    #[test]
+    fn test_execute_return() {
+        clear_loop_signal();
+        let result = execute_return("return 42");
+        assert!(result.is_ok());
+        assert_eq!(get_loop_signal(), LoopSignal::Return(42));
+    }
+
+    #[test]
+    fn test_execute_return_default() {
+        clear_loop_signal();
+        let result = execute_return("return");
+        assert!(result.is_ok());
+        assert_eq!(get_loop_signal(), LoopSignal::Return(0));
     }
 }
