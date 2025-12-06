@@ -144,24 +144,21 @@ impl Repl {
             // Create prompt with current exit code
             let prompt = RushPrompt::new(self.last_exit_code);
 
-            // Read line from user
-            tracing::trace!("Waiting for user input");
-            let sig = self.editor.read_line(&prompt);
+            // Read input - potentially across multiple lines for incomplete statements
+            let sig = self.read_complete_statement_signal(&prompt)?;
 
             match sig {
-                Ok(Signal::Success(buffer)) => {
-                    // User entered a command
-                    let line = buffer.trim();
+                Signal::Success(line) => {
                     tracing::debug!(cmd = %line, iteration, "User input received");
 
                     // Skip empty lines
-                    if line.is_empty() {
+                    if line.trim().is_empty() {
                         tracing::trace!("Empty line, skipping");
                         continue;
                     }
 
                     // Execute the command
-                    match self.executor.execute(line) {
+                    match self.executor.execute(&line) {
                         Ok(exit_code) => {
                             tracing::info!(
                                 cmd = %line,
@@ -187,22 +184,61 @@ impl Repl {
                         }
                     }
                 }
-                Ok(Signal::CtrlD) => {
+                Signal::CtrlD => {
                     // Exit on Ctrl+D
                     tracing::info!(exit_code = self.last_exit_code, "Ctrl+D received, exiting");
                     return Ok(self.last_exit_code);
                 }
-                Ok(Signal::CtrlC) => {
+                Signal::CtrlC => {
                     // Clear current line and show new prompt
                     tracing::debug!(iteration, "Ctrl+C received, clearing line");
                     // reedline handles this automatically
                     continue;
                 }
+            }
+        }
+    }
+
+    /// Read a complete statement, potentially across multiple lines
+    /// Accumulates lines until we have a syntactically complete statement
+    fn read_complete_statement_signal(&mut self, prompt: &RushPrompt) -> std::result::Result<Signal, std::io::Error> {
+        let mut accumulated = String::new();
+        let mut line_count = 0;
+
+        loop {
+            line_count += 1;
+
+            // Use different prompt for continuation lines
+            let current_prompt = if line_count == 1 {
+                prompt.clone()
+            } else {
+                RushPrompt::new_continuation()
+            };
+
+            // Read line from user
+            tracing::trace!("Waiting for user input (line {}))", line_count);
+            let sig = self.editor.read_line(&current_prompt);
+
+            match sig {
+                Ok(Signal::Success(buffer)) => {
+                    // Add the line to accumulated input
+                    if !accumulated.is_empty() {
+                        accumulated.push('\n');
+                    }
+                    accumulated.push_str(&buffer);
+
+                    // Check if the statement is syntactically complete
+                    if crate::executor::conditional::is_statement_complete(&accumulated) {
+                        return Ok(Signal::Success(accumulated));
+                    }
+                    // Otherwise, continue reading more lines
+                }
+                Ok(signal) => {
+                    // Ctrl+D, Ctrl+C, or other signals
+                    return Ok(signal);
+                }
                 Err(err) => {
-                    // REPL error - log and return error code
-                    tracing::error!(error = %err, iteration, "REPL error");
-                    eprintln!("rush: REPL error: {}", err);
-                    return Ok(1);
+                    return Err(err);
                 }
             }
         }

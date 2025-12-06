@@ -32,6 +32,7 @@ pub mod builtins;
 pub mod conditional;
 pub mod execute;
 pub mod expansion;
+pub mod for_loop;
 pub mod glob;
 pub mod job;
 pub mod parser;
@@ -442,6 +443,37 @@ impl IfBlock {
     /// Set the else block
     pub fn set_else(&mut self, else_block: CompoundList) {
         self.else_block = Some(Box::new(else_block));
+    }
+}
+
+/// A `for` loop with list-based iteration
+#[derive(Debug, Clone, PartialEq)]
+pub struct ForLoop {
+    /// Loop variable name (identifier)
+    pub variable: String,
+    /// Word list to iterate over
+    pub word_list: Vec<String>,
+    /// Commands to execute in each iteration
+    pub body: Box<CompoundList>,
+}
+
+impl ForLoop {
+    /// Create a new for loop
+    pub fn new(variable: String, word_list: Vec<String>, body: CompoundList) -> Self {
+        Self {
+            variable,
+            word_list,
+            body: Box::new(body),
+        }
+    }
+
+    /// Create a for loop with empty word list (uses positional parameters)
+    pub fn new_with_positional(variable: String, body: CompoundList) -> Self {
+        Self {
+            variable,
+            word_list: Vec::new(), // Empty means use $@
+            body: Box::new(body),
+        }
     }
 }
 

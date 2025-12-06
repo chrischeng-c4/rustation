@@ -28,21 +28,26 @@ Each feature is organized in its own directory with:
 | 009 | Globbing & Wildcards | ✅ Complete | ✅ Merged | ✅ 16+ |
 | 013 | CD Builtin | ✅ Complete | ✅ Merged | ✅ 8+ |
 | 014 | Environment Variables | ✅ Complete | ✅ Merged | ✅ 20+ |
+| 017 | Conditionals (if/then/elif/else/fi) | ✅ Complete | ✅ Ready for PR | ✅ 22 (11 unit + 11 integration) |
 
-### 📋 In Progress (Specification Phase)
+### 📋 Ready for Implementation (Specification + Plan + Tasks Complete)
 
-| # | Feature | Spec | Plan | Tasks | GitHub |
-|---|---------|------|------|-------|--------|
-| 017 | if/then/else/elif/fi | ✅ | ✅ | ✅ (66 tasks) | #32 |
-| 018 | for/in/do/done loops | ✅ | ✅ | ✅ (58 tasks) | #33 |
-| 019 | while/until loops | ✅ | ⏳ | ⏳ | #37 |
-| 020 | case/esac patterns | ⏳ | ⏳ | ⏳ | #38 |
-| 021 | shell functions | ⏳ | ⏳ | ⏳ | #39 |
-| 022 | break statement | ⏳ | ⏳ | ⏳ | #40 |
-| 023 | continue statement | ⏳ | ⏳ | ⏳ | #41 |
-| 024 | return statement | ⏳ | ⏳ | ⏳ | #42 |
-| 025 | subshells | ⏳ | ⏳ | ⏳ | #43 |
-| 026 | command groups | ⏳ | ⏳ | ⏳ | #44 |
+| # | Feature | Spec | Plan | Tasks | Tests | GitHub |
+|---|---------|------|------|-------|-------|--------|
+| 018 | for/in/do/done loops | ✅ | ✅ | ✅ (58) | 45+ | #33 |
+| 019 | while/until loops | ✅ | ✅ | ✅ (48) | 35+ | #37 |
+
+### 📋 Specification Complete (All Artifacts Ready)
+
+| # | Feature | Spec | Plan | Tasks | Tests | GitHub |
+|---|---------|------|------|-------|-------|--------|
+| 020 | case/esac patterns | ✅ | ✅ | ✅ (42) | 30+ | #38 |
+| 021 | shell functions | ✅ | ✅ | ✅ (40) | 25+ | #39 |
+| 022 | break statement | ✅ | ✅ | ✅ (20) | 15+ | #40 |
+| 023 | continue statement | ✅ | ✅ | ✅ (20) | 15+ | #41 |
+| 024 | return statement | ✅ | ✅ | ✅ (15) | 10+ | #42 |
+| 025 | subshells | ✅ | ✅ | ✅ (30) | 20+ | #43 |
+| 026 | command groups | ✅ | ✅ | ✅ (25) | 15+ | #44 |
 
 ### 🔮 Reserved for Future Features
 
@@ -256,17 +261,23 @@ Each feature directory should contain spec.md and plan.md at minimum.
 ## Statistics
 
 **Completion Status**:
-- ✅ **9 features complete** (001-006, 009, 013-014)
+- ✅ **10 features complete** (001-006, 009, 013-014, 017)
+- 📋 **2 features spec + plan + tasks complete** (018-019)
+- 📋 **7 features spec + plan + tasks complete** (020-026)
 - 🔮 **5 features reserved** (007-008, 010-012)
 
-**Total Test Coverage** (approximate):
-- **232+ tests** across all implemented features (216 existing + 16 new glob tests)
-- Focus on unit tests, integration tests, and edge cases
+**Planning Phase Statistics**:
+- **Total Specifications**: 18 feature specs (001-006, 009, 013-014, 017-026)
+- **Total Task Breakdowns**: 9 features (018-026) with **308 total tasks**
+- **Estimated Test Count**: 215+ tests for Features 018-026
+- **Total Project Test Target**: 469+ tests (254 existing + 215 new)
 
-**Lines of Code** (approximate):
-- **Specs**: 1000+ lines (spec.md + plan.md files)
-- **Implementation**: 2000+ lines (rush crate code)
-- **Tests**: 1000+ lines (test code)
+**Documentation**:
+- **Specs**: 5000+ lines (comprehensive specifications for all features)
+- **Plans**: 3000+ lines (detailed implementation plans)
+- **Tasks**: 2000+ lines (granular task breakdowns)
+- **Implementation**: 2000+ lines (rush crate code to date)
+- **Tests**: 1500+ lines (test code to date)
 
 ---
 
@@ -294,6 +305,6 @@ For questions about:
 
 ---
 
-**Last Updated**: 2025-11-30
-**Total Features Documented**: 9 (001-006, 009, 013-014)
-**Total Features Complete**: 9 (001-006, 009, 013-014)
+**Last Updated**: 2025-12-06
+**Total Features Documented**: 10 (001-006, 009, 013-014, 017)
+**Total Features Complete**: 10 (001-006, 009, 013-014, 017)

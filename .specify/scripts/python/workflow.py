@@ -69,30 +69,80 @@ class WorkflowOrchestrator:
 
     # === Git Operations ===
 
-    def _checkout_branch(self, feature: Feature) -> None:
-        """Checkout or create the feature branch."""
-        # Check if branch exists
+    def _has_uncommitted_changes(self) -> bool:
+        """Check if there are uncommitted changes."""
         result = subprocess.run(
-            ["git", "branch", "--list", feature.branch],
+            ["git", "status", "--porcelain"],
             capture_output=True,
             text=True,
             cwd=self.repo_root,
         )
+        return bool(result.stdout.strip())
 
-        if feature.branch in result.stdout:
-            # Branch exists, checkout
+    def _stash_changes(self) -> bool:
+        """Stash uncommitted changes. Returns True if stash was created."""
+        if not self._has_uncommitted_changes():
+            return False
+
+        result = subprocess.run(
+            ["git", "stash", "push", "-m", "speckit-auto-stash"],
+            capture_output=True,
+            text=True,
+            cwd=self.repo_root,
+        )
+        if result.returncode == 0:
+            logger.info("Stashed uncommitted changes before branch checkout")
+            return True
+        logger.warning(f"Failed to stash changes: {result.stderr}")
+        return False
+
+    def _pop_stash(self) -> None:
+        """Pop the most recent stash if it was created by speckit."""
+        result = subprocess.run(
+            ["git", "stash", "list", "-1"],
+            capture_output=True,
+            text=True,
+            cwd=self.repo_root,
+        )
+        if "speckit-auto-stash" in result.stdout:
             subprocess.run(
-                ["git", "checkout", feature.branch],
-                check=True,
+                ["git", "stash", "pop"],
                 cwd=self.repo_root,
             )
-        else:
-            # Create new branch from main
-            subprocess.run(
-                ["git", "checkout", "-b", feature.branch, "main"],
-                check=True,
+            logger.info("Restored stashed changes")
+
+    def _checkout_branch(self, feature: Feature) -> None:
+        """Checkout or create the feature branch."""
+        # Handle dirty git state by stashing changes
+        had_stash = self._stash_changes()
+
+        try:
+            # Check if branch exists
+            result = subprocess.run(
+                ["git", "branch", "--list", feature.branch],
+                capture_output=True,
+                text=True,
                 cwd=self.repo_root,
             )
+
+            if feature.branch in result.stdout:
+                # Branch exists, checkout
+                subprocess.run(
+                    ["git", "checkout", feature.branch],
+                    check=True,
+                    cwd=self.repo_root,
+                )
+            else:
+                # Create new branch from main
+                subprocess.run(
+                    ["git", "checkout", "-b", feature.branch, "main"],
+                    check=True,
+                    cwd=self.repo_root,
+                )
+        finally:
+            # Restore stash if we created one
+            if had_stash:
+                self._pop_stash()
 
     def _commit_and_push(self, feature: Feature, message: str) -> None:
         """Commit all changes and push to remote."""

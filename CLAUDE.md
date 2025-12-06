@@ -117,3 +117,8 @@ gh pr create --title "title" --body "closes #{issue}"
 - Rust 1.75+ (edition 2021) (001-rush-mvp)
 - reedline 0.26+ (002-tab-completion, 003-autosuggestions)
 - File-based history (~/.config/rush/history)
+- Conditional control flow (017-conditionals): if/then/elif/else/fi with nested support
+  - Recursive descent parser with keyword detection
+  - Multiline REPL support with continuation prompts
+  - Short-circuit evaluation
+  - 22 passing tests (11 integration, 11 unit)

@@ -73,6 +73,12 @@ impl CommandExecutor {
             return self.execute_if_statement(trimmed);
         }
 
+        // Check if this is a for loop (before alias/variable expansion)
+        if trimmed.starts_with("for") && (trimmed.len() == 3 || trimmed.chars().nth(3).map_or(false, |c| c.is_whitespace())) {
+            tracing::debug!("Detected for loop");
+            return self.execute_for_loop(trimmed);
+        }
+
         // Expand aliases first (before variable expansion)
         let aliased_line = self.alias_manager.expand(line);
 
@@ -222,6 +228,27 @@ impl CommandExecutor {
 
         // Execute the if block
         let exit_code = conditional::execute_if_block(&if_block, self)?;
+        self.last_exit_code = exit_code;
+        Ok(exit_code)
+    }
+
+    /// Execute a for loop
+    /// This is called when a line starts with the "for" keyword
+    fn execute_for_loop(&mut self, line: &str) -> Result<i32> {
+        use super::for_loop;
+
+        // Parse the for loop
+        let for_loop = match for_loop::parse_for_loop(line) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                tracing::warn!(error = %e, "For loop parsing failed");
+                eprintln!("rush: {}", e);
+                return Ok(1);
+            }
+        };
+
+        // Execute the for loop
+        let exit_code = for_loop::execute_for_loop(&for_loop, self)?;
         self.last_exit_code = exit_code;
         Ok(exit_code)
     }

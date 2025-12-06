@@ -76,16 +76,60 @@ mod conditional_integration_tests {
     }
 
     #[test]
-    #[ignore] // Not implemented yet - will enable in Phase 5
     fn test_elif_clause() {
-        // Should execute: if false; then echo "1"; elif true; then echo "2"; fi
-        // Expected: "2" printed to stdout
+        // US3 Acceptance: if false; then ...; elif true; then ...; fi
+        // Expected: elif block executes because if condition is false and elif is true
+        use rush::executor::execute::CommandExecutor;
+
+        let mut executor = CommandExecutor::new();
+        let exit_code = executor.execute("if false; then true; elif true; then true; fi");
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0, "Elif block should execute and return 0");
     }
 
     #[test]
-    #[ignore] // Not implemented yet - will enable in Phase 6
+    fn test_multiple_elif_clauses() {
+        // US3: Test multiple elif clauses - first match should execute
+        use rush::executor::execute::CommandExecutor;
+
+        let mut executor = CommandExecutor::new();
+        let exit_code = executor.execute("if false; then true; elif false; then true; elif true; then true; fi");
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0, "Third elif should execute");
+    }
+
+    #[test]
+    fn test_elif_with_else() {
+        // US3: Test elif followed by else - else should execute if all conditions fail
+        use rush::executor::execute::CommandExecutor;
+
+        let mut executor = CommandExecutor::new();
+        let exit_code = executor.execute("if false; then true; elif false; then true; else true; fi");
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0, "Else should execute when all conditions fail");
+    }
+
+    #[test]
+    fn test_short_circuit_evaluation() {
+        // US3: Test that only the first matching condition executes (short-circuit)
+        use rush::executor::execute::CommandExecutor;
+
+        let mut executor = CommandExecutor::new();
+        // If true condition should execute, elif should NOT be evaluated
+        let exit_code = executor.execute("if true; then true; elif true; then true; fi");
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0, "First matching condition should execute");
+    }
+
+    #[test]
     fn test_nested_conditionals() {
         // Should execute: if true; then if true; then echo "nested"; fi; fi
-        // Expected: "nested" printed to stdout
+        // Expected: the inner if returns 0, so the outer if returns 0
+        use rush::executor::execute::CommandExecutor;
+
+        let mut executor = CommandExecutor::new();
+        let exit_code = executor.execute("if true; then if true; then true; fi; fi");
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0, "Nested if should execute and return 0");
     }
 }

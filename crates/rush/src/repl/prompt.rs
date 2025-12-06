@@ -14,12 +14,34 @@ use std::path::PathBuf;
 pub struct RushPrompt {
     /// Last command exit code (0 = success)
     exit_code: i32,
+    /// Whether this is a continuation prompt for multiline input
+    is_continuation: bool,
+}
+
+impl Clone for RushPrompt {
+    fn clone(&self) -> Self {
+        Self {
+            exit_code: self.exit_code,
+            is_continuation: self.is_continuation,
+        }
+    }
 }
 
 impl RushPrompt {
     /// Create a new prompt with the given exit code
     pub fn new(exit_code: i32) -> Self {
-        Self { exit_code }
+        Self {
+            exit_code,
+            is_continuation: false,
+        }
+    }
+
+    /// Create a continuation prompt for multiline input
+    pub fn new_continuation() -> Self {
+        Self {
+            exit_code: 0,
+            is_continuation: true,
+        }
     }
 
     /// Get shortened current directory path
@@ -61,10 +83,15 @@ impl Prompt for RushPrompt {
     }
 
     fn render_prompt_indicator(&self, _prompt_mode: reedline::PromptEditMode) -> Cow<'_, str> {
-        // Format: "~/path/to/dir ❯ "
-        let dir = self.get_current_dir();
-        let indicator = self.get_prompt_indicator();
-        Cow::Owned(format!("{} {} ", dir, indicator))
+        if self.is_continuation {
+            // Continuation prompt - just show "> "
+            Cow::Borrowed("> ")
+        } else {
+            // Format: "~/path/to/dir ❯ "
+            let dir = self.get_current_dir();
+            let indicator = self.get_prompt_indicator();
+            Cow::Owned(format!("{} {} ", dir, indicator))
+        }
     }
 
     fn render_prompt_multiline_indicator(&self) -> Cow<'_, str> {
