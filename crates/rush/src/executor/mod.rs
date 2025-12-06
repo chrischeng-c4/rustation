@@ -37,6 +37,7 @@ pub mod for_loop;
 pub mod function;
 pub mod glob;
 pub mod job;
+pub mod loop_control;
 pub mod parser;
 pub mod pipeline;
 pub mod script;
