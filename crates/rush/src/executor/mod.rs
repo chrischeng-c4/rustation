@@ -40,6 +40,7 @@ pub mod pipeline;
 pub mod script;
 pub mod substitution;
 pub mod variables;
+pub mod while_loop;
 
 use crate::error::Result;
 use std::path::PathBuf;
@@ -472,6 +473,44 @@ impl ForLoop {
         Self {
             variable,
             word_list: Vec::new(), // Empty means use $@
+            body: Box::new(body),
+        }
+    }
+}
+
+/// While loop: repeat commands while condition is true
+#[derive(Debug, Clone, PartialEq)]
+pub struct WhileLoop {
+    /// Condition to evaluate (command that returns exit code)
+    pub condition: Box<CompoundList>,
+    /// Commands to execute while condition is true
+    pub body: Box<CompoundList>,
+}
+
+impl WhileLoop {
+    /// Create a new while loop
+    pub fn new(condition: CompoundList, body: CompoundList) -> Self {
+        Self {
+            condition: Box::new(condition),
+            body: Box::new(body),
+        }
+    }
+}
+
+/// Until loop: repeat commands until condition becomes true
+#[derive(Debug, Clone, PartialEq)]
+pub struct UntilLoop {
+    /// Condition to evaluate (command that returns exit code)
+    pub condition: Box<CompoundList>,
+    /// Commands to execute until condition becomes true
+    pub body: Box<CompoundList>,
+}
+
+impl UntilLoop {
+    /// Create a new until loop
+    pub fn new(condition: CompoundList, body: CompoundList) -> Self {
+        Self {
+            condition: Box::new(condition),
             body: Box::new(body),
         }
     }

@@ -79,6 +79,18 @@ impl CommandExecutor {
             return self.execute_for_loop(trimmed);
         }
 
+        // Check if this is a while loop (before alias/variable expansion)
+        if trimmed.starts_with("while") && (trimmed.len() == 5 || trimmed.chars().nth(5).map_or(false, |c| c.is_whitespace())) {
+            tracing::debug!("Detected while loop");
+            return self.execute_while_loop(trimmed);
+        }
+
+        // Check if this is an until loop (before alias/variable expansion)
+        if trimmed.starts_with("until") && (trimmed.len() == 5 || trimmed.chars().nth(5).map_or(false, |c| c.is_whitespace())) {
+            tracing::debug!("Detected until loop");
+            return self.execute_until_loop(trimmed);
+        }
+
         // Expand aliases first (before variable expansion)
         let aliased_line = self.alias_manager.expand(line);
 
@@ -249,6 +261,44 @@ impl CommandExecutor {
 
         // Execute the for loop
         let exit_code = for_loop::execute_for_loop(&for_loop, self)?;
+        self.last_exit_code = exit_code;
+        Ok(exit_code)
+    }
+
+    fn execute_while_loop(&mut self, line: &str) -> Result<i32> {
+        use super::while_loop;
+
+        // Parse the while loop
+        let while_loop = match while_loop::parse_while_loop(line) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                tracing::warn!(error = %e, "While loop parsing failed");
+                eprintln!("rush: {}", e);
+                return Ok(1);
+            }
+        };
+
+        // Execute the while loop
+        let exit_code = while_loop::execute_while_loop(&while_loop, self)?;
+        self.last_exit_code = exit_code;
+        Ok(exit_code)
+    }
+
+    fn execute_until_loop(&mut self, line: &str) -> Result<i32> {
+        use super::while_loop;
+
+        // Parse the until loop
+        let until_loop = match while_loop::parse_until_loop(line) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                tracing::warn!(error = %e, "Until loop parsing failed");
+                eprintln!("rush: {}", e);
+                return Ok(1);
+            }
+        };
+
+        // Execute the until loop
+        let exit_code = while_loop::execute_until_loop(&until_loop, self)?;
         self.last_exit_code = exit_code;
         Ok(exit_code)
     }
