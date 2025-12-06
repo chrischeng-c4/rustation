@@ -34,6 +34,7 @@ pub mod conditional;
 pub mod execute;
 pub mod expansion;
 pub mod for_loop;
+pub mod function;
 pub mod glob;
 pub mod job;
 pub mod parser;
@@ -524,6 +525,17 @@ pub struct CaseStatement {
     pub value: String,
     /// List of patterns with corresponding commands
     pub patterns: Vec<CasePattern>,
+}
+
+/// Shell function definition
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShellFunction {
+    /// Function name
+    pub name: String,
+    /// Commands in function body
+    pub body: CompoundList,
+    /// Function parameters (for future use)
+    pub parameters: Vec<String>,
 }
 
 /// A single pattern case with commands
