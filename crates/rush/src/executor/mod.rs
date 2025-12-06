@@ -29,6 +29,7 @@
 pub mod aliases;
 pub mod arrays;
 pub mod builtins;
+pub mod case_statement;
 pub mod conditional;
 pub mod execute;
 pub mod expansion;
@@ -514,6 +515,28 @@ impl UntilLoop {
             body: Box::new(body),
         }
     }
+}
+
+/// Case statement: pattern matching with multiple branches
+#[derive(Debug, Clone, PartialEq)]
+pub struct CaseStatement {
+    /// Value to match against patterns
+    pub value: String,
+    /// List of patterns with corresponding commands
+    pub patterns: Vec<CasePattern>,
+}
+
+/// A single pattern case with commands
+#[derive(Debug, Clone, PartialEq)]
+pub struct CasePattern {
+    /// Patterns to match (can be multiple with |)
+    pub patterns: Vec<String>,
+    /// Commands to execute if pattern matches
+    pub body: CompoundList,
+    /// Whether to fall through to next pattern (;& operator)
+    pub fall_through: bool,
+    /// Whether to test next pattern without executing (;;& operator)
+    pub test_next: bool,
 }
 
 #[cfg(test)]

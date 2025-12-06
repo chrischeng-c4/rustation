@@ -91,6 +91,12 @@ impl CommandExecutor {
             return self.execute_until_loop(trimmed);
         }
 
+        // Check if this is a case statement (before alias/variable expansion)
+        if trimmed.starts_with("case") && (trimmed.len() == 4 || trimmed.chars().nth(4).map_or(false, |c| c.is_whitespace())) {
+            tracing::debug!("Detected case statement");
+            return self.execute_case_statement(trimmed);
+        }
+
         // Expand aliases first (before variable expansion)
         let aliased_line = self.alias_manager.expand(line);
 
@@ -299,6 +305,25 @@ impl CommandExecutor {
 
         // Execute the until loop
         let exit_code = while_loop::execute_until_loop(&until_loop, self)?;
+        self.last_exit_code = exit_code;
+        Ok(exit_code)
+    }
+
+    fn execute_case_statement(&mut self, line: &str) -> Result<i32> {
+        use super::case_statement;
+
+        // Parse the case statement
+        let case_stmt = match case_statement::parse_case_statement(line) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                tracing::warn!(error = %e, "Case statement parsing failed");
+                eprintln!("rush: {}", e);
+                return Ok(1);
+            }
+        };
+
+        // Execute the case statement
+        let exit_code = case_statement::execute_case_statement(&case_stmt, self)?;
         self.last_exit_code = exit_code;
         Ok(exit_code)
     }
