@@ -66,6 +66,13 @@ impl CommandExecutor {
             return Ok(0);
         }
 
+        // Check if this is an if statement (before alias/variable expansion)
+        let trimmed = line.trim();
+        if trimmed.starts_with("if") && (trimmed.len() == 2 || trimmed.chars().nth(2).map_or(false, |c| c.is_whitespace())) {
+            tracing::debug!("Detected if statement");
+            return self.execute_if_statement(trimmed);
+        }
+
         // Expand aliases first (before variable expansion)
         let aliased_line = self.alias_manager.expand(line);
 
@@ -194,6 +201,27 @@ impl CommandExecutor {
             }
         };
 
+        self.last_exit_code = exit_code;
+        Ok(exit_code)
+    }
+
+    /// Execute an if statement
+    /// This is called when a line starts with the "if" keyword
+    fn execute_if_statement(&mut self, line: &str) -> Result<i32> {
+        use super::conditional;
+
+        // Parse the if statement
+        let if_block = match conditional::parse_if_clause(line) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                tracing::warn!(error = %e, "If statement parsing failed");
+                eprintln!("rush: {}", e);
+                return Ok(1);
+            }
+        };
+
+        // Execute the if block
+        let exit_code = conditional::execute_if_block(&if_block, self)?;
         self.last_exit_code = exit_code;
         Ok(exit_code)
     }

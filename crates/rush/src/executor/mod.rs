@@ -29,6 +29,7 @@
 pub mod aliases;
 pub mod arrays;
 pub mod builtins;
+pub mod conditional;
 pub mod execute;
 pub mod expansion;
 pub mod glob;
@@ -316,6 +317,131 @@ impl PipelineSegment {
     /// Check if this is the last segment in a pipeline
     pub fn is_last(&self, pipeline_len: usize) -> bool {
         self.index == pipeline_len - 1
+    }
+}
+
+// Conditional control flow structures (Feature 017)
+
+/// Control flow keywords for parsing conditionals
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Keyword {
+    /// `if` keyword
+    If,
+    /// `then` keyword
+    Then,
+    /// `elif` keyword
+    Elif,
+    /// `else` keyword
+    Else,
+    /// `fi` keyword
+    Fi,
+}
+
+impl Keyword {
+    /// Convert a string to a keyword if it matches
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "if" => Some(Keyword::If),
+            "then" => Some(Keyword::Then),
+            "elif" => Some(Keyword::Elif),
+            "else" => Some(Keyword::Else),
+            "fi" => Some(Keyword::Fi),
+            _ => None,
+        }
+    }
+
+    /// Get the string representation of a keyword
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Keyword::If => "if",
+            Keyword::Then => "then",
+            Keyword::Elif => "elif",
+            Keyword::Else => "else",
+            Keyword::Fi => "fi",
+        }
+    }
+}
+
+/// A sequence of commands separated by `;` or newlines
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompoundList {
+    /// Commands in the list
+    pub commands: Vec<Command>,
+}
+
+impl CompoundList {
+    /// Create a new compound list with commands
+    pub fn new(commands: Vec<Command>) -> Self {
+        Self { commands }
+    }
+
+    /// Create an empty compound list (no-op)
+    pub fn empty() -> Self {
+        Self { commands: Vec::new() }
+    }
+
+    /// Check if the list is empty
+    pub fn is_empty(&self) -> bool {
+        self.commands.is_empty()
+    }
+
+    /// Get the number of commands
+    pub fn len(&self) -> usize {
+        self.commands.len()
+    }
+}
+
+/// An `elif` clause in an if statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct ElifClause {
+    /// Condition command(s) for the elif
+    pub condition: Box<CompoundList>,
+    /// Commands to execute if condition succeeds (exit code 0)
+    pub then_block: Box<CompoundList>,
+}
+
+impl ElifClause {
+    /// Create a new elif clause
+    pub fn new(condition: CompoundList, then_block: CompoundList) -> Self {
+        Self {
+            condition: Box::new(condition),
+            then_block: Box::new(then_block),
+        }
+    }
+}
+
+/// An `if` statement with optional `elif` and `else` clauses
+#[derive(Debug, Clone, PartialEq)]
+pub struct IfBlock {
+    /// Condition command(s) for the if
+    pub condition: Box<CompoundList>,
+    /// Commands to execute if condition succeeds (exit code 0)
+    pub then_block: Box<CompoundList>,
+    /// Optional elif clauses (each with its own condition and then block)
+    pub elif_clauses: Vec<ElifClause>,
+    /// Optional else block (executed if no conditions succeed)
+    pub else_block: Option<Box<CompoundList>>,
+}
+
+impl IfBlock {
+    /// Create a new if block with just condition and then block
+    pub fn new(condition: CompoundList, then_block: CompoundList) -> Self {
+        Self {
+            condition: Box::new(condition),
+            then_block: Box::new(then_block),
+            elif_clauses: Vec::new(),
+            else_block: None,
+        }
+    }
+
+    /// Add an elif clause
+    pub fn add_elif(&mut self, elif_clause: ElifClause) {
+        self.elif_clauses.push(elif_clause);
+    }
+
+    /// Set the else block
+    pub fn set_else(&mut self, else_block: CompoundList) {
+        self.else_block = Some(Box::new(else_block));
     }
 }
 

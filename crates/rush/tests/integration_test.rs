@@ -4,6 +4,11 @@
 
 use rush::{Config, Repl};
 
+// Module for conditional control flow integration tests (Feature 017)
+mod integration {
+    pub mod conditionals_tests;
+}
+
 #[test]
 fn test_repl_initialization() {
     // Test that REPL can be created with default config

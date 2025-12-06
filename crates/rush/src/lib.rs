@@ -58,6 +58,9 @@ pub mod error {
         #[error("Redirection error: {0}")]
         Redirection(String),
 
+        #[error("Syntax error: {0}")]
+        Syntax(String),
+
         #[error("Exit requested with code: {0}")]
         ExitRequest(i32),
     }

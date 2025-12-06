@@ -45,6 +45,42 @@ enum Token {
     HeredocStrip,
     /// Background execution (&)
     Background,
+    /// Control flow keyword (if, then, elif, else, fi)
+    Keyword(super::Keyword),
+    /// Newline separator
+    Newline,
+    /// End of input
+    Eof,
+}
+
+/// Check if a word is a control flow keyword and return the token
+/// Keywords are only recognized at the start of a command (after pipes, operators, etc.)
+fn tokenize_keyword(word: &str) -> Token {
+    if let Some(kw) = super::Keyword::from_str(word) {
+        Token::Keyword(kw)
+    } else {
+        Token::Word(word.to_string())
+    }
+}
+
+/// Expect a specific keyword token and return an error if it doesn't match
+/// Used in parsing conditionals to validate expected keywords
+pub fn expect_keyword(tokens: &[Token], index: usize, expected: super::Keyword) -> Result<usize> {
+    if index >= tokens.len() {
+        return Err(RushError::Syntax(
+            format!("Expected keyword '{}', but reached end of input", expected.as_str()),
+        ));
+    }
+
+    match &tokens[index] {
+        Token::Keyword(kw) if *kw == expected => Ok(index + 1),
+        Token::Keyword(kw) => Err(RushError::Syntax(
+            format!("Expected keyword '{}', found '{}'", expected.as_str(), kw.as_str()),
+        )),
+        _ => Err(RushError::Syntax(
+            format!("Expected keyword '{}', found something else", expected.as_str()),
+        )),
+    }
 }
 
 /// Parse a command line into program, arguments, and redirections
@@ -136,6 +172,15 @@ pub fn parse_command_with_redirections(
                         "Heredoc operator must be followed by delimiter".to_string(),
                     ));
                 }
+            }
+            Token::Keyword(kw) => {
+                return Err(RushError::Syntax(
+                    format!("Unexpected keyword '{}' in command", kw.as_str()),
+                ));
+            }
+            Token::Newline | Token::Eof => {
+                // End of input, return what we have so far
+                break;
             }
         }
     }
@@ -431,7 +476,12 @@ fn tokenize_with_redirections(line: &str) -> Result<Vec<Token>> {
 
     // Add final token if non-empty or was quoted empty string
     if !current_token.is_empty() || had_quotes {
-        tokens.push(Token::Word(current_token));
+        // Check if this word is a keyword (only if not quoted)
+        if !had_quotes {
+            tokens.push(tokenize_keyword(&current_token));
+        } else {
+            tokens.push(Token::Word(current_token));
+        }
     }
 
     Ok(tokens)
@@ -780,6 +830,15 @@ fn split_into_segments(tokens: Vec<Token>) -> Result<Vec<PipelineSegment>> {
                 return Err(RushError::Execution(
                     "Background operator '&' must be at the end of the command".to_string(),
                 ));
+            }
+            Token::Keyword(kw) => {
+                return Err(RushError::Syntax(
+                    format!("Unexpected keyword '{}' in pipeline", kw.as_str()),
+                ));
+            }
+            Token::Newline | Token::Eof => {
+                // End of input, finalize current segment if any
+                break;
             }
         }
     }
