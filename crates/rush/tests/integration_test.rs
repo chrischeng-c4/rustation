@@ -24,6 +24,7 @@ mod integration {
     pub mod case_statements_globbing_tests;
     pub mod nested_structures_tests;
     pub mod posix_compliance_tests;
+    pub mod edge_cases_tests;
 }
 
 #[test]
