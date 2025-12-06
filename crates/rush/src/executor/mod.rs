@@ -461,6 +461,9 @@ pub struct ForLoop {
     pub word_list: Vec<String>,
     /// Commands to execute in each iteration
     pub body: Box<CompoundList>,
+    /// Raw body string (for proper pipe and redirection support)
+    /// Phase 3: Used to execute body directly, supporting pipes and redirections
+    pub body_raw: String,
 }
 
 impl ForLoop {
@@ -470,6 +473,17 @@ impl ForLoop {
             variable,
             word_list,
             body: Box::new(body),
+            body_raw: String::new(),
+        }
+    }
+
+    /// Create a for loop with raw body string (Phase 3+: for pipe support)
+    pub fn new_with_raw_body(variable: String, word_list: Vec<String>, body: CompoundList, body_raw: String) -> Self {
+        Self {
+            variable,
+            word_list,
+            body: Box::new(body),
+            body_raw,
         }
     }
 
@@ -479,6 +493,7 @@ impl ForLoop {
             variable,
             word_list: Vec::new(), // Empty means use $@
             body: Box::new(body),
+            body_raw: String::new(),
         }
     }
 }

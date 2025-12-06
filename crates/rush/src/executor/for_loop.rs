@@ -144,10 +144,19 @@ pub fn parse_for_loop(input: &str) -> Result<ForLoop> {
 
     let body_str = after_do[..done_pos].trim();
 
-    // Parse the body as a compound list
-    let body = super::conditional::parse_compound_list(body_str)?;
+    // Remove trailing semicolon if present (parser doesn't need it)
+    let body_str_clean = body_str.trim_end_matches(';');
 
-    Ok(ForLoop::new(variable, word_list, body))
+    // Parse the body as a compound list (for backward compatibility)
+    let body = super::conditional::parse_compound_list(body_str_clean)?;
+
+    // Phase 3: Store raw body string for pipe and redirection support
+    Ok(ForLoop::new_with_raw_body(
+        variable,
+        word_list,
+        body,
+        body_str_clean.to_string(),
+    ))
 }
 
 /// Find the position of the "do" keyword in the string
@@ -295,8 +304,16 @@ pub fn execute_for_loop(
             word,
         )?;
 
-        // Execute the loop body
-        exit_code = execute_compound_list(&for_loop.body, executor)?;
+        // Phase 3: Execute using raw body string to support pipes and redirections
+        // If raw body is available, use it (supports pipes and redirections)
+        // Otherwise, fall back to parsed compound list
+        if !for_loop.body_raw.is_empty() {
+            // Execute raw body string (which may contain pipes, redirections, etc.)
+            exit_code = executor.execute(&for_loop.body_raw)?;
+        } else {
+            // Fallback for backward compatibility
+            exit_code = execute_compound_list(&for_loop.body, executor)?;
+        }
     }
 
     // Return exit code from last iteration (or 0 if no iterations)
