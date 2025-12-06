@@ -51,6 +51,10 @@ perf.data.old
 
 .claude/settings.local.json
 
+# Spec-kit runtime state (not code)
+.specify/scripts/python/sessions.json
+.specify/scripts/python/__pycache__/
+
 # Prevent accidental commits of directories created by shell testing
 # These are created when rush shell interprets command fragments as paths
 **/--*
