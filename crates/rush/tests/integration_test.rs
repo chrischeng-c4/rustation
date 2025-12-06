@@ -8,16 +8,21 @@ use rush::{Config, Repl};
 mod integration {
     pub mod conditionals_tests;
     pub mod conditionals_expansions_tests;
+    pub mod conditionals_pipes_tests;
+    pub mod conditionals_redirections_tests;
     pub mod for_loops_expansions_tests;
     pub mod for_loops_command_substitution_tests;
     pub mod for_loops_globbing_tests;
     pub mod for_loops_pipes_tests;
+    pub mod for_loops_redirections_tests;
     pub mod while_loops_expansions_tests;
     pub mod while_loops_command_substitution_tests;
     pub mod while_loops_pipes_tests;
+    pub mod while_loops_redirections_tests;
     pub mod case_statements_expansions_tests;
     pub mod case_statements_command_substitution_tests;
     pub mod case_statements_globbing_tests;
+    pub mod nested_structures_tests;
 }
 
 #[test]

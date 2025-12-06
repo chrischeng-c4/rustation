@@ -7,7 +7,7 @@
 //! - Command substitution: $(cmd)
 
 use crate::error::{Result, RushError};
-use super::{CompoundList, IfBlock, ElifClause, Keyword};
+use super::{CompoundList, IfBlock, ElifClause};
 use crate::executor::expansion::expand_variables;
 use crate::executor::substitution::expander::expand_substitutions;
 
@@ -218,41 +218,41 @@ pub fn parse_if_clause(input: &str) -> Result<IfBlock> {
     let fi_pos = find_matching_fi_position(after_then);
 
     // Determine which comes first and parse accordingly
-    let (then_str, elif_clauses, else_block) = match (elif_pos, else_pos, fi_pos) {
+    let (then_str, elif_clauses, else_block, else_block_raw) = match (elif_pos, else_pos, fi_pos) {
         (Some(elif_idx), Some(else_idx), Some(fi_idx)) => {
             // All three found - determine which comes first
             if elif_idx < else_idx {
                 // elif comes first
                 let then_part = after_then[..elif_idx].trim();
                 let after_elif = &after_then[elif_idx..];
-                let (elif_clauses, else_block) = parse_else_part(after_elif)?;
-                (then_part, elif_clauses, else_block)
+                let (elif_clauses, else_block, else_block_raw) = parse_else_part(after_elif)?;
+                (then_part, elif_clauses, else_block, else_block_raw)
             } else {
                 // else comes first
                 let then_part = after_then[..else_idx].trim();
                 let after_else = &after_then[else_idx..];
-                let (elif_clauses, else_block) = parse_else_part(after_else)?;
-                (then_part, elif_clauses, else_block)
+                let (elif_clauses, else_block, else_block_raw) = parse_else_part(after_else)?;
+                (then_part, elif_clauses, else_block, else_block_raw)
             }
         }
         (Some(elif_idx), None, Some(fi_idx)) => {
             // elif and fi found
             let then_part = after_then[..elif_idx].trim();
             let after_elif = &after_then[elif_idx..];
-            let (elif_clauses, else_block) = parse_else_part(after_elif)?;
-            (then_part, elif_clauses, else_block)
+            let (elif_clauses, else_block, else_block_raw) = parse_else_part(after_elif)?;
+            (then_part, elif_clauses, else_block, else_block_raw)
         }
         (None, Some(else_idx), Some(fi_idx)) => {
             // else and fi found
             let then_part = after_then[..else_idx].trim();
             let after_else = &after_then[else_idx..];
-            let (elif_clauses, else_block) = parse_else_part(after_else)?;
-            (then_part, elif_clauses, else_block)
+            let (elif_clauses, else_block, else_block_raw) = parse_else_part(after_else)?;
+            (then_part, elif_clauses, else_block, else_block_raw)
         }
         (None, None, Some(fi_idx)) => {
             // Only fi found, no else/elif
             let then_part = after_then[..fi_idx].trim();
-            (then_part, Vec::new(), None)
+            (then_part, Vec::new(), None, String::new())
         }
         _ => {
             // No valid fi found
@@ -262,10 +262,13 @@ pub fn parse_if_clause(input: &str) -> Result<IfBlock> {
 
     // Parse condition and then block
     let condition = parse_compound_list(condition_str)?;
-    let then_block = parse_compound_list(then_str)?;
 
-    // Create if block
-    let mut if_block = IfBlock::new(condition, then_block);
+    // Remove trailing semicolon from then block if present
+    let then_str_clean = then_str.trim_end_matches(';');
+    let then_block = parse_compound_list(then_str_clean)?;
+
+    // Phase 3: Create if block with raw body string for pipe support
+    let mut if_block = IfBlock::new_with_raw_body(condition, then_block, then_str_clean.to_string());
 
     // Add elif clauses
     for elif_clause in elif_clauses {
@@ -274,7 +277,8 @@ pub fn parse_if_clause(input: &str) -> Result<IfBlock> {
 
     // Set else block if present
     if let Some(else_block) = else_block {
-        if_block.set_else(else_block);
+        // Phase 3: Use set_else_with_raw for pipe/redirection support
+        if_block.set_else_with_raw(else_block, else_block_raw);
     }
 
     Ok(if_block)
@@ -374,20 +378,35 @@ pub fn execute_if_block(if_block: &IfBlock, executor: &mut super::execute::Comma
     // Check condition result
     if condition_exit_code == 0 {
         // Condition succeeded - execute then block
-        execute_compound_list(&if_block.then_block, executor)
+        // Phase 3: Use raw body if available for pipe/redirection support
+        if !if_block.then_block_raw.is_empty() {
+            execute_body(&if_block.then_block_raw, executor)
+        } else {
+            execute_compound_list(&if_block.then_block, executor)
+        }
     } else {
         // Condition failed - check elif clauses (short-circuit evaluation)
         for elif_clause in &if_block.elif_clauses {
             let elif_condition_code = execute_compound_list(&elif_clause.condition, executor)?;
             if elif_condition_code == 0 {
                 // This elif condition succeeded - execute its then block
-                return execute_compound_list(&elif_clause.then_block, executor);
+                // Phase 3: Use raw body if available for pipe/redirection support
+                return if !elif_clause.then_block_raw.is_empty() {
+                    execute_body(&elif_clause.then_block_raw, executor)
+                } else {
+                    execute_compound_list(&elif_clause.then_block, executor)
+                };
             }
         }
 
         // No elif succeeded - check for else block
         if let Some(else_block) = &if_block.else_block {
-            execute_compound_list(else_block, executor)
+            // Phase 3: Use raw body if available for pipe/redirection support
+            if !if_block.else_block_raw.is_empty() {
+                execute_body(&if_block.else_block_raw, executor)
+            } else {
+                execute_compound_list(else_block, executor)
+            }
         } else {
             // No else block - return the original condition's exit code
             Ok(condition_exit_code)
@@ -446,6 +465,17 @@ pub fn execute_compound_list(compound_list: &CompoundList, executor: &mut super:
     Ok(last_exit_code)
 }
 
+/// Execute compound list (sequence of commands) - used by conditional body execution
+/// This is an alternative to execute_compound_list that allows for raw body string execution
+pub fn execute_body(body_raw: &str, executor: &mut super::execute::CommandExecutor) -> Result<i32> {
+    if body_raw.is_empty() {
+        return Ok(0);
+    }
+
+    // Phase 3: Execute raw body string directly to support pipes and redirections
+    executor.execute(body_raw)
+}
+
 /// Parse the optional else/elif part of an if statement
 ///
 /// For User Story 2 (Phase 4), this handles basic else clause.
@@ -455,14 +485,14 @@ pub fn execute_compound_list(compound_list: &CompoundList, executor: &mut super:
 /// * `input` - Raw input string after the last then/fi block
 ///
 /// # Returns
-/// A tuple of (elif_clauses, else_block)
-pub fn parse_else_part(input: &str) -> Result<(Vec<ElifClause>, Option<CompoundList>)> {
+/// A tuple of (elif_clauses, else_block, else_block_raw)
+pub fn parse_else_part(input: &str) -> Result<(Vec<ElifClause>, Option<CompoundList>, String)> {
     let trimmed = input.trim();
 
     // Check if there's an else/elif clause
     if trimmed.is_empty() {
         // No else clause
-        return Ok((Vec::new(), None));
+        return Ok((Vec::new(), None, String::new()));
     }
 
     // Look for elif keyword first
@@ -498,18 +528,22 @@ pub fn parse_else_part(input: &str) -> Result<(Vec<ElifClause>, Option<CompoundL
 
         // Parse the elif condition and then block
         let elif_condition = parse_compound_list(elif_condition_str)?;
-        let elif_then_block = parse_compound_list(elif_then_str)?;
+
+        // Phase 3: Remove trailing semicolon from elif then block if present
+        let elif_then_str_clean = elif_then_str.trim_end_matches(';');
+        let elif_then_block = parse_compound_list(elif_then_str_clean)?;
 
         // Recursively parse the rest (might be more elif or else)
         let after_block = &after_then[then_block_end..].trim_start();
-        let (mut elif_clauses, else_block) = parse_else_part(after_block)?;
+        let (mut elif_clauses, else_block, else_block_raw) = parse_else_part(after_block)?;
 
         // Prepend this elif clause to the list
-        let new_elif = ElifClause::new(elif_condition, elif_then_block);
+        // Phase 3: Use new_with_raw_body for pipe/redirection support
+        let new_elif = ElifClause::new_with_raw_body(elif_condition, elif_then_block, elif_then_str_clean.to_string());
         let mut result_clauses = vec![new_elif];
         result_clauses.extend(elif_clauses);
 
-        Ok((result_clauses, else_block))
+        Ok((result_clauses, else_block, else_block_raw))
     } else if trimmed.starts_with("else") && (trimmed.len() == 4 || trimmed.chars().nth(4).map_or(false, |c| c.is_whitespace() || c == ';')) {
         // We have an else clause - parse until we find "fi"
         let after_else = &trimmed[4..].trim_start();
@@ -520,16 +554,20 @@ pub fn parse_else_part(input: &str) -> Result<(Vec<ElifClause>, Option<CompoundL
 
         let else_block_str = after_else[..fi_pos].trim();
 
-        // Parse the else block as a compound list (excluding "fi")
-        let else_block = parse_compound_list(else_block_str)?;
+        // Phase 3: Remove trailing semicolon from else block if present
+        let else_block_str_clean = else_block_str.trim_end_matches(';');
 
-        Ok((Vec::new(), Some(else_block)))
+        // Parse the else block as a compound list (excluding "fi")
+        let else_block = parse_compound_list(else_block_str_clean)?;
+
+        // Phase 3: Return the raw else block string for pipe/redirection support
+        Ok((Vec::new(), Some(else_block), else_block_str_clean.to_string()))
     } else if trimmed.starts_with("fi") {
         // Just fi, no else clause
-        Ok((Vec::new(), None))
+        Ok((Vec::new(), None, String::new()))
     } else {
         // Unrecognized keyword or end of input
-        Ok((Vec::new(), None))
+        Ok((Vec::new(), None, String::new()))
     }
 }
 

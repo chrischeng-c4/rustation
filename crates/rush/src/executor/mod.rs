@@ -405,6 +405,9 @@ pub struct ElifClause {
     pub condition: Box<CompoundList>,
     /// Commands to execute if condition succeeds (exit code 0)
     pub then_block: Box<CompoundList>,
+    /// Raw then block string (for proper pipe and redirection support)
+    /// Phase 3: Used to execute block directly, supporting pipes and redirections
+    pub then_block_raw: String,
 }
 
 impl ElifClause {
@@ -413,6 +416,16 @@ impl ElifClause {
         Self {
             condition: Box::new(condition),
             then_block: Box::new(then_block),
+            then_block_raw: String::new(),
+        }
+    }
+
+    /// Create a new elif clause with raw then block string (Phase 3+: for pipe support)
+    pub fn new_with_raw_body(condition: CompoundList, then_block: CompoundList, then_block_raw: String) -> Self {
+        Self {
+            condition: Box::new(condition),
+            then_block: Box::new(then_block),
+            then_block_raw,
         }
     }
 }
@@ -424,10 +437,16 @@ pub struct IfBlock {
     pub condition: Box<CompoundList>,
     /// Commands to execute if condition succeeds (exit code 0)
     pub then_block: Box<CompoundList>,
+    /// Raw then block string (for proper pipe and redirection support)
+    /// Phase 3: Used to execute block directly, supporting pipes and redirections
+    pub then_block_raw: String,
     /// Optional elif clauses (each with its own condition and then block)
     pub elif_clauses: Vec<ElifClause>,
     /// Optional else block (executed if no conditions succeed)
     pub else_block: Option<Box<CompoundList>>,
+    /// Raw else block string (for proper pipe and redirection support)
+    /// Phase 3: Used to execute block directly, supporting pipes and redirections
+    pub else_block_raw: String,
 }
 
 impl IfBlock {
@@ -436,8 +455,22 @@ impl IfBlock {
         Self {
             condition: Box::new(condition),
             then_block: Box::new(then_block),
+            then_block_raw: String::new(),
             elif_clauses: Vec::new(),
             else_block: None,
+            else_block_raw: String::new(),
+        }
+    }
+
+    /// Create a new if block with raw body strings (Phase 3+: for pipe support)
+    pub fn new_with_raw_body(condition: CompoundList, then_block: CompoundList, then_block_raw: String) -> Self {
+        Self {
+            condition: Box::new(condition),
+            then_block: Box::new(then_block),
+            then_block_raw,
+            elif_clauses: Vec::new(),
+            else_block: None,
+            else_block_raw: String::new(),
         }
     }
 
@@ -449,6 +482,12 @@ impl IfBlock {
     /// Set the else block
     pub fn set_else(&mut self, else_block: CompoundList) {
         self.else_block = Some(Box::new(else_block));
+    }
+
+    /// Set the else block with raw body string (Phase 3+: for pipe support)
+    pub fn set_else_with_raw(&mut self, else_block: CompoundList, else_block_raw: String) {
+        self.else_block = Some(Box::new(else_block));
+        self.else_block_raw = else_block_raw;
     }
 }
 
