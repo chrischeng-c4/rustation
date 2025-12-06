@@ -52,7 +52,7 @@ def get_repo_root() -> Path:
     return Path.cwd()
 
 
-def create_orchestrator(repo_root: Path) -> WorkflowOrchestrator:
+def create_orchestrator(repo_root: Path, model: str = "haiku") -> WorkflowOrchestrator:
     """Create and configure the workflow orchestrator."""
     config = Config(repo_root)
 
@@ -61,6 +61,7 @@ def create_orchestrator(repo_root: Path) -> WorkflowOrchestrator:
         repo_root,
         permission_mode=config.permission_mode,
         timeout=config.claude_timeout,
+        model=model,
     )
     sessions = SessionManager(repo_root / ".specify/scripts/python/sessions.json")
     tracker = FeatureTracker(repo_root, github, sessions)
@@ -270,6 +271,12 @@ def main() -> None:
         action="store_true",
         help="Enable verbose output",
     )
+    parser.add_argument(
+        "--model",
+        choices=["haiku", "sonnet", "opus"],
+        default="haiku",
+        help="Claude model to use (default: haiku)",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -335,7 +342,7 @@ def main() -> None:
         logging.getLogger().setLevel(logging.DEBUG)
 
     repo_root = get_repo_root()
-    orchestrator = create_orchestrator(repo_root)
+    orchestrator = create_orchestrator(repo_root, model=args.model)
 
     try:
         if args.command == "discover":

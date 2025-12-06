@@ -41,10 +41,12 @@ class ClaudeClient:
         repo_root: Path,
         permission_mode: str = "acceptEdits",
         timeout: int = 600,  # 10 minutes default
+        model: str = "haiku",  # Default to haiku for speed/cost
     ):
         self.repo_root = repo_root
         self.permission_mode = permission_mode
         self.timeout = timeout
+        self.model = model
         self._verified = False
         self._claude_path: str | None = None
 
@@ -98,6 +100,7 @@ class ClaudeClient:
 
         claude_path = self._get_claude_path()
         args = [claude_path, "-p"]
+        args.extend(["--model", self.model])
         args.extend(["--output-format", output_format])
         args.extend(["--permission-mode", self.permission_mode])
 
