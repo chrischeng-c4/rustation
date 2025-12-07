@@ -23,9 +23,157 @@
 //! - ${#var} - String length
 //! - ${var:offset} - Substring from offset
 //! - ${var:offset:length} - Substring with length
+//!
+//! String manipulation:
+//! - ${var#pattern} - Remove shortest prefix match
+//! - ${var##pattern} - Remove longest prefix match
+//! - ${var%pattern} - Remove shortest suffix match
+//! - ${var%%pattern} - Remove longest suffix match
+//! - ${var/pattern/replacement} - Replace first match
+//! - ${var//pattern/replacement} - Replace all matches
+//! - ${var/#pattern/replacement} - Replace prefix match
+//! - ${var/%pattern/replacement} - Replace suffix match
 
 use crate::executor::arrays::{parse_array_ref, ArrayRefType};
 use crate::executor::execute::CommandExecutor;
+
+/// Simple glob pattern matching supporting * and ?
+/// Returns true if the pattern matches the text
+fn glob_match(pattern: &str, text: &str) -> bool {
+    glob_match_from(pattern.as_bytes(), text.as_bytes())
+}
+
+fn glob_match_from(pattern: &[u8], text: &[u8]) -> bool {
+    let mut p = 0;
+    let mut t = 0;
+    let mut star_p = None;
+    let mut star_t = 0;
+
+    while t < text.len() {
+        if p < pattern.len() && (pattern[p] == b'?' || pattern[p] == text[t]) {
+            p += 1;
+            t += 1;
+        } else if p < pattern.len() && pattern[p] == b'*' {
+            star_p = Some(p);
+            star_t = t;
+            p += 1;
+        } else if let Some(sp) = star_p {
+            p = sp + 1;
+            star_t += 1;
+            t = star_t;
+        } else {
+            return false;
+        }
+    }
+
+    while p < pattern.len() && pattern[p] == b'*' {
+        p += 1;
+    }
+
+    p == pattern.len()
+}
+
+/// Find shortest prefix match for pattern
+fn find_shortest_prefix_match(text: &str, pattern: &str) -> Option<usize> {
+    for i in 0..=text.len() {
+        if glob_match(pattern, &text[..i]) {
+            return Some(i);
+        }
+    }
+    None
+}
+
+/// Find longest prefix match for pattern
+fn find_longest_prefix_match(text: &str, pattern: &str) -> Option<usize> {
+    for i in (0..=text.len()).rev() {
+        if glob_match(pattern, &text[..i]) {
+            return Some(i);
+        }
+    }
+    None
+}
+
+/// Find shortest suffix match for pattern
+fn find_shortest_suffix_match(text: &str, pattern: &str) -> Option<usize> {
+    for i in (0..=text.len()).rev() {
+        if glob_match(pattern, &text[i..]) {
+            return Some(i);
+        }
+    }
+    None
+}
+
+/// Find longest suffix match for pattern
+fn find_longest_suffix_match(text: &str, pattern: &str) -> Option<usize> {
+    for i in 0..=text.len() {
+        if glob_match(pattern, &text[i..]) {
+            return Some(i);
+        }
+    }
+    None
+}
+
+/// Replace first occurrence of pattern in text
+fn replace_first(text: &str, pattern: &str, replacement: &str) -> String {
+    // Find first match position and length
+    for start in 0..text.len() {
+        for end in start..=text.len() {
+            if glob_match(pattern, &text[start..end]) {
+                let mut result = text[..start].to_string();
+                result.push_str(replacement);
+                result.push_str(&text[end..]);
+                return result;
+            }
+        }
+    }
+    text.to_string()
+}
+
+/// Replace all occurrences of pattern in text
+fn replace_all(text: &str, pattern: &str, replacement: &str) -> String {
+    let mut result = String::new();
+    let mut pos = 0;
+
+    while pos < text.len() {
+        let mut matched = false;
+        for end in (pos + 1)..=text.len() {
+            if glob_match(pattern, &text[pos..end]) {
+                result.push_str(replacement);
+                pos = end;
+                matched = true;
+                break;
+            }
+        }
+        if !matched {
+            result.push(text.as_bytes()[pos] as char);
+            pos += 1;
+        }
+    }
+
+    result
+}
+
+/// Replace prefix match
+fn replace_prefix(text: &str, pattern: &str, replacement: &str) -> String {
+    if let Some(end) = find_longest_prefix_match(text, pattern) {
+        let mut result = replacement.to_string();
+        result.push_str(&text[end..]);
+        result
+    } else {
+        text.to_string()
+    }
+}
+
+/// Replace suffix match
+fn replace_suffix(text: &str, pattern: &str, replacement: &str) -> String {
+    if let Some(start) = find_longest_suffix_match(text, pattern) {
+        let mut result = text[..start].to_string();
+        result.push_str(replacement);
+        result
+    } else {
+        text.to_string()
+    }
+}
 
 /// Result of parameter expansion
 #[derive(Debug)]
@@ -43,13 +191,138 @@ enum ParamExpansionResult {
 /// Handles: ${var:-default}, ${var:=default}, ${var:?error}, ${var:+alternate}
 ///          ${var-default}, ${var=default}, ${var?error}, ${var+alternate}
 ///          ${#var}, ${var:offset}, ${var:offset:length}
+///          ${var#pattern}, ${var##pattern}, ${var%pattern}, ${var%%pattern}
+///          ${var/pattern/replacement}, ${var//pattern/replacement}
+///          ${var/#pattern/replacement}, ${var/%pattern/replacement}
 fn expand_parameter(content: &str, executor: &CommandExecutor) -> ParamExpansionResult {
-    // Check for ${#var} - string length
-    if content.starts_with('#') && !content.contains(':') && !content.contains('-')
-        && !content.contains('=') && !content.contains('?') && !content.contains('+') {
+    // Check for ${#var} - string length (but not ${##...} which is longest prefix)
+    if content.starts_with('#') && !content.starts_with("##")
+        && !content.contains(':') && !content.contains('-')
+        && !content.contains('=') && !content.contains('?') && !content.contains('+')
+        && !content.contains('/') && !content.contains('%') {
         let var_name = &content[1..];
         let value = executor.variable_manager().get(var_name).unwrap_or("");
         return ParamExpansionResult::Value(value.len().to_string());
+    }
+
+    // Check for string manipulation operators: # ## % %% /
+    // ${var##pattern} - longest prefix removal
+    if let Some(pos) = content.find("##") {
+        let var_name = &content[..pos];
+        let pattern = &content[pos + 2..];
+        if !var_name.is_empty() && !var_name.contains('[') {
+            let value = executor.variable_manager().get(var_name).unwrap_or("");
+            if let Some(end) = find_longest_prefix_match(value, pattern) {
+                return ParamExpansionResult::Value(value[end..].to_string());
+            }
+            return ParamExpansionResult::Value(value.to_string());
+        }
+    }
+
+    // IMPORTANT: Check multi-char operators before single-char ones!
+
+    // ${var//pattern/replacement} - replace all (must check before /)
+    if let Some(pos) = content.find("//") {
+        let var_name = &content[..pos];
+        let rest = &content[pos + 2..];
+        if !var_name.is_empty() && !var_name.contains('[') {
+            let value = executor.variable_manager().get(var_name).unwrap_or("");
+            let (pattern, replacement) = if let Some(slash_pos) = rest.find('/') {
+                (&rest[..slash_pos], &rest[slash_pos + 1..])
+            } else {
+                (rest, "")
+            };
+            return ParamExpansionResult::Value(replace_all(value, pattern, replacement));
+        }
+    }
+
+    // ${var/#pattern/replacement} - replace prefix (must check before / and #)
+    if let Some(pos) = content.find("/#") {
+        let var_name = &content[..pos];
+        let rest = &content[pos + 2..];
+        if !var_name.is_empty() && !var_name.contains('[') {
+            let value = executor.variable_manager().get(var_name).unwrap_or("");
+            let (pattern, replacement) = if let Some(slash_pos) = rest.find('/') {
+                (&rest[..slash_pos], &rest[slash_pos + 1..])
+            } else {
+                (rest, "")
+            };
+            return ParamExpansionResult::Value(replace_prefix(value, pattern, replacement));
+        }
+    }
+
+    // ${var/%pattern/replacement} - replace suffix (must check before / and %)
+    if let Some(pos) = content.find("/%") {
+        let var_name = &content[..pos];
+        let rest = &content[pos + 2..];
+        if !var_name.is_empty() && !var_name.contains('[') {
+            let value = executor.variable_manager().get(var_name).unwrap_or("");
+            let (pattern, replacement) = if let Some(slash_pos) = rest.find('/') {
+                (&rest[..slash_pos], &rest[slash_pos + 1..])
+            } else {
+                (rest, "")
+            };
+            return ParamExpansionResult::Value(replace_suffix(value, pattern, replacement));
+        }
+    }
+
+    // ${var/pattern/replacement} - replace first
+    // Must skip if var_name contains # or % (those are prefix/suffix removal)
+    if let Some(pos) = content.find('/') {
+        let var_name = &content[..pos];
+        let rest = &content[pos + 1..];
+        if !var_name.is_empty() && !var_name.contains('[') && !var_name.contains(':')
+            && !var_name.contains('#') && !var_name.contains('%') {
+            let value = executor.variable_manager().get(var_name).unwrap_or("");
+            let (pattern, replacement) = if let Some(slash_pos) = rest.find('/') {
+                (&rest[..slash_pos], &rest[slash_pos + 1..])
+            } else {
+                (rest, "")
+            };
+            return ParamExpansionResult::Value(replace_first(value, pattern, replacement));
+        }
+    }
+
+    // ${var%%pattern} - longest suffix removal (must check before %)
+    if let Some(pos) = content.find("%%") {
+        let var_name = &content[..pos];
+        let pattern = &content[pos + 2..];
+        if !var_name.is_empty() && !var_name.contains('[') {
+            let value = executor.variable_manager().get(var_name).unwrap_or("");
+            if let Some(start) = find_longest_suffix_match(value, pattern) {
+                return ParamExpansionResult::Value(value[..start].to_string());
+            }
+            return ParamExpansionResult::Value(value.to_string());
+        }
+    }
+
+    // ${var%pattern} - shortest suffix removal
+    if let Some(pos) = content.find('%') {
+        let var_name = &content[..pos];
+        let pattern = &content[pos + 1..];
+        if !var_name.is_empty() && !var_name.contains('[') && !var_name.contains(':') {
+            let value = executor.variable_manager().get(var_name).unwrap_or("");
+            if let Some(start) = find_shortest_suffix_match(value, pattern) {
+                return ParamExpansionResult::Value(value[..start].to_string());
+            }
+            return ParamExpansionResult::Value(value.to_string());
+        }
+    }
+
+    // ${var#pattern} - shortest prefix removal (check after / operators)
+    if let Some(pos) = content.find('#') {
+        if pos > 0 {
+            let var_name = &content[..pos];
+            let pattern = &content[pos + 1..];
+            // Make sure var_name doesn't contain / (would be /#)
+            if !var_name.is_empty() && !var_name.contains('[') && !var_name.contains(':') && !var_name.contains('/') {
+                let value = executor.variable_manager().get(var_name).unwrap_or("");
+                if let Some(end) = find_shortest_prefix_match(value, pattern) {
+                    return ParamExpansionResult::Value(value[end..].to_string());
+                }
+                return ParamExpansionResult::Value(value.to_string());
+            }
+        }
     }
 
     // Find the operator position
@@ -929,5 +1202,155 @@ mod tests {
         let result = expand_variables(input, &executor);
         // Note: nested expansion not fully supported yet, should get ${b:-final}
         assert_eq!(result, "${b:-final}");
+    }
+
+    // ===== String Manipulation Tests =====
+
+    #[test]
+    fn test_prefix_removal_shortest() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("path".to_string(), "/usr/local/bin/script.sh".to_string()).unwrap();
+        // ${path#*/} - remove shortest prefix match for */
+        let input = "echo ${path#*/}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo usr/local/bin/script.sh");
+    }
+
+    #[test]
+    fn test_prefix_removal_longest() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("path".to_string(), "/usr/local/bin/script.sh".to_string()).unwrap();
+        // ${path##*/} - remove longest prefix match for */
+        let input = "echo ${path##*/}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo script.sh");
+    }
+
+    #[test]
+    fn test_suffix_removal_shortest() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("file".to_string(), "archive.tar.gz".to_string()).unwrap();
+        // ${file%.*} - remove shortest suffix match for .*
+        let input = "echo ${file%.*}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo archive.tar");
+    }
+
+    #[test]
+    fn test_suffix_removal_longest() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("file".to_string(), "archive.tar.gz".to_string()).unwrap();
+        // ${file%%.*} - remove longest suffix match for .*
+        let input = "echo ${file%%.*}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo archive");
+    }
+
+    #[test]
+    fn test_get_file_extension() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("file".to_string(), "script.sh".to_string()).unwrap();
+        // ${file##*.} - get file extension
+        let input = "echo ${file##*.}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo sh");
+    }
+
+    #[test]
+    fn test_replace_first() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("str".to_string(), "hello world world".to_string()).unwrap();
+        // ${str/world/universe} - replace first occurrence
+        let input = "echo ${str/world/universe}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo hello universe world");
+    }
+
+    #[test]
+    fn test_replace_all() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("str".to_string(), "hello world world".to_string()).unwrap();
+        // ${str//world/universe} - replace all occurrences
+        let input = "echo ${str//world/universe}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo hello universe universe");
+    }
+
+    #[test]
+    fn test_replace_prefix() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("str".to_string(), "hello world".to_string()).unwrap();
+        // ${str/#hello/hi} - replace prefix
+        let input = "echo ${str/#hello/hi}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo hi world");
+    }
+
+    #[test]
+    fn test_replace_suffix() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("str".to_string(), "hello world".to_string()).unwrap();
+        // ${str/%world/earth} - replace suffix
+        let input = "echo ${str/%world/earth}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo hello earth");
+    }
+
+    #[test]
+    fn test_replace_deletion() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("str".to_string(), "hello world".to_string()).unwrap();
+        // ${str/world} - delete (empty replacement)
+        let input = "echo ${str/world}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo hello ");
+    }
+
+    #[test]
+    fn test_pattern_with_wildcard() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("path".to_string(), "/home/user/file.txt".to_string()).unwrap();
+        // ${path%/*} - remove everything after last /
+        let input = "echo ${path%/*}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo /home/user");
+    }
+
+    #[test]
+    fn test_no_match_returns_original() {
+        let mut executor = CommandExecutor::new();
+        executor.variable_manager_mut().set("str".to_string(), "hello".to_string()).unwrap();
+        // No match - returns original
+        let input = "echo ${str#xyz}";
+        let result = expand_variables(input, &executor);
+        assert_eq!(result, "echo hello");
+    }
+
+    #[test]
+    fn test_glob_match_basic() {
+        assert!(glob_match("hello", "hello"));
+        assert!(!glob_match("hello", "world"));
+    }
+
+    #[test]
+    fn test_glob_match_star() {
+        assert!(glob_match("*", "anything"));
+        assert!(glob_match("hello*", "hello world"));
+        assert!(glob_match("*world", "hello world"));
+        assert!(glob_match("*llo*", "hello world"));
+    }
+
+    #[test]
+    fn test_glob_match_question() {
+        assert!(glob_match("h?llo", "hello"));
+        assert!(glob_match("h?llo", "hallo"));
+        assert!(!glob_match("h?llo", "hllo"));
+    }
+
+    #[test]
+    fn test_glob_match_combined() {
+        assert!(glob_match("*.txt", "file.txt"));
+        assert!(glob_match("file?.txt", "file1.txt"));
+        assert!(glob_match("*/*", "path/file"));
     }
 }
