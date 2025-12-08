@@ -415,42 +415,94 @@ mod tests {
 
     // === User Story 2: Working Directory Shortcuts Tests ===
 
+    // Helper to set/unset PWD for testing
+    fn with_pwd<F>(pwd: Option<&str>, f: F)
+    where
+        F: FnOnce(),
+    {
+        let original = env::var("PWD").ok();
+
+        if let Some(p) = pwd {
+            env::set_var("PWD", p);
+        } else {
+            env::remove_var("PWD");
+        }
+
+        f();
+
+        // Restore original
+        if let Some(p) = original {
+            env::set_var("PWD", p);
+        } else {
+            env::remove_var("PWD");
+        }
+    }
+
+    // Helper to set/unset OLDPWD for testing
+    fn with_oldpwd<F>(oldpwd: Option<&str>, f: F)
+    where
+        F: FnOnce(),
+    {
+        let original = env::var("OLDPWD").ok();
+
+        if let Some(o) = oldpwd {
+            env::set_var("OLDPWD", o);
+        } else {
+            env::remove_var("OLDPWD");
+        }
+
+        f();
+
+        // Restore original
+        if let Some(o) = original {
+            env::set_var("OLDPWD", o);
+        } else {
+            env::remove_var("OLDPWD");
+        }
+    }
+
     #[test]
     fn test_tilde_plus() {
-        env::set_var("PWD", "/current/directory");
-        assert_eq!(expand_tilde("~+"), "/current/directory");
-        assert_eq!(expand_tilde("echo ~+"), "echo /current/directory");
+        with_pwd(Some("/current/directory"), || {
+            assert_eq!(expand_tilde("~+"), "/current/directory");
+            assert_eq!(expand_tilde("echo ~+"), "echo /current/directory");
+        });
     }
 
     #[test]
     fn test_tilde_plus_with_path() {
-        env::set_var("PWD", "/current/directory");
-        assert_eq!(expand_tilde("~+/file.txt"), "/current/directory/file.txt");
-        assert_eq!(expand_tilde("ls ~+/src"), "ls /current/directory/src");
+        with_pwd(Some("/current/directory"), || {
+            assert_eq!(expand_tilde("~+/file.txt"), "/current/directory/file.txt");
+            assert_eq!(expand_tilde("ls ~+/src"), "ls /current/directory/src");
+        });
     }
 
     #[test]
     fn test_tilde_minus() {
-        env::set_var("OLDPWD", "/previous/directory");
-        assert_eq!(expand_tilde("~-"), "/previous/directory");
-        assert_eq!(expand_tilde("cd ~-"), "cd /previous/directory");
+        with_oldpwd(Some("/previous/directory"), || {
+            assert_eq!(expand_tilde("~-"), "/previous/directory");
+            assert_eq!(expand_tilde("cd ~-"), "cd /previous/directory");
+        });
     }
 
     #[test]
     fn test_tilde_minus_with_path() {
-        env::set_var("OLDPWD", "/previous/directory");
-        assert_eq!(expand_tilde("~-/file.txt"), "/previous/directory/file.txt");
+        with_oldpwd(Some("/previous/directory"), || {
+            assert_eq!(expand_tilde("~-/file.txt"), "/previous/directory/file.txt");
+        });
     }
 
     #[test]
     fn test_missing_pwd() {
-        env::remove_var("PWD");
-        assert_eq!(expand_tilde("~+"), "~+");
+        with_pwd(None, || {
+            assert_eq!(expand_tilde("~+"), "~+");
+        });
     }
 
     #[test]
     fn test_missing_oldpwd() {
-        env::remove_var("OLDPWD");
-        assert_eq!(expand_tilde("~-"), "~-");
+        with_oldpwd(None, || {
+            assert_eq!(expand_tilde("~-"), "~-");
+        });
     }
 }
