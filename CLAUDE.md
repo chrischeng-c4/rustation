@@ -74,6 +74,10 @@ git commit -m "feat(NNN): description"
 - Rust 1.75+ (edition 2021) + reedline (already in project), std::io for terminal I/O (030-read-builtin)
 - N/A (variables stored in existing VariableManager) (030-read-builtin)
 - Rust 1.75+ (edition 2021) + None (pure Rust implementation) (034-brace-expansion)
+- Rust 1.75+ (edition 2021) + None (pure Rust std library) (036-set-builtin)
+- In-memory (ShellOptions struct in CommandExecutor) (036-set-builtin)
+- Rust 1.75+ (edition 2021) + nix 0.29 (signal handling), existing in Cargo.toml (037-trap-builtin)
+- In-memory HashMap in CommandExecutor (trap registry persists for shell session lifetime) (037-trap-builtin)
 
 ## Recent Changes
 - 029-arithmetic-expansion: Added Rust 1.75+ (edition 2021) + No new dependencies (pure Rust implementation)

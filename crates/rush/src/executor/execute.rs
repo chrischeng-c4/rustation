@@ -2,6 +2,7 @@
 
 use super::aliases::AliasManager;
 use super::arithmetic;
+use super::builtins::trap::TrapRegistry;
 use super::expansion::expand_variables;
 use super::glob::glob_expand;
 use super::job::JobManager;
@@ -35,6 +36,7 @@ pub struct CommandExecutor {
     job_manager: JobManager,
     variable_manager: VariableManager,
     alias_manager: AliasManager,
+    trap_registry: TrapRegistry,
     last_exit_code: i32,
 }
 
@@ -46,6 +48,7 @@ impl CommandExecutor {
             job_manager: JobManager::new(),
             variable_manager: VariableManager::new(),
             alias_manager: AliasManager::new(),
+            trap_registry: TrapRegistry::new(),
             last_exit_code: 0,
         }
     }
@@ -404,6 +407,16 @@ impl CommandExecutor {
     /// Get reference to variable manager
     pub fn variable_manager(&self) -> &VariableManager {
         &self.variable_manager
+    }
+
+    /// Get mutable reference to trap registry (for trap builtin)
+    pub fn trap_registry_mut(&mut self) -> &mut TrapRegistry {
+        &mut self.trap_registry
+    }
+
+    /// Get reference to trap registry
+    pub fn trap_registry(&self) -> &TrapRegistry {
+        &self.trap_registry
     }
 
     /// Set the last exit code (for $? expansion)

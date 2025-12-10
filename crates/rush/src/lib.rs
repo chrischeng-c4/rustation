@@ -63,6 +63,19 @@ pub mod error {
 
         #[error("Exit requested with code: {0}")]
         ExitRequest(i32),
+
+        // Trap builtin errors
+        #[error("trap: invalid signal specification: {0}")]
+        InvalidSignal(String),
+
+        #[error("trap: cannot trap {0}: signal cannot be caught")]
+        UncatchableSignal(String),
+
+        #[error("trap: trap already exists for signal {0} (use 'trap \"\" {0}' to clear first)")]
+        DuplicateTrap(String),
+
+        #[error("trap: empty command (use 'trap \"\" SIGNAL' to clear)")]
+        EmptyCommand,
     }
 
     pub type Result<T> = std::result::Result<T, RushError>;
