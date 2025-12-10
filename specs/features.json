@@ -260,7 +260,7 @@
       "id": "035",
       "name": "tilde-expansion",
       "description": "Tilde expansion (~, ~user, ~+, ~-)",
-      "status": "planned",
+      "status": "complete",
       "phase": 6,
       "dependencies": ["013", "014"],
       "priority": "medium"

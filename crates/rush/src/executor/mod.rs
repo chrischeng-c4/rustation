@@ -46,6 +46,7 @@ pub mod pipeline;
 pub mod script;
 pub mod subshell;
 pub mod substitution;
+pub mod tilde;
 pub mod variables;
 pub mod while_loop;
 

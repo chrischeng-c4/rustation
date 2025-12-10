@@ -18,6 +18,7 @@ pub mod pwd;
 pub mod read;
 pub mod source;
 pub mod test;
+pub mod trap;
 pub mod true_cmd;
 pub mod type_cmd;
 pub mod unalias;
@@ -56,6 +57,7 @@ pub fn execute_builtin(
         "let" => Some(let_cmd::execute(executor, args)),
         "local" => Some(local::execute(executor, args)),
         "read" => Some(read::execute(executor, args)),
+        "trap" => Some(trap::execute(executor, args)),
         _ => None,
     }
 }
