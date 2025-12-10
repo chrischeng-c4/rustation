@@ -41,7 +41,10 @@ mod for_loop_command_substitution {
     #[test]
     fn test_for_loop_with_command_substitution_and_variables() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("items".to_string(), "x y z".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("items".to_string(), "x y z".to_string())
+            .unwrap();
 
         // Test: mixing command substitution with variables
         let cmd = "for item in $(echo $items); do echo $item; done";

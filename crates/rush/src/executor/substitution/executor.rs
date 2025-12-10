@@ -134,7 +134,8 @@ mod tests {
     #[test]
     fn test_multiline_output() {
         // Use sh -c to enable escape sequence interpretation
-        let output = SubstitutionExecutor::execute("sh -c \"printf 'line1\\\\nline2\\\\nline3'\"").unwrap();
+        let output =
+            SubstitutionExecutor::execute("sh -c \"printf 'line1\\\\nline2\\\\nline3'\"").unwrap();
         assert_eq!(output, "line1\nline2\nline3");
     }
 
@@ -208,7 +209,8 @@ mod tests {
     #[test]
     fn test_multiline_with_trailing_newlines_trimmed() {
         // Even with multiple trailing newlines, they should be trimmed
-        let output = SubstitutionExecutor::execute("sh -c \"printf 'test\\\\n\\\\n\\\\n'\"").unwrap();
+        let output =
+            SubstitutionExecutor::execute("sh -c \"printf 'test\\\\n\\\\n\\\\n'\"").unwrap();
         assert_eq!(output, "test");
     }
 

@@ -52,7 +52,10 @@ mod while_loop_command_substitution {
     #[test]
     fn test_while_loop_command_substitution_with_variables() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("limit".to_string(), "3".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("limit".to_string(), "3".to_string())
+            .unwrap();
 
         // Test: command substitution mixed with variables
         let cmd = "i=0; while [ $i -lt $(echo $limit) ]; do i=$((i+1)); done; echo $i";
@@ -88,7 +91,8 @@ mod while_loop_command_substitution {
         let mut executor = CommandExecutor::new();
 
         // Test: until loop with command substitution in comparison
-        let cmd = "count=0; until [ $(echo $count) -eq 2 ]; do count=$((count+1)); done; echo $count";
+        let cmd =
+            "count=0; until [ $(echo $count) -eq 2 ]; do count=$((count+1)); done; echo $count";
         let result = executor.execute(cmd);
 
         assert!(result.is_ok(), "Until loop with command substitution comparison should work");

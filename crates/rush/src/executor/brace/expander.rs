@@ -146,9 +146,7 @@ fn expand_expr(expr: &BraceExpr) -> Vec<String> {
         BraceExpr::NumericSeq { start, end, step, width } => {
             expand_numeric_seq(*start, *end, *step, *width)
         }
-        BraceExpr::CharSeq { start, end, step } => {
-            expand_char_seq(*start, *end, *step)
-        }
+        BraceExpr::CharSeq { start, end, step } => expand_char_seq(*start, *end, *step),
         BraceExpr::Literal(s) => vec![s.clone()],
     }
 }

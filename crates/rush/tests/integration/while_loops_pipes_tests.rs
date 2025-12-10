@@ -52,7 +52,10 @@ mod while_loop_pipes {
     #[test]
     fn test_until_loop_with_variable_and_pipe() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("msg".to_string(), "hello".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("msg".to_string(), "hello".to_string())
+            .unwrap();
 
         // Test: until loop using variable in piped command
         let cmd = "i=0; until [ $i -ge 1 ]; do echo $msg | wc -c; i=$((i+1)); done";

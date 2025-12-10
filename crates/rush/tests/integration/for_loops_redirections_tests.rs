@@ -62,10 +62,16 @@ mod for_loop_redirections {
     #[test]
     fn test_for_loop_with_variable_in_redirection() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("outfile".to_string(), "/tmp/out.txt".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("outfile".to_string(), "/tmp/out.txt".to_string())
+            .unwrap();
         let cmd = "for item in test; do echo $item; done > $outfile";
         let result = executor.execute(cmd);
 
-        assert!(result.is_ok(), "For loop with variable in redirection should parse successfully");
+        assert!(
+            result.is_ok(),
+            "For loop with variable in redirection should parse successfully"
+        );
     }
 }

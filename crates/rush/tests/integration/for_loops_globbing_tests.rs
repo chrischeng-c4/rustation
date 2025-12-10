@@ -88,7 +88,10 @@ mod for_loop_globbing {
     #[test]
     fn test_for_loop_glob_with_variable_path() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("dir".to_string(), ".".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("dir".to_string(), ".".to_string())
+            .unwrap();
 
         // Test: glob pattern with directory variable (may not work depending on implementation)
         let cmd = "for f in $dir/*.rs; do true; done";

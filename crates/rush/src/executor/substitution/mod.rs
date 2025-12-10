@@ -67,11 +67,7 @@ impl std::fmt::Display for SubstitutionError {
                 write!(f, "command '{}' failed with exit code {}", command, code)
             }
             SubstitutionError::OutputTooLarge { size, limit } => {
-                write!(
-                    f,
-                    "output too large: {} bytes (limit: {} bytes)",
-                    size, limit
-                )
+                write!(f, "output too large: {} bytes (limit: {} bytes)", size, limit)
             }
             SubstitutionError::InvalidUtf8 => write!(f, "invalid UTF-8 in command output"),
         }

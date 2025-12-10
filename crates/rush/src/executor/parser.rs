@@ -69,19 +69,23 @@ fn tokenize_keyword(word: &str) -> Token {
 /// Used in parsing conditionals to validate expected keywords
 pub fn expect_keyword(tokens: &[Token], index: usize, expected: super::Keyword) -> Result<usize> {
     if index >= tokens.len() {
-        return Err(RushError::Syntax(
-            format!("Expected keyword '{}', but reached end of input", expected.as_str()),
-        ));
+        return Err(RushError::Syntax(format!(
+            "Expected keyword '{}', but reached end of input",
+            expected.as_str()
+        )));
     }
 
     match &tokens[index] {
         Token::Keyword(kw) if *kw == expected => Ok(index + 1),
-        Token::Keyword(kw) => Err(RushError::Syntax(
-            format!("Expected keyword '{}', found '{}'", expected.as_str(), kw.as_str()),
-        )),
-        _ => Err(RushError::Syntax(
-            format!("Expected keyword '{}', found something else", expected.as_str()),
-        )),
+        Token::Keyword(kw) => Err(RushError::Syntax(format!(
+            "Expected keyword '{}', found '{}'",
+            expected.as_str(),
+            kw.as_str()
+        ))),
+        _ => Err(RushError::Syntax(format!(
+            "Expected keyword '{}', found something else",
+            expected.as_str()
+        ))),
     }
 }
 
@@ -116,7 +120,11 @@ pub fn parse_command_with_redirections(
                     "Pipe operator not supported - use parse_pipeline() instead".to_string(),
                 ));
             }
-            Token::RedirectOut | Token::RedirectAppend | Token::RedirectIn | Token::StderrOut | Token::StderrAppend => {
+            Token::RedirectOut
+            | Token::RedirectAppend
+            | Token::RedirectIn
+            | Token::StderrOut
+            | Token::StderrAppend => {
                 // Redirection operator must be followed by a file path
                 if i + 1 >= tokens.len() {
                     return Err(RushError::Execution(
@@ -167,7 +175,11 @@ pub fn parse_command_with_redirections(
                     let strip_tabs = matches!(&tokens[i], Token::HeredocStrip);
                     // Note: heredoc content is not collected here - this legacy function
                     // doesn't support heredocs. Use parse_with_heredocs() instead.
-                    redirections.push(Redirection::new_heredoc(delimiter.clone(), String::new(), strip_tabs));
+                    redirections.push(Redirection::new_heredoc(
+                        delimiter.clone(),
+                        String::new(),
+                        strip_tabs,
+                    ));
                     i += 2; // Skip operator and delimiter
                 } else {
                     return Err(RushError::Execution(
@@ -193,9 +205,10 @@ pub fn parse_command_with_redirections(
                 }
             }
             Token::Keyword(kw) => {
-                return Err(RushError::Syntax(
-                    format!("Unexpected keyword '{}' in command", kw.as_str()),
-                ));
+                return Err(RushError::Syntax(format!(
+                    "Unexpected keyword '{}' in command",
+                    kw.as_str()
+                )));
             }
             Token::Newline | Token::Eof => {
                 // End of input, return what we have so far
@@ -279,7 +292,8 @@ pub fn extract_redirections_from_args(
                         "Invalid redirection: 2> requires filename".to_string(),
                     ));
                 }
-                redirections.push(Redirection::new(RedirectionType::Stderr(false), args[i + 1].clone()));
+                redirections
+                    .push(Redirection::new(RedirectionType::Stderr(false), args[i + 1].clone()));
                 i += 2; // Skip operator and path
             }
             "2>>" => {
@@ -289,7 +303,8 @@ pub fn extract_redirections_from_args(
                         "Invalid redirection: 2>> requires filename".to_string(),
                     ));
                 }
-                redirections.push(Redirection::new(RedirectionType::Stderr(true), args[i + 1].clone()));
+                redirections
+                    .push(Redirection::new(RedirectionType::Stderr(true), args[i + 1].clone()));
                 i += 2; // Skip operator and path
             }
             "2>&1" => {
@@ -421,7 +436,10 @@ fn tokenize_with_redirections(line: &str) -> Result<Vec<Token>> {
                 }
                 in_double_quote = !in_double_quote;
             }
-            '2' if !in_single_quote && !in_double_quote && (current_token.is_empty() || current_token == "2") => {
+            '2' if !in_single_quote
+                && !in_double_quote
+                && (current_token.is_empty() || current_token == "2") =>
+            {
                 // Check for 2> or 2>> (stderr redirection operators)
                 // Only recognize 2 as redirection prefix if token is empty (we're at start of word)
                 if current_token.is_empty() && chars.peek() == Some(&'>') {
@@ -871,9 +889,10 @@ fn split_into_segments(tokens: Vec<Token>) -> Result<Vec<PipelineSegment>> {
                 ));
             }
             Token::Keyword(kw) => {
-                return Err(RushError::Syntax(
-                    format!("Unexpected keyword '{}' in pipeline", kw.as_str()),
-                ));
+                return Err(RushError::Syntax(format!(
+                    "Unexpected keyword '{}' in pipeline",
+                    kw.as_str()
+                )));
             }
             Token::Newline | Token::Eof => {
                 // End of input, finalize current segment if any
@@ -921,10 +940,7 @@ pub fn get_pending_heredocs(line: &str) -> Result<Vec<PendingHeredoc>> {
                 let strip_tabs = matches!(&tokens[i], Token::HeredocStrip);
                 if i + 1 < tokens.len() {
                     if let Token::Word(delimiter) = &tokens[i + 1] {
-                        heredocs.push(PendingHeredoc {
-                            delimiter: delimiter.clone(),
-                            strip_tabs,
-                        });
+                        heredocs.push(PendingHeredoc { delimiter: delimiter.clone(), strip_tabs });
                         i += 2;
                         continue;
                     }
@@ -970,10 +986,7 @@ where
         content.push('\n');
     }
 
-    Err(RushError::Execution(format!(
-        "Heredoc delimiter '{}' not found",
-        delimiter
-    )))
+    Err(RushError::Execution(format!("Heredoc delimiter '{}' not found", delimiter)))
 }
 
 /// Check if all heredocs in the input have their closing delimiters
@@ -1087,7 +1100,8 @@ pub fn extract_redirections_with_heredocs(
                         "Invalid redirection: 2> requires filename".to_string(),
                     ));
                 }
-                redirections.push(Redirection::new(RedirectionType::Stderr(false), args[i + 1].clone()));
+                redirections
+                    .push(Redirection::new(RedirectionType::Stderr(false), args[i + 1].clone()));
                 i += 2;
             }
             "2>>" => {
@@ -1096,7 +1110,8 @@ pub fn extract_redirections_with_heredocs(
                         "Invalid redirection: 2>> requires filename".to_string(),
                     ));
                 }
-                redirections.push(Redirection::new(RedirectionType::Stderr(true), args[i + 1].clone()));
+                redirections
+                    .push(Redirection::new(RedirectionType::Stderr(true), args[i + 1].clone()));
                 i += 2;
             }
             "2>&1" => {
@@ -1114,7 +1129,10 @@ pub fn extract_redirections_with_heredocs(
                     ));
                 }
                 let delimiter = args[i + 1].clone();
-                let content = heredoc_contents.get(&delimiter).cloned().unwrap_or_default();
+                let content = heredoc_contents
+                    .get(&delimiter)
+                    .cloned()
+                    .unwrap_or_default();
                 redirections.push(Redirection::new_heredoc(delimiter, content, false));
                 i += 2;
             }
@@ -1125,7 +1143,10 @@ pub fn extract_redirections_with_heredocs(
                     ));
                 }
                 let delimiter = args[i + 1].clone();
-                let content = heredoc_contents.get(&delimiter).cloned().unwrap_or_default();
+                let content = heredoc_contents
+                    .get(&delimiter)
+                    .cloned()
+                    .unwrap_or_default();
                 redirections.push(Redirection::new_heredoc(delimiter, content, true));
                 i += 2;
             }
@@ -1538,7 +1559,7 @@ mod tests {
         assert_eq!(cmd_line, "cat <<- END");
         assert_eq!(heredocs.len(), 1);
         assert_eq!(heredocs[0].0, "END"); // delimiter
-        // <<- strips ALL leading tabs from each line
+                                          // <<- strips ALL leading tabs from each line
         assert_eq!(heredocs[0].1, "hello\nworld\n"); // content (all leading tabs stripped)
         assert!(heredocs[0].2); // strip_tabs = true
     }
@@ -1550,7 +1571,8 @@ mod tests {
         let mut heredoc_contents = HashMap::new();
         heredoc_contents.insert("EOF".to_string(), "test content\n".to_string());
 
-        let (clean_args, redirs) = extract_redirections_with_heredocs(&args, &heredoc_contents).unwrap();
+        let (clean_args, redirs) =
+            extract_redirections_with_heredocs(&args, &heredoc_contents).unwrap();
         assert_eq!(clean_args, vec!["arg1"]);
         assert_eq!(redirs.len(), 1);
         assert_eq!(redirs[0].redir_type, RedirectionType::Heredoc);
@@ -1560,7 +1582,11 @@ mod tests {
 
     #[test]
     fn test_extract_redirections_from_args_heredoc() {
-        let args = vec!["arg1".to_string(), "<<".to_string(), "DELIMITER".to_string()];
+        let args = vec![
+            "arg1".to_string(),
+            "<<".to_string(),
+            "DELIMITER".to_string(),
+        ];
         let (clean_args, redirs) = extract_redirections_from_args(&args).unwrap();
         assert_eq!(clean_args, vec!["arg1"]);
         assert_eq!(redirs.len(), 1);

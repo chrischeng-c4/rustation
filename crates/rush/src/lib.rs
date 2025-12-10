@@ -76,6 +76,22 @@ pub mod error {
 
         #[error("trap: empty command (use 'trap \"\" SIGNAL' to clear)")]
         EmptyCommand,
+
+        // Test command errors
+        #[error("test: invalid operator: {0}")]
+        InvalidOperator(String),
+
+        #[error("test: type mismatch: {0}")]
+        TypeMismatch(String),
+
+        #[error("test: invalid pattern: {0}")]
+        InvalidPattern(String),
+
+        #[error("test: pattern too long (max 10KB)")]
+        PatternTooLong,
+
+        #[error("test: file test failed: {0}")]
+        FileTestFailed(String),
     }
 
     pub type Result<T> = std::result::Result<T, RushError>;

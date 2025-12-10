@@ -19,7 +19,8 @@ mod nested_structures {
     #[test]
     fn test_for_loop_deeply_nested() {
         let mut executor = CommandExecutor::new();
-        let cmd = "for i in 1 2; do for j in a b; do for k in x y; do echo $i$j$k; done; done; done";
+        let cmd =
+            "for i in 1 2; do for j in a b; do for k in x y; do echo $i$j$k; done; done; done";
         let result = executor.execute(cmd);
 
         assert!(result.is_ok(), "Deeply nested for loops should execute successfully");
@@ -30,9 +31,13 @@ mod nested_structures {
     #[test]
     fn test_while_loop_nested_in_for_loop() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("n".to_string(), "1".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("n".to_string(), "1".to_string())
+            .unwrap();
 
-        let cmd = "for item in a b; do n=1; while [ $n -le 2 ]; do echo $item$n; n=$((n+1)); done; done";
+        let cmd =
+            "for item in a b; do n=1; while [ $n -le 2 ]; do echo $item$n; n=$((n+1)); done; done";
         let result = executor.execute(cmd);
 
         assert!(result.is_ok(), "While loop nested in for loop should execute");
@@ -43,7 +48,10 @@ mod nested_structures {
     #[test]
     fn test_for_loop_nested_in_while_loop() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("i".to_string(), "1".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("i".to_string(), "1".to_string())
+            .unwrap();
 
         let cmd = "while [ $i -le 2 ]; do for j in x y; do echo $i$j; done; i=$((i+1)); done";
         let result = executor.execute(cmd);
@@ -56,8 +64,14 @@ mod nested_structures {
     #[test]
     fn test_while_loop_nested_in_while_loop() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("i".to_string(), "1".to_string()).unwrap();
-        executor.variable_manager_mut().set("j".to_string(), "1".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("i".to_string(), "1".to_string())
+            .unwrap();
+        executor
+            .variable_manager_mut()
+            .set("j".to_string(), "1".to_string())
+            .unwrap();
 
         let cmd = "while [ $i -le 2 ]; do j=1; while [ $j -le 2 ]; do echo $i$j; j=$((j+1)); done; i=$((i+1)); done";
         let result = executor.execute(cmd);
@@ -70,7 +84,8 @@ mod nested_structures {
     #[test]
     fn test_until_loop_nested_in_for_loop() {
         let mut executor = CommandExecutor::new();
-        let cmd = "for item in a b; do n=0; until [ $n -ge 2 ]; do echo $item$n; n=$((n+1)); done; done";
+        let cmd =
+            "for item in a b; do n=0; until [ $n -ge 2 ]; do echo $item$n; n=$((n+1)); done; done";
         let result = executor.execute(cmd);
 
         assert!(result.is_ok(), "Until loop nested in for loop should execute");
@@ -101,7 +116,10 @@ mod nested_structures {
     #[test]
     fn test_if_statement_inside_while_loop() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("i".to_string(), "1".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("i".to_string(), "1".to_string())
+            .unwrap();
 
         let cmd = "while [ $i -le 3 ]; do if [ $i -eq 2 ]; then echo found; fi; i=$((i+1)); done";
         let result = executor.execute(cmd);
@@ -114,7 +132,10 @@ mod nested_structures {
     #[test]
     fn test_for_loop_inside_if_statement() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "1".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "1".to_string())
+            .unwrap();
 
         let cmd = "if [ $x -eq 1 ]; then for item in a b c; do echo $item; done; fi";
         let result = executor.execute(cmd);
@@ -125,7 +146,10 @@ mod nested_structures {
     #[test]
     fn test_for_loop_inside_if_else() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "2".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "2".to_string())
+            .unwrap();
 
         let cmd = "if [ $x -eq 1 ]; then echo one; else for item in a b; do echo $item; done; fi";
         let result = executor.execute(cmd);
@@ -138,8 +162,14 @@ mod nested_structures {
     #[test]
     fn test_while_loop_inside_if_statement() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("n".to_string(), "1".to_string()).unwrap();
-        executor.variable_manager_mut().set("x".to_string(), "1".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("n".to_string(), "1".to_string())
+            .unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "1".to_string())
+            .unwrap();
 
         let cmd = "if [ $x -eq 1 ]; then while [ $n -le 2 ]; do echo $n; n=$((n+1)); done; fi";
         let result = executor.execute(cmd);
@@ -152,8 +182,14 @@ mod nested_structures {
     #[test]
     fn test_if_statement_nested_in_if_statement() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "1".to_string()).unwrap();
-        executor.variable_manager_mut().set("y".to_string(), "2".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "1".to_string())
+            .unwrap();
+        executor
+            .variable_manager_mut()
+            .set("y".to_string(), "2".to_string())
+            .unwrap();
 
         let cmd = "if [ $x -eq 1 ]; then if [ $y -eq 2 ]; then echo match; fi; fi";
         let result = executor.execute(cmd);
@@ -164,7 +200,10 @@ mod nested_structures {
     #[test]
     fn test_if_inside_if_else_branch() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "2".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "2".to_string())
+            .unwrap();
 
         let cmd = "if [ $x -eq 1 ]; then echo one; else if [ $x -eq 2 ]; then echo two; fi; fi";
         let result = executor.execute(cmd);
@@ -200,7 +239,10 @@ mod nested_structures {
     #[test]
     fn test_deeply_nested_mixed_structures() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("n".to_string(), "1".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("n".to_string(), "1".to_string())
+            .unwrap();
 
         let cmd = "for i in 1 2; do if [ $i -eq 1 ]; then while [ $n -le 2 ]; do echo $i-$n; n=$((n+1)); done; fi; done";
         let result = executor.execute(cmd);
@@ -213,9 +255,13 @@ mod nested_structures {
     #[test]
     fn test_variable_scope_in_nested_loops() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("outer".to_string(), "out".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("outer".to_string(), "out".to_string())
+            .unwrap();
 
-        let cmd = "for i in 1 2; do inner=in; for j in a b; do echo $outer-$inner-$i-$j; done; done";
+        let cmd =
+            "for i in 1 2; do inner=in; for j in a b; do echo $outer-$inner-$i-$j; done; done";
         let result = executor.execute(cmd);
 
         assert!(result.is_ok(), "Variable scope in nested loops should work");
@@ -224,9 +270,13 @@ mod nested_structures {
     #[test]
     fn test_variable_modification_in_nested_loops() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("counter".to_string(), "0".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("counter".to_string(), "0".to_string())
+            .unwrap();
 
-        let cmd = "for i in 1 2; do for j in a b; do counter=$((counter+1)); done; done; echo $counter";
+        let cmd =
+            "for i in 1 2; do for j in a b; do counter=$((counter+1)); done; done; echo $counter";
         let result = executor.execute(cmd);
 
         assert!(result.is_ok(), "Variable modification in nested loops should persist");

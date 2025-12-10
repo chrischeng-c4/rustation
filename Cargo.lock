@@ -1004,6 +1004,7 @@ dependencies = [
  "nu-ansi-term",
  "once_cell",
  "reedline",
+ "regex",
  "rexpect",
  "serde",
  "serial_test",

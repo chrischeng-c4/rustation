@@ -24,19 +24,22 @@ thread_local! {
 /// Check if a statement is a break statement
 pub fn is_break_statement(input: &str) -> bool {
     let trimmed = input.trim();
-    trimmed == "break" || (trimmed.starts_with("break ") && trimmed[6..].trim().parse::<i32>().is_ok())
+    trimmed == "break"
+        || (trimmed.starts_with("break ") && trimmed[6..].trim().parse::<i32>().is_ok())
 }
 
 /// Check if a statement is a continue statement
 pub fn is_continue_statement(input: &str) -> bool {
     let trimmed = input.trim();
-    trimmed == "continue" || (trimmed.starts_with("continue ") && trimmed[9..].trim().parse::<i32>().is_ok())
+    trimmed == "continue"
+        || (trimmed.starts_with("continue ") && trimmed[9..].trim().parse::<i32>().is_ok())
 }
 
 /// Check if a statement is a return statement
 pub fn is_return_statement(input: &str) -> bool {
     let trimmed = input.trim();
-    trimmed == "return" || (trimmed.starts_with("return ") && trimmed[7..].trim().parse::<i32>().is_ok())
+    trimmed == "return"
+        || (trimmed.starts_with("return ") && trimmed[7..].trim().parse::<i32>().is_ok())
 }
 
 /// Execute a break statement

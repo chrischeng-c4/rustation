@@ -46,6 +46,7 @@ pub mod pipeline;
 pub mod script;
 pub mod subshell;
 pub mod substitution;
+pub mod test_expr;
 pub mod tilde;
 pub mod variables;
 pub mod while_loop;
@@ -190,7 +191,11 @@ impl Redirection {
     /// Creates a new heredoc redirection with content
     pub fn new_heredoc(delimiter: String, content: String, _strip_tabs: bool) -> Self {
         Self {
-            redir_type: if _strip_tabs { RedirectionType::HeredocStrip } else { RedirectionType::Heredoc },
+            redir_type: if _strip_tabs {
+                RedirectionType::HeredocStrip
+            } else {
+                RedirectionType::Heredoc
+            },
             file_path: delimiter,
             heredoc_content: Some(content),
         }
@@ -212,10 +217,14 @@ impl Redirection {
         // Heredocs use file_path as delimiter, which can be empty for some edge cases
         // StderrToStdout and StdoutToStderr don't need file paths
         // HereString stores content in heredoc_content, not file_path
-        if self.file_path.is_empty() && !matches!(
-            self.redir_type,
-            RedirectionType::StderrToStdout | RedirectionType::StdoutToStderr | RedirectionType::HereString
-        ) {
+        if self.file_path.is_empty()
+            && !matches!(
+                self.redir_type,
+                RedirectionType::StderrToStdout
+                    | RedirectionType::StdoutToStderr
+                    | RedirectionType::HereString
+            )
+        {
             return Err(RushError::Execution("Empty file path for redirection".to_string()));
         }
         Ok(())
@@ -437,12 +446,12 @@ impl ElifClause {
     }
 
     /// Create a new elif clause with raw then block string (Phase 3+: for pipe support)
-    pub fn new_with_raw_body(condition: CompoundList, then_block: CompoundList, then_block_raw: String) -> Self {
-        Self {
-            condition: Box::new(condition),
-            then_block: Box::new(then_block),
-            then_block_raw,
-        }
+    pub fn new_with_raw_body(
+        condition: CompoundList,
+        then_block: CompoundList,
+        then_block_raw: String,
+    ) -> Self {
+        Self { condition: Box::new(condition), then_block: Box::new(then_block), then_block_raw }
     }
 }
 
@@ -479,7 +488,11 @@ impl IfBlock {
     }
 
     /// Create a new if block with raw body strings (Phase 3+: for pipe support)
-    pub fn new_with_raw_body(condition: CompoundList, then_block: CompoundList, then_block_raw: String) -> Self {
+    pub fn new_with_raw_body(
+        condition: CompoundList,
+        then_block: CompoundList,
+        then_block_raw: String,
+    ) -> Self {
         Self {
             condition: Box::new(condition),
             then_block: Box::new(then_block),
@@ -524,22 +537,17 @@ pub struct ForLoop {
 impl ForLoop {
     /// Create a new for loop
     pub fn new(variable: String, word_list: Vec<String>, body: CompoundList) -> Self {
-        Self {
-            variable,
-            word_list,
-            body: Box::new(body),
-            body_raw: String::new(),
-        }
+        Self { variable, word_list, body: Box::new(body), body_raw: String::new() }
     }
 
     /// Create a for loop with raw body string (Phase 3+: for pipe support)
-    pub fn new_with_raw_body(variable: String, word_list: Vec<String>, body: CompoundList, body_raw: String) -> Self {
-        Self {
-            variable,
-            word_list,
-            body: Box::new(body),
-            body_raw,
-        }
+    pub fn new_with_raw_body(
+        variable: String,
+        word_list: Vec<String>,
+        body: CompoundList,
+        body_raw: String,
+    ) -> Self {
+        Self { variable, word_list, body: Box::new(body), body_raw }
     }
 
     /// Create a for loop with empty word list (uses positional parameters)
@@ -568,20 +576,16 @@ pub struct WhileLoop {
 impl WhileLoop {
     /// Create a new while loop
     pub fn new(condition: CompoundList, body: CompoundList) -> Self {
-        Self {
-            condition: Box::new(condition),
-            body: Box::new(body),
-            body_raw: String::new(),
-        }
+        Self { condition: Box::new(condition), body: Box::new(body), body_raw: String::new() }
     }
 
     /// Create a new while loop with raw body string (Phase 3+: for pipe support)
-    pub fn new_with_raw_body(condition: CompoundList, body: CompoundList, body_raw: String) -> Self {
-        Self {
-            condition: Box::new(condition),
-            body: Box::new(body),
-            body_raw,
-        }
+    pub fn new_with_raw_body(
+        condition: CompoundList,
+        body: CompoundList,
+        body_raw: String,
+    ) -> Self {
+        Self { condition: Box::new(condition), body: Box::new(body), body_raw }
     }
 }
 
@@ -600,20 +604,16 @@ pub struct UntilLoop {
 impl UntilLoop {
     /// Create a new until loop
     pub fn new(condition: CompoundList, body: CompoundList) -> Self {
-        Self {
-            condition: Box::new(condition),
-            body: Box::new(body),
-            body_raw: String::new(),
-        }
+        Self { condition: Box::new(condition), body: Box::new(body), body_raw: String::new() }
     }
 
     /// Create a new until loop with raw body string (Phase 3+: for pipe support)
-    pub fn new_with_raw_body(condition: CompoundList, body: CompoundList, body_raw: String) -> Self {
-        Self {
-            condition: Box::new(condition),
-            body: Box::new(body),
-            body_raw,
-        }
+    pub fn new_with_raw_body(
+        condition: CompoundList,
+        body: CompoundList,
+        body_raw: String,
+    ) -> Self {
+        Self { condition: Box::new(condition), body: Box::new(body), body_raw }
     }
 }
 

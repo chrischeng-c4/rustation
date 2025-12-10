@@ -95,7 +95,10 @@ mod tests {
         let mut executor = CommandExecutor::new();
 
         // Set global variable
-        executor.variable_manager_mut().set("x".to_string(), "global".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "global".to_string())
+            .unwrap();
 
         // Enter function scope
         executor.variable_manager_mut().push_scope();
@@ -129,7 +132,8 @@ mod tests {
         let mut executor = CommandExecutor::new();
         executor.variable_manager_mut().push_scope();
 
-        let result = execute(&mut executor, &["a=1".to_string(), "b=2".to_string(), "c".to_string()]);
+        let result =
+            execute(&mut executor, &["a=1".to_string(), "b=2".to_string(), "c".to_string()]);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 0);
         assert_eq!(executor.variable_manager().get("a"), Some("1"));

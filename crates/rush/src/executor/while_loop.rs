@@ -6,8 +6,8 @@
 //! - Variable expansion: $VAR, ${VAR}
 //! - Command substitution: $(cmd)
 
+use super::{Command, CompoundList, UntilLoop, WhileLoop};
 use crate::error::{Result, RushError};
-use super::{WhileLoop, UntilLoop, CompoundList, Command};
 use crate::executor::execute::CommandExecutor;
 use crate::executor::expansion::expand_variables;
 use crate::executor::substitution::expander::expand_substitutions;
@@ -145,11 +145,7 @@ pub fn parse_while_loop(input: &str) -> Result<WhileLoop> {
     let body = parse_command_list(body_str_clean)?;
 
     // Phase 3: Store raw body string for pipe and redirection support
-    Ok(WhileLoop::new_with_raw_body(
-        condition,
-        body,
-        body_str_clean.to_string(),
-    ))
+    Ok(WhileLoop::new_with_raw_body(condition, body, body_str_clean.to_string()))
 }
 
 /// Parse an until loop from input string
@@ -187,11 +183,7 @@ pub fn parse_until_loop(input: &str) -> Result<UntilLoop> {
     let body = parse_command_list(body_str_clean)?;
 
     // Phase 3: Store raw body string for pipe and redirection support
-    Ok(UntilLoop::new_with_raw_body(
-        condition,
-        body,
-        body_str_clean.to_string(),
-    ))
+    Ok(UntilLoop::new_with_raw_body(condition, body, body_str_clean.to_string()))
 }
 
 /// Parse a condition (command or pipeline)
@@ -262,7 +254,11 @@ fn find_keyword_position(input: &str, keyword: &str) -> Option<usize> {
         let after = if actual_pos + keyword_lower.len() >= lower.len() {
             true
         } else {
-            !lower.chars().nth(actual_pos + keyword_lower.len()).unwrap().is_alphanumeric()
+            !lower
+                .chars()
+                .nth(actual_pos + keyword_lower.len())
+                .unwrap()
+                .is_alphanumeric()
         };
 
         if before && after {
@@ -276,16 +272,14 @@ fn find_keyword_position(input: &str, keyword: &str) -> Option<usize> {
 }
 
 /// Execute a while loop
-pub fn execute_while_loop(
-    while_loop: &WhileLoop,
-    executor: &mut CommandExecutor,
-) -> Result<i32> {
+pub fn execute_while_loop(while_loop: &WhileLoop, executor: &mut CommandExecutor) -> Result<i32> {
     let mut exit_code = 0;
 
     // Loop while condition is true (exit code 0)
     loop {
         // Evaluate condition with variable expansion
-        let condition_exit_code = execute_compound_list_with_expansion(&while_loop.condition, executor)?;
+        let condition_exit_code =
+            execute_compound_list_with_expansion(&while_loop.condition, executor)?;
 
         // Check if condition is true (exit code 0)
         if condition_exit_code != 0 {
@@ -309,16 +303,14 @@ pub fn execute_while_loop(
 }
 
 /// Execute an until loop
-pub fn execute_until_loop(
-    until_loop: &UntilLoop,
-    executor: &mut CommandExecutor,
-) -> Result<i32> {
+pub fn execute_until_loop(until_loop: &UntilLoop, executor: &mut CommandExecutor) -> Result<i32> {
     let mut exit_code = 0;
 
     // Loop until condition is true (exit code 0)
     loop {
         // Evaluate condition with variable expansion
-        let condition_exit_code = execute_compound_list_with_expansion(&until_loop.condition, executor)?;
+        let condition_exit_code =
+            execute_compound_list_with_expansion(&until_loop.condition, executor)?;
 
         // Check if condition is true (exit code 0)
         if condition_exit_code == 0 {
@@ -343,7 +335,10 @@ pub fn execute_until_loop(
 
 /// Execute a compound list with variable expansion in commands
 /// Phase 2: Applies variable expansion to all parts of the command
-fn execute_compound_list_with_expansion(compound_list: &CompoundList, executor: &mut CommandExecutor) -> Result<i32> {
+fn execute_compound_list_with_expansion(
+    compound_list: &CompoundList,
+    executor: &mut CommandExecutor,
+) -> Result<i32> {
     if compound_list.commands.is_empty() {
         return Ok(0);
     }
@@ -353,16 +348,16 @@ fn execute_compound_list_with_expansion(compound_list: &CompoundList, executor: 
     for cmd in &compound_list.commands {
         // Phase 2: Expand variables in program name
         let expanded_program = expand_variables(&cmd.program, executor);
-        let fully_expanded_program = expand_substitutions(&expanded_program)
-            .unwrap_or_else(|_| expanded_program);
+        let fully_expanded_program =
+            expand_substitutions(&expanded_program).unwrap_or_else(|_| expanded_program);
 
         // Phase 2: Expand variables in arguments
-        let expanded_args: Vec<String> = cmd.args
+        let expanded_args: Vec<String> = cmd
+            .args
             .iter()
             .map(|arg| {
                 let var_expanded = expand_variables(arg, executor);
-                expand_substitutions(&var_expanded)
-                    .unwrap_or_else(|_| var_expanded)
+                expand_substitutions(&var_expanded).unwrap_or_else(|_| var_expanded)
             })
             .collect();
 
@@ -379,7 +374,10 @@ fn execute_compound_list_with_expansion(compound_list: &CompoundList, executor: 
 }
 
 /// Execute a compound list (sequence of commands) and return the exit code of the last command
-fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExecutor) -> Result<i32> {
+fn execute_compound_list(
+    compound_list: &CompoundList,
+    executor: &mut CommandExecutor,
+) -> Result<i32> {
     if compound_list.commands.is_empty() {
         return Ok(0);
     }
@@ -388,7 +386,9 @@ fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExe
 
     for cmd in &compound_list.commands {
         // Build command line from the command
-        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" ")).trim().to_string();
+        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" "))
+            .trim()
+            .to_string();
 
         // Execute the command through the executor
         last_exit_code = executor.execute(&cmd_line)?;

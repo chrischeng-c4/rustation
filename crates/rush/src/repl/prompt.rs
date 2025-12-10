@@ -33,29 +33,17 @@ impl Clone for RushPrompt {
 impl RushPrompt {
     /// Create a new prompt with the given exit code
     pub fn new(exit_code: i32) -> Self {
-        Self {
-            exit_code,
-            is_continuation: false,
-            is_heredoc: false,
-        }
+        Self { exit_code, is_continuation: false, is_heredoc: false }
     }
 
     /// Create a continuation prompt for multiline input
     pub fn new_continuation() -> Self {
-        Self {
-            exit_code: 0,
-            is_continuation: true,
-            is_heredoc: false,
-        }
+        Self { exit_code: 0, is_continuation: true, is_heredoc: false }
     }
 
     /// Create a heredoc input prompt
     pub fn new_heredoc() -> Self {
-        Self {
-            exit_code: 0,
-            is_continuation: true,
-            is_heredoc: true,
-        }
+        Self { exit_code: 0, is_continuation: true, is_heredoc: true }
     }
 
     /// Get shortened current directory path

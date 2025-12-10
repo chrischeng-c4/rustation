@@ -28,9 +28,7 @@ pub struct AliasManager {
 impl AliasManager {
     /// Create a new empty AliasManager
     pub fn new() -> Self {
-        Self {
-            aliases: HashMap::new(),
-        }
+        Self { aliases: HashMap::new() }
     }
 
     /// Add or update an alias
@@ -417,18 +415,12 @@ mod tests {
 
     #[test]
     fn test_parse_alias_line() {
-        assert_eq!(
-            parse_alias_line("ll='ls -la'"),
-            Some(("ll".to_string(), "ls -la".to_string()))
-        );
+        assert_eq!(parse_alias_line("ll='ls -la'"), Some(("ll".to_string(), "ls -la".to_string())));
         assert_eq!(
             parse_alias_line("ll=\"ls -la\""),
             Some(("ll".to_string(), "ls -la".to_string()))
         );
-        assert_eq!(
-            parse_alias_line("ll=ls"),
-            Some(("ll".to_string(), "ls".to_string()))
-        );
+        assert_eq!(parse_alias_line("ll=ls"), Some(("ll".to_string(), "ls".to_string())));
         assert_eq!(parse_alias_line("invalid"), None);
     }
 

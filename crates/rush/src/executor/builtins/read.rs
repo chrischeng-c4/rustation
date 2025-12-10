@@ -191,7 +191,11 @@ fn read_line(stdin: &io::Stdin) -> io::Result<Option<String>> {
 }
 
 /// Read exactly N characters
-fn read_n_chars(stdin: &io::Stdin, count: usize, _options: &ReadOptions) -> io::Result<Option<String>> {
+fn read_n_chars(
+    stdin: &io::Stdin,
+    count: usize,
+    _options: &ReadOptions,
+) -> io::Result<Option<String>> {
     let mut result = String::new();
     let mut lock = stdin.lock();
 
@@ -216,7 +220,11 @@ fn read_n_chars(stdin: &io::Stdin, count: usize, _options: &ReadOptions) -> io::
 }
 
 /// Read until a delimiter character
-fn read_until_delimiter(stdin: &io::Stdin, delim: char, _options: &ReadOptions) -> io::Result<Option<String>> {
+fn read_until_delimiter(
+    stdin: &io::Stdin,
+    delim: char,
+    _options: &ReadOptions,
+) -> io::Result<Option<String>> {
     let mut result = String::new();
     let mut lock = stdin.lock();
 
@@ -245,7 +253,11 @@ fn read_until_delimiter(stdin: &io::Stdin, delim: char, _options: &ReadOptions) 
 }
 
 /// Read with timeout
-fn read_with_timeout(stdin: &io::Stdin, timeout_secs: f64, _options: &ReadOptions) -> io::Result<Option<String>> {
+fn read_with_timeout(
+    stdin: &io::Stdin,
+    timeout_secs: f64,
+    _options: &ReadOptions,
+) -> io::Result<Option<String>> {
     let start = Instant::now();
     let timeout = Duration::from_secs_f64(timeout_secs);
 
@@ -332,12 +344,16 @@ fn assign_to_variables(
 
     if var_names.is_empty() {
         // No variable names - assign to REPLY
-        let _ = executor.variable_manager_mut().set("REPLY".to_string(), trimmed.to_string());
+        let _ = executor
+            .variable_manager_mut()
+            .set("REPLY".to_string(), trimmed.to_string());
         return;
     }
 
     // Get IFS (default is space, tab, newline)
-    let ifs = executor.variable_manager().get("IFS")
+    let ifs = executor
+        .variable_manager()
+        .get("IFS")
         .map(|s| s.to_string())
         .unwrap_or_else(|| " \t\n".to_string());
 
@@ -346,7 +362,8 @@ fn assign_to_variables(
         // Empty IFS means no splitting
         vec![trimmed]
     } else {
-        trimmed.split(|c: char| ifs.contains(c))
+        trimmed
+            .split(|c: char| ifs.contains(c))
             .filter(|s| !s.is_empty())
             .collect()
     };
@@ -500,7 +517,12 @@ mod tests {
     #[test]
     fn test_assign_multiple_variables() {
         let mut executor = CommandExecutor::new();
-        assign_to_variables(&mut executor, "John Doe", &["first".to_string(), "last".to_string()], false);
+        assign_to_variables(
+            &mut executor,
+            "John Doe",
+            &["first".to_string(), "last".to_string()],
+            false,
+        );
         assert_eq!(executor.variable_manager().get("first"), Some("John"));
         assert_eq!(executor.variable_manager().get("last"), Some("Doe"));
     }
@@ -508,7 +530,12 @@ mod tests {
     #[test]
     fn test_assign_excess_words_to_last() {
         let mut executor = CommandExecutor::new();
-        assign_to_variables(&mut executor, "one two three four", &["a".to_string(), "b".to_string()], false);
+        assign_to_variables(
+            &mut executor,
+            "one two three four",
+            &["a".to_string(), "b".to_string()],
+            false,
+        );
         assert_eq!(executor.variable_manager().get("a"), Some("one"));
         assert_eq!(executor.variable_manager().get("b"), Some("two three four"));
     }
@@ -516,7 +543,12 @@ mod tests {
     #[test]
     fn test_assign_fewer_words_than_variables() {
         let mut executor = CommandExecutor::new();
-        assign_to_variables(&mut executor, "only", &["a".to_string(), "b".to_string(), "c".to_string()], false);
+        assign_to_variables(
+            &mut executor,
+            "only",
+            &["a".to_string(), "b".to_string(), "c".to_string()],
+            false,
+        );
         assert_eq!(executor.variable_manager().get("a"), Some("only"));
         assert_eq!(executor.variable_manager().get("b"), Some(""));
         assert_eq!(executor.variable_manager().get("c"), Some(""));

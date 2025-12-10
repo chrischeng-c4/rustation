@@ -31,7 +31,10 @@ mod case_statement_command_substitution {
     #[test]
     fn test_case_statement_command_substitution_with_variables() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("fruit".to_string(), "apple".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("fruit".to_string(), "apple".to_string())
+            .unwrap();
 
         // Test: mixing command substitution with variables in case value
         let cmd = "case $(echo $fruit) in apple) echo red;; banana) echo yellow;; esac";

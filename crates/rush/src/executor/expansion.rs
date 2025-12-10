@@ -196,10 +196,16 @@ enum ParamExpansionResult {
 ///          ${var/#pattern/replacement}, ${var/%pattern/replacement}
 fn expand_parameter(content: &str, executor: &CommandExecutor) -> ParamExpansionResult {
     // Check for ${#var} - string length (but not ${##...} which is longest prefix)
-    if content.starts_with('#') && !content.starts_with("##")
-        && !content.contains(':') && !content.contains('-')
-        && !content.contains('=') && !content.contains('?') && !content.contains('+')
-        && !content.contains('/') && !content.contains('%') {
+    if content.starts_with('#')
+        && !content.starts_with("##")
+        && !content.contains(':')
+        && !content.contains('-')
+        && !content.contains('=')
+        && !content.contains('?')
+        && !content.contains('+')
+        && !content.contains('/')
+        && !content.contains('%')
+    {
         let var_name = &content[1..];
         let value = executor.variable_manager().get(var_name).unwrap_or("");
         return ParamExpansionResult::Value(value.len().to_string());
@@ -271,8 +277,12 @@ fn expand_parameter(content: &str, executor: &CommandExecutor) -> ParamExpansion
     if let Some(pos) = content.find('/') {
         let var_name = &content[..pos];
         let rest = &content[pos + 1..];
-        if !var_name.is_empty() && !var_name.contains('[') && !var_name.contains(':')
-            && !var_name.contains('#') && !var_name.contains('%') {
+        if !var_name.is_empty()
+            && !var_name.contains('[')
+            && !var_name.contains(':')
+            && !var_name.contains('#')
+            && !var_name.contains('%')
+        {
             let value = executor.variable_manager().get(var_name).unwrap_or("");
             let (pattern, replacement) = if let Some(slash_pos) = rest.find('/') {
                 (&rest[..slash_pos], &rest[slash_pos + 1..])
@@ -315,7 +325,11 @@ fn expand_parameter(content: &str, executor: &CommandExecutor) -> ParamExpansion
             let var_name = &content[..pos];
             let pattern = &content[pos + 1..];
             // Make sure var_name doesn't contain / (would be /#)
-            if !var_name.is_empty() && !var_name.contains('[') && !var_name.contains(':') && !var_name.contains('/') {
+            if !var_name.is_empty()
+                && !var_name.contains('[')
+                && !var_name.contains(':')
+                && !var_name.contains('/')
+            {
                 let value = executor.variable_manager().get(var_name).unwrap_or("");
                 if let Some(end) = find_shortest_prefix_match(value, pattern) {
                     return ParamExpansionResult::Value(value[end..].to_string());
@@ -327,8 +341,16 @@ fn expand_parameter(content: &str, executor: &CommandExecutor) -> ParamExpansion
 
     // Find the operator position
     // Look for :- := :? :+ - = ? + in that order
-    let operators = [(":-", true), (":=", true), (":?", true), (":+", true),
-                     ("-", false), ("=", false), ("?", false), ("+", false)];
+    let operators = [
+        (":-", true),
+        (":=", true),
+        (":?", true),
+        (":+", true),
+        ("-", false),
+        ("=", false),
+        ("?", false),
+        ("+", false),
+    ];
 
     for (op, check_null) in operators {
         if let Some(pos) = content.find(op) {
@@ -491,19 +513,29 @@ pub fn expand_variables(input: &str, executor: &CommandExecutor) -> String {
                             chars.next();
                             let content = extract_until(&mut chars, '}');
                             if !content.is_empty() {
-                                if content.contains('[') && !content.contains(":-") && !content.contains(":=")
-                                    && !content.contains(":?") && !content.contains(":+")
-                                    && !content.starts_with('#') {
+                                if content.contains('[')
+                                    && !content.contains(":-")
+                                    && !content.contains(":=")
+                                    && !content.contains(":?")
+                                    && !content.contains(":+")
+                                    && !content.starts_with('#')
+                                {
                                     let array_expr = format!("${{{}}}", content);
                                     if let Ok(arr_ref) = parse_array_ref(&array_expr) {
                                         match arr_ref.ref_type {
                                             ArrayRefType::Index(idx) => {
-                                                if let Some(value) = executor.variable_manager().array_get(&arr_ref.name, idx) {
+                                                if let Some(value) = executor
+                                                    .variable_manager()
+                                                    .array_get(&arr_ref.name, idx)
+                                                {
                                                     result.push_str(value);
                                                 }
                                             }
                                             ArrayRefType::AllWords | ArrayRefType::AllAsOne => {
-                                                if let Some(arr) = executor.variable_manager().get_array(&arr_ref.name) {
+                                                if let Some(arr) = executor
+                                                    .variable_manager()
+                                                    .get_array(&arr_ref.name)
+                                                {
                                                     result.push_str(&arr.join(" "));
                                                 }
                                             }
@@ -604,29 +636,42 @@ pub fn expand_variables_mut(input: &str, executor: &mut CommandExecutor) -> Stri
                             let content = extract_until(&mut chars, '}');
                             if !content.is_empty() {
                                 // Check if this is an array reference (contains [ but not a modifier)
-                                if content.contains('[') && !content.contains(":-") && !content.contains(":=")
-                                    && !content.contains(":?") && !content.contains(":+")
-                                    && !content.starts_with('#') {
+                                if content.contains('[')
+                                    && !content.contains(":-")
+                                    && !content.contains(":=")
+                                    && !content.contains(":?")
+                                    && !content.contains(":+")
+                                    && !content.starts_with('#')
+                                {
                                     // Try to parse as array reference: ${arr[0]}, ${arr[@]}, ${arr[*]}
                                     let array_expr = format!("${{{}}}", content);
                                     if let Ok(arr_ref) = parse_array_ref(&array_expr) {
                                         match arr_ref.ref_type {
                                             ArrayRefType::Index(idx) => {
                                                 // ${arr[0]} - single element
-                                                if let Some(value) = executor.variable_manager().array_get(&arr_ref.name, idx) {
+                                                if let Some(value) = executor
+                                                    .variable_manager()
+                                                    .array_get(&arr_ref.name, idx)
+                                                {
                                                     result.push_str(value);
                                                 }
                                                 // Out of bounds or non-existent array -> empty string
                                             }
                                             ArrayRefType::AllWords => {
                                                 // ${arr[@]} - all elements as space-separated words
-                                                if let Some(arr) = executor.variable_manager().get_array(&arr_ref.name) {
+                                                if let Some(arr) = executor
+                                                    .variable_manager()
+                                                    .get_array(&arr_ref.name)
+                                                {
                                                     result.push_str(&arr.join(" "));
                                                 }
                                             }
                                             ArrayRefType::AllAsOne => {
                                                 // ${arr[*]} - all elements as one word
-                                                if let Some(arr) = executor.variable_manager().get_array(&arr_ref.name) {
+                                                if let Some(arr) = executor
+                                                    .variable_manager()
+                                                    .get_array(&arr_ref.name)
+                                                {
                                                     result.push_str(&arr.join(" "));
                                                 }
                                             }
@@ -643,7 +688,9 @@ pub fn expand_variables_mut(input: &str, executor: &mut CommandExecutor) -> Stri
                                         }
                                         ParamExpansionResult::Assign { var_name, value } => {
                                             // Assign and return value
-                                            let _ = executor.variable_manager_mut().set(var_name, value.clone());
+                                            let _ = executor
+                                                .variable_manager_mut()
+                                                .set(var_name, value.clone());
                                             result.push_str(&value);
                                         }
                                     }
@@ -884,7 +931,14 @@ mod tests {
         let mut executor = CommandExecutor::new();
         executor
             .variable_manager_mut()
-            .set_array("arr".to_string(), vec!["first".to_string(), "second".to_string(), "third".to_string()])
+            .set_array(
+                "arr".to_string(),
+                vec![
+                    "first".to_string(),
+                    "second".to_string(),
+                    "third".to_string(),
+                ],
+            )
             .unwrap();
 
         let input = "echo ${arr[0]}";
@@ -923,7 +977,10 @@ mod tests {
         let mut executor = CommandExecutor::new();
         executor
             .variable_manager_mut()
-            .set_array("arr".to_string(), vec!["one".to_string(), "two".to_string(), "three".to_string()])
+            .set_array(
+                "arr".to_string(),
+                vec!["one".to_string(), "two".to_string(), "three".to_string()],
+            )
             .unwrap();
 
         let input = "echo ${arr[@]}";
@@ -936,7 +993,10 @@ mod tests {
         let mut executor = CommandExecutor::new();
         executor
             .variable_manager_mut()
-            .set_array("arr".to_string(), vec!["one".to_string(), "two".to_string(), "three".to_string()])
+            .set_array(
+                "arr".to_string(),
+                vec!["one".to_string(), "two".to_string(), "three".to_string()],
+            )
             .unwrap();
 
         let input = "echo ${arr[*]}";
@@ -1040,7 +1100,10 @@ mod tests {
     #[test]
     fn test_default_value_set() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "value".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "value".to_string())
+            .unwrap();
         // ${var:-default} when var is set
         let input = "echo ${var:-default}";
         let result = expand_variables(input, &executor);
@@ -1050,7 +1113,10 @@ mod tests {
     #[test]
     fn test_default_value_empty() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "".to_string())
+            .unwrap();
         // ${var:-default} when var is empty (colon means check null too)
         let input = "echo ${var:-default}";
         let result = expand_variables(input, &executor);
@@ -1060,7 +1126,10 @@ mod tests {
     #[test]
     fn test_default_no_colon_empty() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "".to_string())
+            .unwrap();
         // ${var-default} when var is empty (no colon means only check unset)
         let input = "echo ${var-default}";
         let result = expand_variables(input, &executor);
@@ -1080,7 +1149,10 @@ mod tests {
     #[test]
     fn test_assign_default_set() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "existing".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "existing".to_string())
+            .unwrap();
         // ${var:=default} when var is set - should not assign
         let input = "echo ${var:=ignored}";
         let result = expand_variables_mut(input, &mut executor);
@@ -1091,7 +1163,10 @@ mod tests {
     #[test]
     fn test_alternate_value_set() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "value".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "value".to_string())
+            .unwrap();
         // ${var:+alternate} when var is set
         let input = "echo ${var:+alternate}";
         let result = expand_variables(input, &executor);
@@ -1110,7 +1185,10 @@ mod tests {
     #[test]
     fn test_string_length() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "hello".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "hello".to_string())
+            .unwrap();
         // ${#var} - string length
         let input = "echo ${#var}";
         let result = expand_variables(input, &executor);
@@ -1120,7 +1198,10 @@ mod tests {
     #[test]
     fn test_string_length_empty() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "".to_string())
+            .unwrap();
         let input = "echo ${#var}";
         let result = expand_variables(input, &executor);
         assert_eq!(result, "echo 0");
@@ -1137,7 +1218,10 @@ mod tests {
     #[test]
     fn test_substring_from_offset() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "hello world".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "hello world".to_string())
+            .unwrap();
         // ${var:6} - from offset 6 to end
         let input = "echo ${var:6}";
         let result = expand_variables(input, &executor);
@@ -1147,7 +1231,10 @@ mod tests {
     #[test]
     fn test_substring_with_length() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "hello world".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "hello world".to_string())
+            .unwrap();
         // ${var:0:5} - first 5 chars
         let input = "echo ${var:0:5}";
         let result = expand_variables(input, &executor);
@@ -1157,7 +1244,10 @@ mod tests {
     #[test]
     fn test_substring_negative_offset() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "hello world".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "hello world".to_string())
+            .unwrap();
         // ${var:-5} would match :- operator, so use ${var: -5} in bash
         // For now test positive offset
         let input = "echo ${var:6:5}";
@@ -1178,7 +1268,10 @@ mod tests {
     #[test]
     fn test_error_if_set() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "value".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "value".to_string())
+            .unwrap();
         // ${var:?message} when var is set - no error
         let input = "echo ${var:?should not appear}";
         let result = expand_variables(input, &executor);
@@ -1188,7 +1281,10 @@ mod tests {
     #[test]
     fn test_multiple_param_expansions() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("name".to_string(), "world".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("name".to_string(), "world".to_string())
+            .unwrap();
         let input = "${greeting:-hello} ${name}!";
         let result = expand_variables(input, &executor);
         assert_eq!(result, "hello world!");
@@ -1209,7 +1305,10 @@ mod tests {
     #[test]
     fn test_prefix_removal_shortest() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("path".to_string(), "/usr/local/bin/script.sh".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("path".to_string(), "/usr/local/bin/script.sh".to_string())
+            .unwrap();
         // ${path#*/} - remove shortest prefix match for */
         let input = "echo ${path#*/}";
         let result = expand_variables(input, &executor);
@@ -1219,7 +1318,10 @@ mod tests {
     #[test]
     fn test_prefix_removal_longest() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("path".to_string(), "/usr/local/bin/script.sh".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("path".to_string(), "/usr/local/bin/script.sh".to_string())
+            .unwrap();
         // ${path##*/} - remove longest prefix match for */
         let input = "echo ${path##*/}";
         let result = expand_variables(input, &executor);
@@ -1229,7 +1331,10 @@ mod tests {
     #[test]
     fn test_suffix_removal_shortest() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("file".to_string(), "archive.tar.gz".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("file".to_string(), "archive.tar.gz".to_string())
+            .unwrap();
         // ${file%.*} - remove shortest suffix match for .*
         let input = "echo ${file%.*}";
         let result = expand_variables(input, &executor);
@@ -1239,7 +1344,10 @@ mod tests {
     #[test]
     fn test_suffix_removal_longest() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("file".to_string(), "archive.tar.gz".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("file".to_string(), "archive.tar.gz".to_string())
+            .unwrap();
         // ${file%%.*} - remove longest suffix match for .*
         let input = "echo ${file%%.*}";
         let result = expand_variables(input, &executor);
@@ -1249,7 +1357,10 @@ mod tests {
     #[test]
     fn test_get_file_extension() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("file".to_string(), "script.sh".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("file".to_string(), "script.sh".to_string())
+            .unwrap();
         // ${file##*.} - get file extension
         let input = "echo ${file##*.}";
         let result = expand_variables(input, &executor);
@@ -1259,7 +1370,10 @@ mod tests {
     #[test]
     fn test_replace_first() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("str".to_string(), "hello world world".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("str".to_string(), "hello world world".to_string())
+            .unwrap();
         // ${str/world/universe} - replace first occurrence
         let input = "echo ${str/world/universe}";
         let result = expand_variables(input, &executor);
@@ -1269,7 +1383,10 @@ mod tests {
     #[test]
     fn test_replace_all() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("str".to_string(), "hello world world".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("str".to_string(), "hello world world".to_string())
+            .unwrap();
         // ${str//world/universe} - replace all occurrences
         let input = "echo ${str//world/universe}";
         let result = expand_variables(input, &executor);
@@ -1279,7 +1396,10 @@ mod tests {
     #[test]
     fn test_replace_prefix() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("str".to_string(), "hello world".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("str".to_string(), "hello world".to_string())
+            .unwrap();
         // ${str/#hello/hi} - replace prefix
         let input = "echo ${str/#hello/hi}";
         let result = expand_variables(input, &executor);
@@ -1289,7 +1409,10 @@ mod tests {
     #[test]
     fn test_replace_suffix() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("str".to_string(), "hello world".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("str".to_string(), "hello world".to_string())
+            .unwrap();
         // ${str/%world/earth} - replace suffix
         let input = "echo ${str/%world/earth}";
         let result = expand_variables(input, &executor);
@@ -1299,7 +1422,10 @@ mod tests {
     #[test]
     fn test_replace_deletion() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("str".to_string(), "hello world".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("str".to_string(), "hello world".to_string())
+            .unwrap();
         // ${str/world} - delete (empty replacement)
         let input = "echo ${str/world}";
         let result = expand_variables(input, &executor);
@@ -1309,7 +1435,10 @@ mod tests {
     #[test]
     fn test_pattern_with_wildcard() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("path".to_string(), "/home/user/file.txt".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("path".to_string(), "/home/user/file.txt".to_string())
+            .unwrap();
         // ${path%/*} - remove everything after last /
         let input = "echo ${path%/*}";
         let result = expand_variables(input, &executor);
@@ -1319,7 +1448,10 @@ mod tests {
     #[test]
     fn test_no_match_returns_original() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("str".to_string(), "hello".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("str".to_string(), "hello".to_string())
+            .unwrap();
         // No match - returns original
         let input = "echo ${str#xyz}";
         let result = expand_variables(input, &executor);

@@ -7,10 +7,10 @@
 //! - Command substitution: $(cmd)
 //! - Globbing support: *, ?, [...]
 
-use crate::error::{Result, RushError};
-use super::ForLoop;
-use crate::executor::execute::CommandExecutor;
 use super::CompoundList;
+use super::ForLoop;
+use crate::error::{Result, RushError};
+use crate::executor::execute::CommandExecutor;
 use crate::executor::expansion::expand_variables;
 use crate::executor::substitution::expander::expand_substitutions;
 
@@ -95,7 +95,8 @@ pub fn parse_for_loop(input: &str) -> Result<ForLoop> {
     if variable.is_empty() {
         return Err(RushError::Syntax("Variable name cannot be empty".to_string()));
     }
-    if !variable.chars().next().unwrap().is_alphabetic() && variable.chars().next().unwrap() != '_' {
+    if !variable.chars().next().unwrap().is_alphabetic() && variable.chars().next().unwrap() != '_'
+    {
         return Err(RushError::Syntax(format!("Invalid variable name: {}", variable)));
     }
     for c in variable.chars() {
@@ -113,8 +114,9 @@ pub fn parse_for_loop(input: &str) -> Result<ForLoop> {
         let after_in = after_var[in_keyword_end..].trim_start();
 
         // Find where the word list ends (at "do" keyword)
-        let do_pos = find_do_keyword(after_in)
-            .ok_or_else(|| RushError::Syntax("Expected 'do' keyword after word list".to_string()))?;
+        let do_pos = find_do_keyword(after_in).ok_or_else(|| {
+            RushError::Syntax("Expected 'do' keyword after word list".to_string())
+        })?;
 
         let word_list_str = after_in[..do_pos].trim();
         let words = parse_word_list(word_list_str);
@@ -139,8 +141,9 @@ pub fn parse_for_loop(input: &str) -> Result<ForLoop> {
     let after_do = after_words[2..].trim_start();
 
     // Find "done" keyword
-    let done_pos = find_done_keyword(after_do)
-        .ok_or_else(|| RushError::Syntax("Expected 'done' keyword to close for loop".to_string()))?;
+    let done_pos = find_done_keyword(after_do).ok_or_else(|| {
+        RushError::Syntax("Expected 'done' keyword to close for loop".to_string())
+    })?;
 
     let body_str = after_do[..done_pos].trim();
 
@@ -261,10 +264,7 @@ fn parse_word_list(input: &str) -> Vec<String> {
 /// - Variable expansion: for x in $items; do ... done
 /// - Command substitution: for f in $(ls); do ... done
 /// - Globbing: for f in *.txt; do ... done
-pub fn execute_for_loop(
-    for_loop: &ForLoop,
-    executor: &mut CommandExecutor,
-) -> Result<i32> {
+pub fn execute_for_loop(for_loop: &ForLoop, executor: &mut CommandExecutor) -> Result<i32> {
     // Get the word list to iterate over
     let words = if for_loop.word_list.is_empty() {
         // No explicit word list - use positional parameters ($@)
@@ -283,8 +283,8 @@ pub fn execute_for_loop(
             let var_expanded = expand_variables(word, executor);
 
             // Phase 2: Apply command substitution
-            let fully_expanded = expand_substitutions(&var_expanded)
-                .unwrap_or_else(|_| var_expanded); // Fall back to var expansion if subst fails
+            let fully_expanded =
+                expand_substitutions(&var_expanded).unwrap_or_else(|_| var_expanded); // Fall back to var expansion if subst fails
 
             // Phase 2: Perform word splitting on expanded result
             for expanded_word in fully_expanded.split_whitespace() {
@@ -299,10 +299,9 @@ pub fn execute_for_loop(
     // Iterate over each word
     for word in words {
         // Bind the loop variable to the current word
-        executor.variable_manager_mut().set(
-            for_loop.variable.clone(),
-            word,
-        )?;
+        executor
+            .variable_manager_mut()
+            .set(for_loop.variable.clone(), word)?;
 
         // Phase 3: Execute using raw body string to support pipes and redirections
         // If raw body is available, use it (supports pipes and redirections)
@@ -321,7 +320,10 @@ pub fn execute_for_loop(
 }
 
 /// Execute a compound list (sequence of commands) and return the exit code of the last command
-fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExecutor) -> Result<i32> {
+fn execute_compound_list(
+    compound_list: &CompoundList,
+    executor: &mut CommandExecutor,
+) -> Result<i32> {
     if compound_list.commands.is_empty() {
         return Ok(0);
     }
@@ -330,7 +332,9 @@ fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExe
 
     for cmd in &compound_list.commands {
         // Build command line from the command
-        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" ")).trim().to_string();
+        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" "))
+            .trim()
+            .to_string();
 
         // Execute the command through the executor
         last_exit_code = executor.execute(&cmd_line)?;

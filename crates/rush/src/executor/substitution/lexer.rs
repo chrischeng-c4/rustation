@@ -98,10 +98,7 @@ impl SubstitutionLexer {
     /// * `Ok(Some((end_pos, command)))` - Found a substitution, returns position after ) and the command
     /// * `Ok(None)` - No substitution at this position
     /// * `Err(e)` - Parsing error (mismatched parens, unclosed quote)
-    fn find_substitution(
-        chars: &[char],
-        start: usize,
-    ) -> Result<Option<(usize, String)>> {
+    fn find_substitution(chars: &[char], start: usize) -> Result<Option<(usize, String)>> {
         // Check for $( pattern and not in single quotes
         if start >= chars.len() - 1
             || chars[start] != '$'
@@ -248,10 +245,7 @@ mod tests {
     fn test_no_substitution() {
         let tokens = SubstitutionLexer::tokenize("echo hello world").unwrap();
         assert_eq!(tokens.len(), 1);
-        assert_eq!(
-            tokens[0],
-            SubstitutionToken::Literal("echo hello world".to_string())
-        );
+        assert_eq!(tokens[0], SubstitutionToken::Literal("echo hello world".to_string()));
     }
 
     #[test]
@@ -275,20 +269,14 @@ mod tests {
         let tokens = SubstitutionLexer::tokenize("echo $(echo $(date))").unwrap();
         assert_eq!(tokens.len(), 2);
         assert_eq!(tokens[0], SubstitutionToken::Literal("echo ".to_string()));
-        assert_eq!(
-            tokens[1],
-            SubstitutionToken::Substitution("echo $(date)".to_string())
-        );
+        assert_eq!(tokens[1], SubstitutionToken::Substitution("echo $(date)".to_string()));
     }
 
     #[test]
     fn test_deeply_nested_substitution() {
         let tokens = SubstitutionLexer::tokenize("$(echo $(echo $(date)))").unwrap();
         assert_eq!(tokens.len(), 1);
-        assert_eq!(
-            tokens[0],
-            SubstitutionToken::Substitution("echo $(echo $(date))".to_string())
-        );
+        assert_eq!(tokens[0], SubstitutionToken::Substitution("echo $(echo $(date))".to_string()));
     }
 
     #[test]
@@ -304,40 +292,28 @@ mod tests {
     fn test_substitution_not_in_single_quotes() {
         let tokens = SubstitutionLexer::tokenize("echo '$(date)'").unwrap();
         assert_eq!(tokens.len(), 1);
-        assert_eq!(
-            tokens[0],
-            SubstitutionToken::Literal("echo '$(date)'".to_string())
-        );
+        assert_eq!(tokens[0], SubstitutionToken::Literal("echo '$(date)'".to_string()));
     }
 
     #[test]
     fn test_escaped_dollar_sign() {
         let tokens = SubstitutionLexer::tokenize("echo \\$(date)").unwrap();
         assert_eq!(tokens.len(), 1);
-        assert_eq!(
-            tokens[0],
-            SubstitutionToken::Literal("echo \\$(date)".to_string())
-        );
+        assert_eq!(tokens[0], SubstitutionToken::Literal("echo \\$(date)".to_string()));
     }
 
     #[test]
     fn test_command_with_quoted_args() {
         let tokens = SubstitutionLexer::tokenize("$(echo \"hello world\")").unwrap();
         assert_eq!(tokens.len(), 1);
-        assert_eq!(
-            tokens[0],
-            SubstitutionToken::Substitution("echo \"hello world\"".to_string())
-        );
+        assert_eq!(tokens[0], SubstitutionToken::Substitution("echo \"hello world\"".to_string()));
     }
 
     #[test]
     fn test_command_with_parentheses_in_quotes() {
         let tokens = SubstitutionLexer::tokenize("$(echo \"(test)\")").unwrap();
         assert_eq!(tokens.len(), 1);
-        assert_eq!(
-            tokens[0],
-            SubstitutionToken::Substitution("echo \"(test)\"".to_string())
-        );
+        assert_eq!(tokens[0], SubstitutionToken::Substitution("echo \"(test)\"".to_string()));
     }
 
     #[test]
@@ -364,10 +340,7 @@ mod tests {
     fn test_literal_with_spaces() {
         let tokens = SubstitutionLexer::tokenize("  hello  ").unwrap();
         assert_eq!(tokens.len(), 1);
-        assert_eq!(
-            tokens[0],
-            SubstitutionToken::Literal("  hello  ".to_string())
-        );
+        assert_eq!(tokens[0], SubstitutionToken::Literal("  hello  ".to_string()));
     }
 
     #[test]
@@ -375,10 +348,7 @@ mod tests {
         let tokens = SubstitutionLexer::tokenize("ls $(find . -name '*.txt')").unwrap();
         assert_eq!(tokens.len(), 2);
         assert_eq!(tokens[0], SubstitutionToken::Literal("ls ".to_string()));
-        assert_eq!(
-            tokens[1],
-            SubstitutionToken::Substitution("find . -name '*.txt'".to_string())
-        );
+        assert_eq!(tokens[1], SubstitutionToken::Substitution("find . -name '*.txt'".to_string()));
     }
 
     #[test]
@@ -393,10 +363,7 @@ mod tests {
     fn test_multiple_nested_levels() {
         let tokens = SubstitutionLexer::tokenize("$(a $(b $(c)))").unwrap();
         assert_eq!(tokens.len(), 1);
-        assert_eq!(
-            tokens[0],
-            SubstitutionToken::Substitution("a $(b $(c))".to_string())
-        );
+        assert_eq!(tokens[0], SubstitutionToken::Substitution("a $(b $(c))".to_string()));
     }
 
     #[test]
@@ -405,9 +372,6 @@ mod tests {
         assert_eq!(tokens.len(), 3);
         assert_eq!(tokens[0], SubstitutionToken::Literal("echo \"".to_string()));
         assert_eq!(tokens[1], SubstitutionToken::Substitution("cmd".to_string()));
-        assert_eq!(
-            tokens[2],
-            SubstitutionToken::Literal("\" '$(not_cmd)'".to_string())
-        );
+        assert_eq!(tokens[2], SubstitutionToken::Literal("\" '$(not_cmd)'".to_string()));
     }
 }

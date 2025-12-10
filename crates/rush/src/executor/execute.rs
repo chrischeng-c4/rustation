@@ -73,31 +73,41 @@ impl CommandExecutor {
 
         // Check if this is an if statement (before alias/variable expansion)
         let trimmed = line.trim();
-        if trimmed.starts_with("if") && (trimmed.len() == 2 || trimmed.chars().nth(2).map_or(false, |c| c.is_whitespace())) {
+        if trimmed.starts_with("if")
+            && (trimmed.len() == 2 || trimmed.chars().nth(2).map_or(false, |c| c.is_whitespace()))
+        {
             tracing::debug!("Detected if statement");
             return self.execute_if_statement(trimmed);
         }
 
         // Check if this is a for loop (before alias/variable expansion)
-        if trimmed.starts_with("for") && (trimmed.len() == 3 || trimmed.chars().nth(3).map_or(false, |c| c.is_whitespace())) {
+        if trimmed.starts_with("for")
+            && (trimmed.len() == 3 || trimmed.chars().nth(3).map_or(false, |c| c.is_whitespace()))
+        {
             tracing::debug!("Detected for loop");
             return self.execute_for_loop(trimmed);
         }
 
         // Check if this is a while loop (before alias/variable expansion)
-        if trimmed.starts_with("while") && (trimmed.len() == 5 || trimmed.chars().nth(5).map_or(false, |c| c.is_whitespace())) {
+        if trimmed.starts_with("while")
+            && (trimmed.len() == 5 || trimmed.chars().nth(5).map_or(false, |c| c.is_whitespace()))
+        {
             tracing::debug!("Detected while loop");
             return self.execute_while_loop(trimmed);
         }
 
         // Check if this is an until loop (before alias/variable expansion)
-        if trimmed.starts_with("until") && (trimmed.len() == 5 || trimmed.chars().nth(5).map_or(false, |c| c.is_whitespace())) {
+        if trimmed.starts_with("until")
+            && (trimmed.len() == 5 || trimmed.chars().nth(5).map_or(false, |c| c.is_whitespace()))
+        {
             tracing::debug!("Detected until loop");
             return self.execute_until_loop(trimmed);
         }
 
         // Check if this is a case statement (before alias/variable expansion)
-        if trimmed.starts_with("case") && (trimmed.len() == 4 || trimmed.chars().nth(4).map_or(false, |c| c.is_whitespace())) {
+        if trimmed.starts_with("case")
+            && (trimmed.len() == 4 || trimmed.chars().nth(4).map_or(false, |c| c.is_whitespace()))
+        {
             tracing::debug!("Detected case statement");
             return self.execute_case_statement(trimmed);
         }
@@ -115,10 +125,7 @@ impl CommandExecutor {
                                 .into_iter()
                                 .map(|(delim, content, _strip)| (delim, content))
                                 .collect();
-                            tracing::debug!(
-                                heredocs = content_map.len(),
-                                "Parsed heredoc content"
-                            );
+                            tracing::debug!(heredocs = content_map.len(), "Parsed heredoc content");
                             (cmd, Some(content_map))
                         }
                         Err(e) => {
@@ -467,7 +474,10 @@ impl CommandExecutor {
 
     /// Evaluate an arithmetic expression and return the result
     /// Used by the `let` builtin and `(())` command
-    pub fn evaluate_arithmetic(&mut self, expr: &str) -> std::result::Result<i64, arithmetic::ArithmeticError> {
+    pub fn evaluate_arithmetic(
+        &mut self,
+        expr: &str,
+    ) -> std::result::Result<i64, arithmetic::ArithmeticError> {
         let mut ctx = ExecutorVarContext { executor: self };
         arithmetic::expander::evaluate_expression(expr, &mut ctx)
     }
@@ -514,7 +524,10 @@ impl CommandExecutor {
         }
 
         // Simple variable assignment
-        if let Err(e) = self.variable_manager.set(name.to_string(), value.to_string()) {
+        if let Err(e) = self
+            .variable_manager
+            .set(name.to_string(), value.to_string())
+        {
             eprintln!("rush: {}: {}", name, e);
             return Some(1);
         }
@@ -538,7 +551,8 @@ impl<'a> arithmetic::evaluator::VariableContext for ExecutorVarContext<'a> {
     }
 
     fn set(&mut self, name: &str, value: i64) {
-        let _ = self.executor
+        let _ = self
+            .executor
             .variable_manager_mut()
             .set(name.to_string(), value.to_string());
     }

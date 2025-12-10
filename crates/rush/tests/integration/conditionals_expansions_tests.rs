@@ -8,19 +8,28 @@ mod conditional_expansions {
     #[test]
     fn test_if_statement_with_variable_expansion_in_condition() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "5".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "5".to_string())
+            .unwrap();
 
         // Test: if statement with variable in comparison
         let cmd = "if [ $x -gt 3 ]; then echo greater; fi";
         let result = executor.execute(cmd);
 
-        assert!(result.is_ok(), "Should execute if statement with variable expansion in condition");
+        assert!(
+            result.is_ok(),
+            "Should execute if statement with variable expansion in condition"
+        );
     }
 
     #[test]
     fn test_if_statement_with_braced_variable() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("count".to_string(), "10".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("count".to_string(), "10".to_string())
+            .unwrap();
 
         // Test: if statement with braced variable syntax
         let cmd = "if [ ${count} -eq 10 ]; then echo correct; fi";
@@ -32,7 +41,10 @@ mod conditional_expansions {
     #[test]
     fn test_if_else_statement_with_variable_expansion() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("status".to_string(), "active".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("status".to_string(), "active".to_string())
+            .unwrap();
 
         // Test: if/else statement with string variable comparison
         let cmd = "if [ $status = active ]; then echo running; else echo stopped; fi";
@@ -44,7 +56,10 @@ mod conditional_expansions {
     #[test]
     fn test_if_elif_else_statement_with_variables() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("level".to_string(), "2".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("level".to_string(), "2".to_string())
+            .unwrap();
 
         // Test: if/elif/else statement with variable comparisons
         let cmd = "if [ $level -eq 1 ]; then echo one; elif [ $level -eq 2 ]; then echo two; else echo other; fi";
@@ -56,7 +71,10 @@ mod conditional_expansions {
     #[test]
     fn test_if_statement_with_variable_in_command_body() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("action".to_string(), "create".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("action".to_string(), "create".to_string())
+            .unwrap();
 
         // Test: if statement with variable used in the then block
         let cmd = "if true; then result=$action; fi; echo $result";
@@ -68,8 +86,14 @@ mod conditional_expansions {
     #[test]
     fn test_nested_if_statements_with_variable_expansion() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("outer".to_string(), "yes".to_string()).unwrap();
-        executor.variable_manager_mut().set("inner".to_string(), "ok".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("outer".to_string(), "yes".to_string())
+            .unwrap();
+        executor
+            .variable_manager_mut()
+            .set("inner".to_string(), "ok".to_string())
+            .unwrap();
 
         // Test: nested if statements with variables
         let cmd = "if [ $outer = yes ]; then if [ $inner = ok ]; then echo matched; fi; fi";
@@ -96,8 +120,14 @@ mod conditional_expansions {
     #[test]
     fn test_if_statement_with_variable_concatenation() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("prefix".to_string(), "test_".to_string()).unwrap();
-        executor.variable_manager_mut().set("suffix".to_string(), "file".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("prefix".to_string(), "test_".to_string())
+            .unwrap();
+        executor
+            .variable_manager_mut()
+            .set("suffix".to_string(), "file".to_string())
+            .unwrap();
 
         // Test: if statement with variable concatenation
         let cmd = "if [ \"${prefix}${suffix}\" = \"test_file\" ]; then echo match; fi";
@@ -132,7 +162,10 @@ mod conditional_expansions {
     #[test]
     fn test_if_statement_with_test_command_variables() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("file".to_string(), "/tmp/test".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("file".to_string(), "/tmp/test".to_string())
+            .unwrap();
 
         // Test: if statement using test command with variables
         let cmd = "if [ -n \"$file\" ]; then echo nonempty; fi";

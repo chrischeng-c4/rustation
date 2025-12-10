@@ -189,20 +189,16 @@ mod tests {
         let file_path = temp_dir.path().join("test.txt");
         File::create(&file_path).unwrap();
 
-        let result = execute(
-            &mut executor,
-            &["-f".to_string(), file_path.to_string_lossy().to_string()],
-        );
+        let result =
+            execute(&mut executor, &["-f".to_string(), file_path.to_string_lossy().to_string()]);
         assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
     fn test_file_not_exists() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["-f".to_string(), "/nonexistent/file.txt".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["-f".to_string(), "/nonexistent/file.txt".to_string()]);
         assert_eq!(result.unwrap(), 1);
     }
 
@@ -216,10 +212,7 @@ mod tests {
     #[test]
     fn test_directory_not_exists() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["-d".to_string(), "/nonexistent/dir".to_string()],
-        );
+        let result = execute(&mut executor, &["-d".to_string(), "/nonexistent/dir".to_string()]);
         assert_eq!(result.unwrap(), 1);
     }
 
@@ -265,30 +258,24 @@ mod tests {
     #[test]
     fn test_string_equal() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["hello".to_string(), "=".to_string(), "hello".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["hello".to_string(), "=".to_string(), "hello".to_string()]);
         assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
     fn test_string_not_equal() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["hello".to_string(), "=".to_string(), "world".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["hello".to_string(), "=".to_string(), "world".to_string()]);
         assert_eq!(result.unwrap(), 1);
     }
 
     #[test]
     fn test_string_not_equal_operator() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["hello".to_string(), "!=".to_string(), "world".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["hello".to_string(), "!=".to_string(), "world".to_string()]);
         assert_eq!(result.unwrap(), 0);
     }
 
@@ -297,70 +284,56 @@ mod tests {
     #[test]
     fn test_integer_equal() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["42".to_string(), "-eq".to_string(), "42".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["42".to_string(), "-eq".to_string(), "42".to_string()]);
         assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
     fn test_integer_not_equal() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["42".to_string(), "-ne".to_string(), "43".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["42".to_string(), "-ne".to_string(), "43".to_string()]);
         assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
     fn test_integer_less_than() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["5".to_string(), "-lt".to_string(), "10".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["5".to_string(), "-lt".to_string(), "10".to_string()]);
         assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
     fn test_integer_less_equal() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["10".to_string(), "-le".to_string(), "10".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["10".to_string(), "-le".to_string(), "10".to_string()]);
         assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
     fn test_integer_greater_than() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["10".to_string(), "-gt".to_string(), "5".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["10".to_string(), "-gt".to_string(), "5".to_string()]);
         assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
     fn test_integer_greater_equal() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["10".to_string(), "-ge".to_string(), "10".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["10".to_string(), "-ge".to_string(), "10".to_string()]);
         assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
     fn test_integer_invalid_returns_false() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["abc".to_string(), "-eq".to_string(), "42".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["abc".to_string(), "-eq".to_string(), "42".to_string()]);
         assert_eq!(result.unwrap(), 1);
     }
 
@@ -384,20 +357,15 @@ mod tests {
     #[test]
     fn test_unknown_unary_operator() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["-unknown".to_string(), "value".to_string()],
-        );
+        let result = execute(&mut executor, &["-unknown".to_string(), "value".to_string()]);
         assert_eq!(result.unwrap(), 2);
     }
 
     #[test]
     fn test_unknown_binary_operator() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["a".to_string(), "-unknown".to_string(), "b".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["a".to_string(), "-unknown".to_string(), "b".to_string()]);
         assert_eq!(result.unwrap(), 2);
     }
 }

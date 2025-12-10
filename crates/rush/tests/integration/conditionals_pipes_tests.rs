@@ -30,7 +30,10 @@ mod conditionals_pipes {
     #[test]
     fn test_if_then_else_with_pipes() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "1".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "1".to_string())
+            .unwrap();
 
         // Test: if/else statement with pipes in both branches
         let cmd = "if [ $x -eq 1 ]; then echo first | cat; else echo second | cat; fi";
@@ -42,7 +45,10 @@ mod conditionals_pipes {
     #[test]
     fn test_if_elif_else_with_pipes() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("level".to_string(), "2".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("level".to_string(), "2".to_string())
+            .unwrap();
 
         // Test: if/elif/else statement with pipes in all branches
         let cmd = "if [ $level -eq 1 ]; then echo one | cat; elif [ $level -eq 2 ]; then echo two | cat; else echo other | cat; fi";
@@ -65,7 +71,10 @@ mod conditionals_pipes {
     #[test]
     fn test_if_then_with_pipe_and_variable() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("pattern".to_string(), "test".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("pattern".to_string(), "test".to_string())
+            .unwrap();
 
         // Test: if statement with pipe and variable expansion
         let cmd = "if true; then echo testing | grep $pattern; fi";
@@ -77,7 +86,10 @@ mod conditionals_pipes {
     #[test]
     fn test_nested_if_with_pipes() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("outer".to_string(), "yes".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("outer".to_string(), "yes".to_string())
+            .unwrap();
 
         // Test: nested if statements with pipes
         let cmd = "if [ $outer = yes ]; then if true; then echo nested | cat; fi; fi";
@@ -101,7 +113,10 @@ mod conditionals_pipes {
     #[test]
     fn test_elif_with_pipe_condition_and_body() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "2".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "2".to_string())
+            .unwrap();
 
         // Test: elif with pipe in body (condition doesn't need pipe)
         let cmd = "if [ $x -eq 1 ]; then echo one; elif [ $x -eq 2 ]; then echo two | cat; fi";

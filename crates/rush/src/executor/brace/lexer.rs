@@ -229,7 +229,7 @@ mod tests {
         assert!(contains_braces("{a,b}"));
         assert!(contains_braces("pre{a}post"));
         assert!(!contains_braces("no braces"));
-        assert!(!contains_braces("'{a,b}'"));  // Quoted
-        assert!(!contains_braces("\\{escaped\\}"));  // Escaped
+        assert!(!contains_braces("'{a,b}'")); // Quoted
+        assert!(!contains_braces("\\{escaped\\}")); // Escaped
     }
 }

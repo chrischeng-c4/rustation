@@ -111,10 +111,7 @@ impl Parser {
         }
         let expr = self.parse_expression(PREC_COMMA)?;
         if !self.is_at_end() && self.peek() != &Token::Eof {
-            return Err(ArithmeticError::UnexpectedToken(format!(
-                "{:?}",
-                self.peek()
-            )));
+            return Err(ArithmeticError::UnexpectedToken(format!("{:?}", self.peek())));
         }
         Ok(expr)
     }
@@ -244,8 +241,16 @@ impl Parser {
         match token {
             Token::Comma => (PREC_COMMA, false),
 
-            Token::Eq | Token::PlusEq | Token::MinusEq | Token::StarEq | Token::SlashEq
-            | Token::PercentEq | Token::AndEq | Token::OrEq | Token::CaretEq | Token::LtLtEq
+            Token::Eq
+            | Token::PlusEq
+            | Token::MinusEq
+            | Token::StarEq
+            | Token::SlashEq
+            | Token::PercentEq
+            | Token::AndEq
+            | Token::OrEq
+            | Token::CaretEq
+            | Token::LtLtEq
             | Token::GtGtEq => (PREC_ASSIGN, true),
 
             Token::Question => (PREC_TERNARY, true),
@@ -410,10 +415,7 @@ mod tests {
     #[test]
     fn test_addition() {
         let expr = parse("2 + 3").unwrap();
-        assert_eq!(
-            expr,
-            Expr::Add(Box::new(Expr::Number(2)), Box::new(Expr::Number(3)))
-        );
+        assert_eq!(expr, Expr::Add(Box::new(Expr::Number(2)), Box::new(Expr::Number(3))));
     }
 
     #[test]
@@ -424,10 +426,7 @@ mod tests {
             expr,
             Expr::Add(
                 Box::new(Expr::Number(2)),
-                Box::new(Expr::Mul(
-                    Box::new(Expr::Number(3)),
-                    Box::new(Expr::Number(4))
-                ))
+                Box::new(Expr::Mul(Box::new(Expr::Number(3)), Box::new(Expr::Number(4))))
             )
         );
     }
@@ -439,10 +438,7 @@ mod tests {
         assert_eq!(
             expr,
             Expr::Mul(
-                Box::new(Expr::Add(
-                    Box::new(Expr::Number(2)),
-                    Box::new(Expr::Number(3))
-                )),
+                Box::new(Expr::Add(Box::new(Expr::Number(2)), Box::new(Expr::Number(3)))),
                 Box::new(Expr::Number(4))
             )
         );
@@ -462,10 +458,7 @@ mod tests {
             expr,
             Expr::Pow(
                 Box::new(Expr::Number(2)),
-                Box::new(Expr::Pow(
-                    Box::new(Expr::Number(3)),
-                    Box::new(Expr::Number(2))
-                ))
+                Box::new(Expr::Pow(Box::new(Expr::Number(3)), Box::new(Expr::Number(2))))
             )
         );
     }
@@ -473,19 +466,13 @@ mod tests {
     #[test]
     fn test_comparison() {
         let expr = parse("5 > 3").unwrap();
-        assert_eq!(
-            expr,
-            Expr::Gt(Box::new(Expr::Number(5)), Box::new(Expr::Number(3)))
-        );
+        assert_eq!(expr, Expr::Gt(Box::new(Expr::Number(5)), Box::new(Expr::Number(3))));
     }
 
     #[test]
     fn test_logical_and() {
         let expr = parse("1 && 0").unwrap();
-        assert_eq!(
-            expr,
-            Expr::And(Box::new(Expr::Number(1)), Box::new(Expr::Number(0)))
-        );
+        assert_eq!(expr, Expr::And(Box::new(Expr::Number(1)), Box::new(Expr::Number(0))));
     }
 
     #[test]
@@ -497,28 +484,19 @@ mod tests {
     #[test]
     fn test_bitwise() {
         let expr = parse("5 & 3").unwrap();
-        assert_eq!(
-            expr,
-            Expr::BitAnd(Box::new(Expr::Number(5)), Box::new(Expr::Number(3)))
-        );
+        assert_eq!(expr, Expr::BitAnd(Box::new(Expr::Number(5)), Box::new(Expr::Number(3))));
     }
 
     #[test]
     fn test_assignment() {
         let expr = parse("x = 5").unwrap();
-        assert_eq!(
-            expr,
-            Expr::Assign("x".to_string(), Box::new(Expr::Number(5)))
-        );
+        assert_eq!(expr, Expr::Assign("x".to_string(), Box::new(Expr::Number(5))));
     }
 
     #[test]
     fn test_compound_assignment() {
         let expr = parse("x += 3").unwrap();
-        assert_eq!(
-            expr,
-            Expr::AddAssign("x".to_string(), Box::new(Expr::Number(3)))
-        );
+        assert_eq!(expr, Expr::AddAssign("x".to_string(), Box::new(Expr::Number(3))));
     }
 
     #[test]
@@ -549,14 +527,7 @@ mod tests {
     #[test]
     fn test_comma() {
         let expr = parse("1, 2, 3").unwrap();
-        assert_eq!(
-            expr,
-            Expr::Comma(vec![
-                Expr::Number(1),
-                Expr::Number(2),
-                Expr::Number(3)
-            ])
-        );
+        assert_eq!(expr, Expr::Comma(vec![Expr::Number(1), Expr::Number(2), Expr::Number(3)]));
     }
 
     #[test]

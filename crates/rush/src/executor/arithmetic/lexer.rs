@@ -13,61 +13,61 @@ pub enum Token {
     Identifier(String),
 
     // Arithmetic operators
-    Plus,       // +
-    Minus,      // -
-    Star,       // *
-    Slash,      // /
-    Percent,    // %
-    StarStar,   // **
+    Plus,     // +
+    Minus,    // -
+    Star,     // *
+    Slash,    // /
+    Percent,  // %
+    StarStar, // **
 
     // Comparison operators
-    Lt,         // <
-    Gt,         // >
-    Le,         // <=
-    Ge,         // >=
-    EqEq,       // ==
-    Ne,         // !=
+    Lt,   // <
+    Gt,   // >
+    Le,   // <=
+    Ge,   // >=
+    EqEq, // ==
+    Ne,   // !=
 
     // Logical operators
-    AndAnd,     // &&
-    OrOr,       // ||
-    Bang,       // !
+    AndAnd, // &&
+    OrOr,   // ||
+    Bang,   // !
 
     // Bitwise operators
-    And,        // &
-    Or,         // |
-    Caret,      // ^
-    Tilde,      // ~
-    LtLt,       // <<
-    GtGt,       // >>
+    And,   // &
+    Or,    // |
+    Caret, // ^
+    Tilde, // ~
+    LtLt,  // <<
+    GtGt,  // >>
 
     // Assignment operators
-    Eq,         // =
-    PlusEq,     // +=
-    MinusEq,    // -=
-    StarEq,     // *=
-    SlashEq,    // /=
-    PercentEq,  // %=
-    AndEq,      // &=
-    OrEq,       // |=
-    CaretEq,    // ^=
-    LtLtEq,     // <<=
-    GtGtEq,     // >>=
+    Eq,        // =
+    PlusEq,    // +=
+    MinusEq,   // -=
+    StarEq,    // *=
+    SlashEq,   // /=
+    PercentEq, // %=
+    AndEq,     // &=
+    OrEq,      // |=
+    CaretEq,   // ^=
+    LtLtEq,    // <<=
+    GtGtEq,    // >>=
 
     // Increment/Decrement
     PlusPlus,   // ++
     MinusMinus, // --
 
     // Ternary
-    Question,   // ?
-    Colon,      // :
+    Question, // ?
+    Colon,    // :
 
     // Comma
-    Comma,      // ,
+    Comma, // ,
 
     // Grouping
-    LParen,     // (
-    RParen,     // )
+    LParen, // (
+    RParen, // )
 
     // End of input
     Eof,
@@ -83,11 +83,7 @@ pub struct Lexer<'a> {
 impl<'a> Lexer<'a> {
     /// Create a new lexer for the given input.
     pub fn new(input: &'a str) -> Self {
-        Self {
-            input,
-            chars: input.char_indices().peekable(),
-            current_pos: 0,
-        }
+        Self { input, chars: input.char_indices().peekable(), current_pos: 0 }
     }
 
     /// Tokenize the entire input into a vector of tokens.
@@ -149,10 +145,9 @@ impl<'a> Lexer<'a> {
                     self.advance();
                     Ok(Token::RParen)
                 }
-                _ => Err(ArithmeticError::UnexpectedToken(format!(
-                    "unexpected character: '{}'",
-                    c
-                ))),
+                _ => {
+                    Err(ArithmeticError::UnexpectedToken(format!("unexpected character: '{}'", c)))
+                }
             },
         }
     }
@@ -270,10 +265,7 @@ impl<'a> Lexer<'a> {
                 self.advance();
             } else if c.is_ascii_digit() {
                 // Invalid octal digit
-                return Err(ArithmeticError::InvalidNumber(format!(
-                    "invalid octal digit: {}",
-                    c
-                )));
+                return Err(ArithmeticError::InvalidNumber(format!("invalid octal digit: {}", c)));
             } else {
                 break;
             }
@@ -579,10 +571,7 @@ mod tests {
     fn test_logical_operators() {
         let mut lexer = Lexer::new("&& || !");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(
-            tokens,
-            vec![Token::AndAnd, Token::OrOr, Token::Bang, Token::Eof]
-        );
+        assert_eq!(tokens, vec![Token::AndAnd, Token::OrOr, Token::Bang, Token::Eof]);
     }
 
     #[test]
@@ -630,20 +619,14 @@ mod tests {
     fn test_increment_decrement() {
         let mut lexer = Lexer::new("++ --");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(
-            tokens,
-            vec![Token::PlusPlus, Token::MinusMinus, Token::Eof]
-        );
+        assert_eq!(tokens, vec![Token::PlusPlus, Token::MinusMinus, Token::Eof]);
     }
 
     #[test]
     fn test_ternary_comma() {
         let mut lexer = Lexer::new("? : ,");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(
-            tokens,
-            vec![Token::Question, Token::Colon, Token::Comma, Token::Eof]
-        );
+        assert_eq!(tokens, vec![Token::Question, Token::Colon, Token::Comma, Token::Eof]);
     }
 
     #[test]

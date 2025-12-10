@@ -93,7 +93,8 @@ mod conditional_integration_tests {
         use rush::executor::execute::CommandExecutor;
 
         let mut executor = CommandExecutor::new();
-        let exit_code = executor.execute("if false; then true; elif false; then true; elif true; then true; fi");
+        let exit_code = executor
+            .execute("if false; then true; elif false; then true; elif true; then true; fi");
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0, "Third elif should execute");
     }
@@ -104,7 +105,8 @@ mod conditional_integration_tests {
         use rush::executor::execute::CommandExecutor;
 
         let mut executor = CommandExecutor::new();
-        let exit_code = executor.execute("if false; then true; elif false; then true; else true; fi");
+        let exit_code =
+            executor.execute("if false; then true; elif false; then true; else true; fi");
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0, "Else should execute when all conditions fail");
     }

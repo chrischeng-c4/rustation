@@ -41,7 +41,10 @@ mod for_loop_pipes {
     #[test]
     fn test_for_loop_with_pipe_and_variable() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("pattern".to_string(), "test".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("pattern".to_string(), "test".to_string())
+            .unwrap();
 
         // Test: for loop with pipe and external variable
         let cmd = "for item in test testing failed; do echo $item | grep $pattern; done";

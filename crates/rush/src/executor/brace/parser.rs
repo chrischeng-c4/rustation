@@ -14,15 +14,11 @@ pub enum BraceExpr {
         start: i64,
         end: i64,
         step: i64,
-        width: usize,  // For zero-padding
+        width: usize, // For zero-padding
     },
 
     /// Character sequence: {a..z..2}
-    CharSeq {
-        start: char,
-        end: char,
-        step: i64,
-    },
+    CharSeq { start: char, end: char, step: i64 },
 
     /// Literal (invalid brace pattern, no expansion)
     Literal(String),
@@ -36,7 +32,7 @@ pub enum BraceExpr {
 /// - Otherwise: invalid (e.g., {a}, {})
 pub fn is_valid_brace_pattern(content: &str) -> bool {
     if content.is_empty() {
-        return false;  // {} is invalid
+        return false; // {} is invalid
     }
 
     // Check for comma (list pattern)
@@ -52,7 +48,7 @@ pub fn is_valid_brace_pattern(content: &str) -> bool {
         return is_valid_sequence(content);
     }
 
-    false  // Single element like {a} is invalid
+    false // Single element like {a} is invalid
 }
 
 /// Check if a sequence pattern is valid
@@ -89,7 +85,7 @@ fn is_valid_sequence(content: &str) -> bool {
         return true;
     }
 
-    false  // Mixed types or invalid format
+    false // Mixed types or invalid format
 }
 
 /// Parse brace content into a BraceExpr
@@ -133,12 +129,16 @@ fn try_parse_sequence(content: &str) -> Option<BraceExpr> {
         let step_str = if parts.len() == 3 {
             parts[2].trim()
         } else {
-            if start <= end { "1" } else { "-1" }
+            if start <= end {
+                "1"
+            } else {
+                "-1"
+            }
         };
 
         if let Ok(step) = step_str.parse::<i64>() {
             if step == 0 {
-                return None;  // Invalid step
+                return None; // Invalid step
             }
 
             // Calculate width for zero-padding
@@ -158,16 +158,16 @@ fn try_parse_sequence(content: &str) -> Option<BraceExpr> {
             let step_str = if parts.len() == 3 {
                 parts[2].trim()
             } else {
-                if start_char <= end_char { "1" } else { "-1" }
+                if start_char <= end_char {
+                    "1"
+                } else {
+                    "-1"
+                }
             };
 
             if let Ok(step) = step_str.parse::<i64>() {
                 if step != 0 {
-                    return Some(BraceExpr::CharSeq {
-                        start: start_char,
-                        end: end_char,
-                        step,
-                    });
+                    return Some(BraceExpr::CharSeq { start: start_char, end: end_char, step });
                 }
             }
         }
@@ -196,13 +196,13 @@ mod tests {
     fn test_is_valid_brace_pattern_list() {
         assert!(is_valid_brace_pattern("a,b,c"));
         assert!(is_valid_brace_pattern("a,b"));
-        assert!(is_valid_brace_pattern("a,,b"));  // Empty element is valid
+        assert!(is_valid_brace_pattern("a,,b")); // Empty element is valid
     }
 
     #[test]
     fn test_is_valid_brace_pattern_single() {
-        assert!(!is_valid_brace_pattern("a"));  // Single element is invalid
-        assert!(!is_valid_brace_pattern(""));   // Empty is invalid
+        assert!(!is_valid_brace_pattern("a")); // Single element is invalid
+        assert!(!is_valid_brace_pattern("")); // Empty is invalid
     }
 
     #[test]
@@ -220,8 +220,8 @@ mod tests {
 
     #[test]
     fn test_is_valid_brace_pattern_mixed() {
-        assert!(!is_valid_brace_pattern("a..5"));  // Mixed types invalid
-        assert!(!is_valid_brace_pattern("1..z"));  // Mixed types invalid
+        assert!(!is_valid_brace_pattern("a..5")); // Mixed types invalid
+        assert!(!is_valid_brace_pattern("1..z")); // Mixed types invalid
     }
 
     #[test]

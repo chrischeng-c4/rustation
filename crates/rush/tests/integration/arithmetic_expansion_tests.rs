@@ -81,7 +81,10 @@ fn test_arithmetic_expansion_parentheses() {
 #[test]
 fn test_arithmetic_expansion_with_variable() {
     let mut executor = CommandExecutor::new();
-    executor.variable_manager_mut().set("y".to_string(), "10".to_string()).unwrap();
+    executor
+        .variable_manager_mut()
+        .set("y".to_string(), "10".to_string())
+        .unwrap();
     executor.execute("x=$((y * 2))").unwrap();
     assert_eq!(executor.variable_manager().get("x"), Some("20"));
 }
@@ -228,7 +231,10 @@ fn test_arithmetic_assignment() {
 #[test]
 fn test_arithmetic_add_assign() {
     let mut executor = CommandExecutor::new();
-    executor.variable_manager_mut().set("x".to_string(), "5".to_string()).unwrap();
+    executor
+        .variable_manager_mut()
+        .set("x".to_string(), "5".to_string())
+        .unwrap();
     executor.execute("y=$((x += 3))").unwrap();
     assert_eq!(executor.variable_manager().get("x"), Some("8"));
     assert_eq!(executor.variable_manager().get("y"), Some("8"));
@@ -239,7 +245,10 @@ fn test_arithmetic_add_assign() {
 #[test]
 fn test_arithmetic_pre_increment() {
     let mut executor = CommandExecutor::new();
-    executor.variable_manager_mut().set("x".to_string(), "5".to_string()).unwrap();
+    executor
+        .variable_manager_mut()
+        .set("x".to_string(), "5".to_string())
+        .unwrap();
     executor.execute("y=$((++x))").unwrap();
     assert_eq!(executor.variable_manager().get("x"), Some("6"));
     assert_eq!(executor.variable_manager().get("y"), Some("6"));
@@ -248,7 +257,10 @@ fn test_arithmetic_pre_increment() {
 #[test]
 fn test_arithmetic_post_increment() {
     let mut executor = CommandExecutor::new();
-    executor.variable_manager_mut().set("x".to_string(), "5".to_string()).unwrap();
+    executor
+        .variable_manager_mut()
+        .set("x".to_string(), "5".to_string())
+        .unwrap();
     executor.execute("y=$((x++))").unwrap();
     assert_eq!(executor.variable_manager().get("x"), Some("6"));
     assert_eq!(executor.variable_manager().get("y"), Some("5")); // Returns old value
@@ -337,7 +349,10 @@ fn test_let_multiple() {
 #[test]
 fn test_let_increment() {
     let mut executor = CommandExecutor::new();
-    executor.variable_manager_mut().set("x".to_string(), "5".to_string()).unwrap();
+    executor
+        .variable_manager_mut()
+        .set("x".to_string(), "5".to_string())
+        .unwrap();
     let result = executor.execute("let x++");
     assert!(result.is_ok());
     assert_eq!(executor.variable_manager().get("x"), Some("6"));

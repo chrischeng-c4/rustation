@@ -37,7 +37,10 @@ mod edge_cases {
     #[test]
     fn test_while_loop_zero_iterations() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("n".to_string(), "5".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("n".to_string(), "5".to_string())
+            .ok();
         let cmd = "while [ $n -lt 3 ]; do n=$((n+1)); done; echo done";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "While loop with zero iterations should not crash");
@@ -46,7 +49,10 @@ mod edge_cases {
     #[test]
     fn test_until_loop_immediate_exit() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "10".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "10".to_string())
+            .ok();
         let cmd = "until [ $x -gt 5 ]; do echo $x; done";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "Until loop with immediate exit condition should work");
@@ -63,9 +69,18 @@ mod edge_cases {
     #[test]
     fn test_deeply_nested_if_statements() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("a".to_string(), "1".to_string()).ok();
-        executor.variable_manager_mut().set("b".to_string(), "1".to_string()).ok();
-        executor.variable_manager_mut().set("c".to_string(), "1".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("a".to_string(), "1".to_string())
+            .ok();
+        executor
+            .variable_manager_mut()
+            .set("b".to_string(), "1".to_string())
+            .ok();
+        executor
+            .variable_manager_mut()
+            .set("c".to_string(), "1".to_string())
+            .ok();
         let cmd = "if [ $a -eq 1 ]; then if [ $b -eq 1 ]; then if [ $c -eq 1 ]; then echo deep; fi; fi; fi";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "Deeply nested if statements should work");
@@ -94,7 +109,10 @@ mod edge_cases {
     #[test]
     fn test_malformed_arithmetic_in_loop() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("i".to_string(), "1".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("i".to_string(), "1".to_string())
+            .ok();
         let cmd = "while [ $i -le 3 ]; do i=$((invalid)); done";
         let result = executor.execute(cmd);
         // Should handle arithmetic error gracefully
@@ -122,7 +140,10 @@ mod edge_cases {
     #[test]
     fn test_empty_case_statement() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "1".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "1".to_string())
+            .ok();
         let cmd = "case $x in esac";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "Empty case statement should not crash");
@@ -133,7 +154,10 @@ mod edge_cases {
     #[test]
     fn test_variable_shadowing_in_nested_loops() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("i".to_string(), "outer".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("i".to_string(), "outer".to_string())
+            .ok();
         let cmd = "for i in 1 2; do for i in a b; do echo $i; done; echo $i; done";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "Variable shadowing in nested loops should work");
@@ -151,7 +175,10 @@ mod edge_cases {
     #[test]
     fn test_arithmetic_variable_overflow() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("big".to_string(), "9999999999999999999".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("big".to_string(), "9999999999999999999".to_string())
+            .ok();
         let cmd = "echo $((big + 1))";
         let result = executor.execute(cmd);
         // Should handle large numbers (or error gracefully)
@@ -166,7 +193,10 @@ mod edge_cases {
         let cmd = "for i in 1 2; do echo $i; done > /nonexistent/dir/file.txt";
         let result = executor.execute(cmd);
         // Should parse successfully (actual I/O happens at execution time)
-        assert!(result.is_ok(), "Redirection syntax should parse even if target dir doesn't exist");
+        assert!(
+            result.is_ok(),
+            "Redirection syntax should parse even if target dir doesn't exist"
+        );
     }
 
     #[test]
@@ -209,7 +239,10 @@ mod edge_cases {
     #[test]
     fn test_multiple_elif_all_false() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "999".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "999".to_string())
+            .ok();
         let cmd = "if [ $x -eq 1 ]; then echo one; elif [ $x -eq 2 ]; then echo two; elif [ $x -eq 3 ]; then echo three; fi";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "All elif conditions false should not crash");
@@ -218,7 +251,10 @@ mod edge_cases {
     #[test]
     fn test_case_with_multiple_default_patterns() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "test".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "test".to_string())
+            .ok();
         let cmd = "case $x in a) echo a;; *) echo first;; *) echo second;; esac";
         let result = executor.execute(cmd);
         // Multiple default patterns - behavior depends on implementation
@@ -238,7 +274,10 @@ mod edge_cases {
     #[test]
     fn test_unquoted_empty_variable_in_loop_condition() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("empty".to_string(), "".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("empty".to_string(), "".to_string())
+            .ok();
         let cmd = "if [ $empty ]; then echo not empty; else echo empty; fi";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "Empty variable test should work");
@@ -268,7 +307,10 @@ mod edge_cases {
     #[test]
     fn test_large_loop_iteration_count() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("i".to_string(), "1".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("i".to_string(), "1".to_string())
+            .ok();
         // Create a large loop that executes 100 iterations
         let cmd = "while [ $i -le 100 ]; do i=$((i+1)); done; echo done";
         let result = executor.execute(cmd);
@@ -295,7 +337,10 @@ mod edge_cases {
     #[test]
     fn test_case_with_many_patterns() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "5".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "5".to_string())
+            .ok();
         let mut case_cmd = String::from("case $x in");
         for i in 1..=20 {
             case_cmd.push_str(&format!(" {}) echo {};; ", i, i));

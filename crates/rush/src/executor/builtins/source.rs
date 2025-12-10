@@ -50,10 +50,7 @@ pub fn execute(executor: &mut CommandExecutor, args: &[String]) -> Result<i32> {
     // Check nesting depth
     let current_depth = SOURCE_DEPTH.with(|d| d.get());
     if current_depth >= MAX_SOURCE_DEPTH {
-        eprintln!(
-            "rush: source: maximum nesting depth ({}) exceeded",
-            MAX_SOURCE_DEPTH
-        );
+        eprintln!("rush: source: maximum nesting depth ({}) exceeded", MAX_SOURCE_DEPTH);
         return Ok(1);
     }
 
@@ -101,12 +98,7 @@ pub fn execute(executor: &mut CommandExecutor, args: &[String]) -> Result<i32> {
                 last_exit_code = code;
             }
             Err(e) => {
-                eprintln!(
-                    "rush: {}:{}: {}",
-                    file_path.display(),
-                    line_num + 1,
-                    e
-                );
+                eprintln!("rush: {}:{}: {}", file_path.display(), line_num + 1, e);
                 last_exit_code = 1;
             }
         }

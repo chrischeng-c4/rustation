@@ -62,11 +62,11 @@ pub fn glob_expand(line: &str) -> Result<String> {
             }
             '\'' if !in_double_quote => {
                 in_single_quote = !in_single_quote;
-                continue;  // Don't include quotes
+                continue; // Don't include quotes
             }
             '"' if !in_single_quote => {
                 in_double_quote = !in_double_quote;
-                continue;  // Don't include quotes
+                continue; // Don't include quotes
             }
             ' ' | '\t' if !in_single_quote && !in_double_quote => {
                 // End of argument
@@ -77,7 +77,8 @@ pub fn glob_expand(line: &str) -> Result<String> {
                     current_arg.clear();
                 }
                 // Add space to result if not already present
-                if !result.is_empty() && !result.last().map_or(false, |s: &String| s.contains(' ')) {
+                if !result.is_empty() && !result.last().map_or(false, |s: &String| s.contains(' '))
+                {
                     if let Some(last) = result.last_mut() {
                         last.push(' ');
                     } else {
@@ -215,7 +216,7 @@ fn match_character_set(pattern: &str, pos: &mut usize, ch: char) -> bool {
         return false;
     }
 
-    *pos += 1;  // Skip '['
+    *pos += 1; // Skip '['
 
     // Check for negation
     let negated = if *pos < pattern_bytes.len() && pattern_bytes[*pos] == b'!' {
@@ -240,14 +241,17 @@ fn match_character_set(pattern: &str, pos: &mut usize, ch: char) -> bool {
         let current = pattern_bytes[*pos] as char;
 
         // Check for range (e.g., a-z)
-        if *pos + 2 < pattern_bytes.len() && pattern_bytes[*pos + 1] == b'-' && pattern_bytes[*pos + 2] != b']' {
+        if *pos + 2 < pattern_bytes.len()
+            && pattern_bytes[*pos + 1] == b'-'
+            && pattern_bytes[*pos + 2] != b']'
+        {
             let start = current;
             let end = pattern_bytes[*pos + 2] as char;
 
             if ch >= start && ch <= end {
                 matched = true;
             }
-            *pos += 3;  // Skip start, hyphen, end
+            *pos += 3; // Skip start, hyphen, end
         } else {
             // Single character
             if ch == current {
@@ -316,7 +320,7 @@ fn glob_match_recursive(pattern: &str, pattern_pos: usize, text: &str, text_pos:
             // Check remaining text for / separators
             for i in text_pos..text_bytes.len() {
                 if text_bytes[i] == b'/' {
-                    return false;  // * doesn't match /
+                    return false; // * doesn't match /
                 }
             }
             return true;

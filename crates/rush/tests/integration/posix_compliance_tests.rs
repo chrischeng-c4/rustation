@@ -22,7 +22,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_if_then_else_fi() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("TEST".to_string(), "1".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("TEST".to_string(), "1".to_string())
+            .ok();
         let cmd = "if [ $TEST -eq 1 ]; then echo yes; else echo no; fi";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: if/then/else/fi should execute");
@@ -31,7 +34,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_if_elif_else_fi() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("LEVEL".to_string(), "2".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("LEVEL".to_string(), "2".to_string())
+            .ok();
         let cmd = "if [ $LEVEL -eq 1 ]; then echo one; elif [ $LEVEL -eq 2 ]; then echo two; else echo other; fi";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: if/elif/else/fi should execute");
@@ -40,7 +46,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_multiple_elif_clauses() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "3".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "3".to_string())
+            .ok();
         let cmd = "if [ $x -eq 1 ]; then echo one; elif [ $x -eq 2 ]; then echo two; elif [ $x -eq 3 ]; then echo three; fi";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Multiple elif clauses should work");
@@ -58,7 +67,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_if_with_test_operator() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "5".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "5".to_string())
+            .ok();
         let cmd = "if [ $x -gt 3 ]; then echo greater; fi";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: if with test operators (-gt) should work");
@@ -67,7 +79,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_if_string_comparison() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("str".to_string(), "hello".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("str".to_string(), "hello".to_string())
+            .ok();
         let cmd = "if [ $str = hello ]; then echo match; fi";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: String comparison in if should work");
@@ -76,7 +91,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_if_variable_empty_test() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("var".to_string(), "".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("var".to_string(), "".to_string())
+            .ok();
         let cmd = "if [ -z $var ]; then echo empty; fi";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Empty variable test (-z) should work");
@@ -104,7 +122,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_for_loop_variable_expansion() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("LIST".to_string(), "a b c".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("LIST".to_string(), "a b c".to_string())
+            .ok();
         let cmd = "for item in $LIST; do echo $item; done";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: For loop with variable expansion should work");
@@ -131,7 +152,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_while_loop_basic() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("i".to_string(), "1".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("i".to_string(), "1".to_string())
+            .ok();
         let cmd = "while [ $i -le 3 ]; do echo $i; i=$((i+1)); done";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Basic while loop should execute");
@@ -140,7 +164,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_until_loop_basic() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("n".to_string(), "0".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("n".to_string(), "0".to_string())
+            .ok();
         let cmd = "until [ $n -ge 3 ]; do echo $n; n=$((n+1)); done";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Basic until loop should execute");
@@ -149,7 +176,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_while_loop_break() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("i".to_string(), "1".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("i".to_string(), "1".to_string())
+            .ok();
         let cmd = "while [ $i -le 10 ]; do if [ $i -eq 5 ]; then break; fi; i=$((i+1)); done";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: While loop with break should work");
@@ -158,7 +188,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_while_loop_continue() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("i".to_string(), "1".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("i".to_string(), "1".to_string())
+            .ok();
         let cmd = "while [ $i -le 5 ]; do if [ $i -eq 3 ]; then i=$((i+1)); continue; fi; i=$((i+1)); done";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: While loop with continue should work");
@@ -169,7 +202,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_case_esac_basic() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("VAL".to_string(), "1".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("VAL".to_string(), "1".to_string())
+            .ok();
         let cmd = "case $VAL in 1) echo one;; 2) echo two;; esac";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Basic case/esac should execute");
@@ -178,7 +214,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_case_pattern_matching() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("file".to_string(), "test.txt".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("file".to_string(), "test.txt".to_string())
+            .ok();
         let cmd = "case $file in *.txt) echo text;; *.py) echo python;; esac";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Case pattern matching should work");
@@ -187,7 +226,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_case_default_pattern() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "unknown".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "unknown".to_string())
+            .ok();
         let cmd = "case $x in a) echo a;; b) echo b;; *) echo unknown;; esac";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Case with default pattern (*) should work");
@@ -198,7 +240,8 @@ mod posix_compliance {
     #[test]
     fn test_posix_break_single_loop() {
         let mut executor = CommandExecutor::new();
-        let cmd = "for i in 1 2 3 4 5; do if [ $i -eq 3 ]; then break; fi; echo $i; done; echo after";
+        let cmd =
+            "for i in 1 2 3 4 5; do if [ $i -eq 3 ]; then break; fi; echo $i; done; echo after";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Break statement in single loop should work");
     }
@@ -234,7 +277,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_subshell_variable_isolation() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "outer".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "outer".to_string())
+            .ok();
         let cmd = "( x=inner; echo $x ); echo $x";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Subshell variable isolation should work");
@@ -263,7 +309,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_for_in_if_statement() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("flag".to_string(), "1".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("flag".to_string(), "1".to_string())
+            .ok();
         let cmd = "if [ $flag -eq 1 ]; then for i in a b c; do echo $i; done; fi";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Nested for in if statement should work");
@@ -272,7 +321,10 @@ mod posix_compliance {
     #[test]
     fn test_posix_variable_scoping() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("outer".to_string(), "value".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("outer".to_string(), "value".to_string())
+            .ok();
         let cmd = "inner=local; echo $outer $inner";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Variable assignment and expansion should work");
@@ -281,8 +333,14 @@ mod posix_compliance {
     #[test]
     fn test_posix_arithmetic_expansion() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("a".to_string(), "5".to_string()).ok();
-        executor.variable_manager_mut().set("b".to_string(), "3".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("a".to_string(), "5".to_string())
+            .ok();
+        executor
+            .variable_manager_mut()
+            .set("b".to_string(), "3".to_string())
+            .ok();
         let cmd = "echo $((a + b))";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Arithmetic expansion should work");
@@ -341,9 +399,18 @@ mod posix_compliance {
     #[test]
     fn test_posix_deeply_nested_control_flow() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "1".to_string()).ok();
-        executor.variable_manager_mut().set("y".to_string(), "2".to_string()).ok();
-        executor.variable_manager_mut().set("z".to_string(), "3".to_string()).ok();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "1".to_string())
+            .ok();
+        executor
+            .variable_manager_mut()
+            .set("y".to_string(), "2".to_string())
+            .ok();
+        executor
+            .variable_manager_mut()
+            .set("z".to_string(), "3".to_string())
+            .ok();
         let cmd = "if [ $x -eq 1 ]; then for i in a b; do if [ $i = a ]; then while [ $y -le 2 ]; do echo $i$y; break; done; fi; done; fi";
         let result = executor.execute(cmd);
         assert!(result.is_ok(), "POSIX: Deeply nested control flow should work");

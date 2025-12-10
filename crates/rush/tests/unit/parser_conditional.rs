@@ -59,7 +59,8 @@ mod conditional_parser_tests {
     #[test]
     fn test_parse_if_clause_else_only() {
         // Test parsing when else block is present (US2)
-        let result = conditional::parse_if_clause("if false; then echo fail; else echo fallback; fi");
+        let result =
+            conditional::parse_if_clause("if false; then echo fail; else echo fallback; fi");
         assert!(result.is_ok(), "Should parse with else block");
         let if_block = result.unwrap();
         assert!(if_block.else_block.is_some(), "Should have else block");

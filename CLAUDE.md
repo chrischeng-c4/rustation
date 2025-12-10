@@ -78,6 +78,8 @@ git commit -m "feat(NNN): description"
 - In-memory (ShellOptions struct in CommandExecutor) (036-set-builtin)
 - Rust 1.75+ (edition 2021) + nix 0.29 (signal handling), existing in Cargo.toml (037-trap-builtin)
 - In-memory HashMap in CommandExecutor (trap registry persists for shell session lifetime) (037-trap-builtin)
+- Rust 1.75+ (edition 2021) + regex 1.10 (for `=~` operator and pattern matching) (038-test-command)
+- N/A (stateless command execution, uses existing VariableManager for BASH_REMATCH) (038-test-command)
 
 ## Recent Changes
 - 029-arithmetic-expansion: Added Rust 1.75+ (edition 2021) + No new dependencies (pure Rust implementation)

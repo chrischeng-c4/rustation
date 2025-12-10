@@ -2,8 +2,8 @@
 //!
 //! Implements parsing and execution of shell function definitions and calls.
 
+use super::{Command, CompoundList, ShellFunction};
 use crate::error::{Result, RushError};
-use super::{ShellFunction, CompoundList, Command};
 use crate::executor::execute::CommandExecutor;
 use std::collections::HashMap;
 
@@ -72,7 +72,8 @@ pub fn parse_function_definition(input: &str) -> Result<ShellFunction> {
     let trimmed = input.trim();
 
     // Find ()
-    let paren_pos = trimmed.find("()")
+    let paren_pos = trimmed
+        .find("()")
         .ok_or_else(|| RushError::Syntax("Expected '()' in function definition".to_string()))?;
 
     let name = trimmed[..paren_pos].trim().to_string();
@@ -88,7 +89,8 @@ pub fn parse_function_definition(input: &str) -> Result<ShellFunction> {
     }
 
     // Find closing brace
-    let closing_brace = rest.rfind('}')
+    let closing_brace = rest
+        .rfind('}')
         .ok_or_else(|| RushError::Syntax("Expected '}' in function definition".to_string()))?;
 
     let body_str = &rest[1..closing_brace].trim();
@@ -169,7 +171,10 @@ pub fn call_function(
 }
 
 /// Execute a compound list (sequence of commands)
-fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExecutor) -> Result<i32> {
+fn execute_compound_list(
+    compound_list: &CompoundList,
+    executor: &mut CommandExecutor,
+) -> Result<i32> {
     if compound_list.commands.is_empty() {
         return Ok(0);
     }
@@ -178,7 +183,9 @@ fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExe
 
     for cmd in &compound_list.commands {
         // Build command line from the command
-        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" ")).trim().to_string();
+        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" "))
+            .trim()
+            .to_string();
 
         // Execute the command through the executor
         last_exit_code = executor.execute(&cmd_line)?;

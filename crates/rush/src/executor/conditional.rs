@@ -6,8 +6,8 @@
 //! - Variable expansion: $VAR, ${VAR}
 //! - Command substitution: $(cmd)
 
+use super::{CompoundList, ElifClause, IfBlock};
 use crate::error::{Result, RushError};
-use super::{CompoundList, IfBlock, ElifClause};
 use crate::executor::expansion::expand_variables;
 use crate::executor::substitution::expander::expand_substitutions;
 
@@ -81,21 +81,24 @@ pub fn parse_compound_list(input: &str) -> Result<CompoundList> {
         }
 
         // Check if we start with an if statement
-        if trimmed.starts_with("if") && (trimmed.len() == 2 || trimmed.chars().nth(2).map_or(false, |c| c.is_whitespace())) {
+        if trimmed.starts_with("if")
+            && (trimmed.len() == 2 || trimmed.chars().nth(2).map_or(false, |c| c.is_whitespace()))
+        {
             // Parse the entire if statement
             match parse_if_clause(trimmed) {
                 Ok(_if_block) => {
                     // Found a complete if statement - create a marker command that includes the raw if statement
                     // We'll use the "__if__" program name with the raw statement as the first argument
-                    let fi_pos = find_matching_fi(trimmed)
-                        .ok_or_else(|| RushError::Syntax("Unmatched 'if' in compound list".to_string()))?;
+                    let fi_pos = find_matching_fi(trimmed).ok_or_else(|| {
+                        RushError::Syntax("Unmatched 'if' in compound list".to_string())
+                    })?;
 
                     let if_stmt = trimmed[..fi_pos].to_string();
                     commands.push(super::Command::new("__if__".to_string(), vec![if_stmt]));
 
                     // Skip past this if statement
                     remaining = &trimmed[fi_pos..];
-                },
+                }
                 Err(e) => {
                     // If parsing fails, just return the error
                     return Err(e);
@@ -201,8 +204,9 @@ pub fn parse_if_clause(input: &str) -> Result<IfBlock> {
     let rest = &trimmed[2..].trim_start();
 
     // Find "then" keyword - everything between "if" and "then" is the condition
-    let then_pos = find_keyword_position(rest, "then")
-        .ok_or_else(|| RushError::Syntax("Expected 'then' keyword after if condition".to_string()))?;
+    let then_pos = find_keyword_position(rest, "then").ok_or_else(|| {
+        RushError::Syntax("Expected 'then' keyword after if condition".to_string())
+    })?;
 
     let condition_str = rest[..then_pos].trim();
     if condition_str.is_empty() {
@@ -256,7 +260,9 @@ pub fn parse_if_clause(input: &str) -> Result<IfBlock> {
         }
         _ => {
             // No valid fi found
-            return Err(RushError::Syntax("Expected 'fi' keyword to close if statement".to_string()));
+            return Err(RushError::Syntax(
+                "Expected 'fi' keyword to close if statement".to_string(),
+            ));
         }
     };
 
@@ -268,7 +274,8 @@ pub fn parse_if_clause(input: &str) -> Result<IfBlock> {
     let then_block = parse_compound_list(then_str_clean)?;
 
     // Phase 3: Create if block with raw body string for pipe support
-    let mut if_block = IfBlock::new_with_raw_body(condition, then_block, then_str_clean.to_string());
+    let mut if_block =
+        IfBlock::new_with_raw_body(condition, then_block, then_str_clean.to_string());
 
     // Add elif clauses
     for elif_clause in elif_clauses {
@@ -292,7 +299,11 @@ fn find_keyword_position(s: &str, keyword: &str) -> Option<usize> {
 
     for (i, _) in s_lower.match_indices(&keyword_lower) {
         // Check if this is a complete word (not part of a larger word)
-        let is_start_boundary = i == 0 || s[..i].chars().last().map_or(false, |c| c.is_whitespace() || c == ';' || c == '\n');
+        let is_start_boundary = i == 0
+            || s[..i]
+                .chars()
+                .last()
+                .map_or(false, |c| c.is_whitespace() || c == ';' || c == '\n');
         let is_end_boundary = i + keyword.len() >= s.len() || {
             let next_char = s[i + keyword.len()..].chars().next();
             next_char.map_or(false, |c| c.is_whitespace() || c == ';' || c == '\n' || c == '>')
@@ -371,7 +382,10 @@ fn find_matching_fi_position(s: &str) -> Option<usize> {
 ///
 /// # Returns
 /// The exit code of the executed branch (exit code of last command in the branch)
-pub fn execute_if_block(if_block: &IfBlock, executor: &mut super::execute::CommandExecutor) -> Result<i32> {
+pub fn execute_if_block(
+    if_block: &IfBlock,
+    executor: &mut super::execute::CommandExecutor,
+) -> Result<i32> {
     // Execute condition commands and get exit code
     let condition_exit_code = execute_compound_list(&if_block.condition, executor)?;
 
@@ -422,7 +436,10 @@ pub fn execute_if_block(if_block: &IfBlock, executor: &mut super::execute::Comma
 ///
 /// # Returns
 /// The exit code of the last command in the list, or 0 if the list is empty
-pub fn execute_compound_list(compound_list: &CompoundList, executor: &mut super::execute::CommandExecutor) -> Result<i32> {
+pub fn execute_compound_list(
+    compound_list: &CompoundList,
+    executor: &mut super::execute::CommandExecutor,
+) -> Result<i32> {
     if compound_list.is_empty() {
         return Ok(0);
     }
@@ -439,16 +456,16 @@ pub fn execute_compound_list(compound_list: &CompoundList, executor: &mut super:
         } else {
             // Phase 2: Expand variables in program name
             let expanded_program = expand_variables(&cmd.program, executor);
-            let fully_expanded_program = expand_substitutions(&expanded_program)
-                .unwrap_or_else(|_| expanded_program);
+            let fully_expanded_program =
+                expand_substitutions(&expanded_program).unwrap_or_else(|_| expanded_program);
 
             // Phase 2: Expand variables in arguments
-            let expanded_args: Vec<String> = cmd.args
+            let expanded_args: Vec<String> = cmd
+                .args
                 .iter()
                 .map(|arg| {
                     let var_expanded = expand_variables(arg, executor);
-                    expand_substitutions(&var_expanded)
-                        .unwrap_or_else(|_| var_expanded)
+                    expand_substitutions(&var_expanded).unwrap_or_else(|_| var_expanded)
                 })
                 .collect();
 
@@ -496,14 +513,21 @@ pub fn parse_else_part(input: &str) -> Result<(Vec<ElifClause>, Option<CompoundL
     }
 
     // Look for elif keyword first
-    if trimmed.starts_with("elif") && (trimmed.len() == 4 || trimmed.chars().nth(4).map_or(false, |c| c.is_whitespace() || c == ';')) {
+    if trimmed.starts_with("elif")
+        && (trimmed.len() == 4
+            || trimmed
+                .chars()
+                .nth(4)
+                .map_or(false, |c| c.is_whitespace() || c == ';'))
+    {
         // We have an elif clause - parse it recursively
         // elif condition; then block; elif|else|fi
         let rest = &trimmed[4..].trim_start();
 
         // Find "then" keyword
-        let then_pos = find_keyword_position(rest, "then")
-            .ok_or_else(|| RushError::Syntax("Expected 'then' keyword after elif condition".to_string()))?;
+        let then_pos = find_keyword_position(rest, "then").ok_or_else(|| {
+            RushError::Syntax("Expected 'then' keyword after elif condition".to_string())
+        })?;
 
         let elif_condition_str = rest[..then_pos].trim();
         if elif_condition_str.is_empty() {
@@ -522,7 +546,9 @@ pub fn parse_else_part(input: &str) -> Result<(Vec<ElifClause>, Option<CompoundL
             .iter()
             .filter_map(|&pos| pos)
             .min()
-            .ok_or_else(|| RushError::Syntax("Expected elif/else/fi after elif then block".to_string()))?;
+            .ok_or_else(|| {
+                RushError::Syntax("Expected elif/else/fi after elif then block".to_string())
+            })?;
 
         let elif_then_str = after_then[..then_block_end].trim();
 
@@ -539,18 +565,29 @@ pub fn parse_else_part(input: &str) -> Result<(Vec<ElifClause>, Option<CompoundL
 
         // Prepend this elif clause to the list
         // Phase 3: Use new_with_raw_body for pipe/redirection support
-        let new_elif = ElifClause::new_with_raw_body(elif_condition, elif_then_block, elif_then_str_clean.to_string());
+        let new_elif = ElifClause::new_with_raw_body(
+            elif_condition,
+            elif_then_block,
+            elif_then_str_clean.to_string(),
+        );
         let mut result_clauses = vec![new_elif];
         result_clauses.extend(elif_clauses);
 
         Ok((result_clauses, else_block, else_block_raw))
-    } else if trimmed.starts_with("else") && (trimmed.len() == 4 || trimmed.chars().nth(4).map_or(false, |c| c.is_whitespace() || c == ';')) {
+    } else if trimmed.starts_with("else")
+        && (trimmed.len() == 4
+            || trimmed
+                .chars()
+                .nth(4)
+                .map_or(false, |c| c.is_whitespace() || c == ';'))
+    {
         // We have an else clause - parse until we find "fi"
         let after_else = &trimmed[4..].trim_start();
 
         // Find the "fi" keyword to know where the else block ends
-        let fi_pos = find_keyword_position(after_else, "fi")
-            .ok_or_else(|| RushError::Syntax("Expected 'fi' keyword to close else block".to_string()))?;
+        let fi_pos = find_keyword_position(after_else, "fi").ok_or_else(|| {
+            RushError::Syntax("Expected 'fi' keyword to close else block".to_string())
+        })?;
 
         let else_block_str = after_else[..fi_pos].trim();
 

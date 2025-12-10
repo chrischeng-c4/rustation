@@ -88,10 +88,8 @@ mod tests {
     #[test]
     fn test_bracket_file_test() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["-d".to_string(), "/tmp".to_string(), "]".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["-d".to_string(), "/tmp".to_string(), "]".to_string()]);
         assert_eq!(result.unwrap(), 0);
     }
 }

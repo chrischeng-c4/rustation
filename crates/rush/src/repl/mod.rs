@@ -202,7 +202,10 @@ impl Repl {
     /// Read a complete statement, potentially across multiple lines
     /// Accumulates lines until we have a syntactically complete statement
     /// Also handles heredoc input collection
-    fn read_complete_statement_signal(&mut self, prompt: &RushPrompt) -> std::result::Result<Signal, std::io::Error> {
+    fn read_complete_statement_signal(
+        &mut self,
+        prompt: &RushPrompt,
+    ) -> std::result::Result<Signal, std::io::Error> {
         use crate::executor::parser::{get_pending_heredocs, is_heredoc_complete};
 
         let mut accumulated = String::new();
@@ -247,7 +250,8 @@ impl Repl {
                     }
 
                     // Check if both statement and heredocs are complete
-                    let statement_complete = crate::executor::conditional::is_statement_complete(&accumulated);
+                    let statement_complete =
+                        crate::executor::conditional::is_statement_complete(&accumulated);
                     let heredoc_complete = is_heredoc_complete(&accumulated);
 
                     if statement_complete && heredoc_complete {

@@ -130,19 +130,13 @@ fn split_array_values(input: &str) -> Result<Vec<String>> {
     }
 
     if in_single_quote {
-        return Err(RushError::Execution(
-            "parse_array_values: unclosed single quote".to_string(),
-        ));
+        return Err(RushError::Execution("parse_array_values: unclosed single quote".to_string()));
     }
     if in_double_quote {
-        return Err(RushError::Execution(
-            "parse_array_values: unclosed double quote".to_string(),
-        ));
+        return Err(RushError::Execution("parse_array_values: unclosed double quote".to_string()));
     }
     if escape_next {
-        return Err(RushError::Execution(
-            "parse_array_values: trailing backslash".to_string(),
-        ));
+        return Err(RushError::Execution("parse_array_values: trailing backslash".to_string()));
     }
 
     if !current.is_empty() {

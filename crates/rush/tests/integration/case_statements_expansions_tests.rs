@@ -8,7 +8,10 @@ mod case_statement_expansions {
     #[test]
     fn test_case_statement_with_variable_expansion() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("fruit".to_string(), "apple".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("fruit".to_string(), "apple".to_string())
+            .unwrap();
 
         // Test: case statement with variable in value
         let cmd = "case $fruit in apple) echo red;; banana) echo yellow;; esac";
@@ -20,7 +23,10 @@ mod case_statement_expansions {
     #[test]
     fn test_case_statement_with_braced_variable() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("color".to_string(), "blue".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("color".to_string(), "blue".to_string())
+            .unwrap();
 
         // Test: case statement with braced variable syntax ${VAR}
         let cmd = "case ${color} in red) echo warm;; blue) echo cool;; esac";
@@ -32,7 +38,10 @@ mod case_statement_expansions {
     #[test]
     fn test_case_statement_multiple_patterns_with_variable() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("item".to_string(), "orange".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("item".to_string(), "orange".to_string())
+            .unwrap();
 
         // Test: case statement matching against multiple patterns
         let cmd = "case $item in apple|orange) echo fruit;; potato) echo vegetable;; esac";
@@ -44,19 +53,28 @@ mod case_statement_expansions {
     #[test]
     fn test_case_statement_with_wildcard_patterns() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("filename".to_string(), "test.txt".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("filename".to_string(), "test.txt".to_string())
+            .unwrap();
 
         // Test: case statement with wildcard patterns
         let cmd = "case $filename in *.txt) echo text;; *.md) echo markdown;; esac";
         let result = executor.execute(cmd);
 
-        assert!(result.is_ok(), "Case statement should work with wildcard patterns and variables");
+        assert!(
+            result.is_ok(),
+            "Case statement should work with wildcard patterns and variables"
+        );
     }
 
     #[test]
     fn test_case_statement_default_pattern_with_variable() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("unknown".to_string(), "xyz".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("unknown".to_string(), "xyz".to_string())
+            .unwrap();
 
         // Test: case statement with default pattern
         let cmd = "case $unknown in apple) echo red;; *) echo other;; esac";
@@ -68,7 +86,10 @@ mod case_statement_expansions {
     #[test]
     fn test_case_statement_with_empty_variable() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("empty".to_string(), "".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("empty".to_string(), "".to_string())
+            .unwrap();
 
         // Test: case statement with empty variable expansion
         let cmd = "case $empty in \"\") echo empty;; *) echo nonempty;; esac";
@@ -80,8 +101,14 @@ mod case_statement_expansions {
     #[test]
     fn test_case_statement_with_variable_in_pattern() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("target".to_string(), "txt".to_string()).unwrap();
-        executor.variable_manager_mut().set("file".to_string(), "document.txt".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("target".to_string(), "txt".to_string())
+            .unwrap();
+        executor
+            .variable_manager_mut()
+            .set("file".to_string(), "document.txt".to_string())
+            .unwrap();
 
         // Test: case statement matching variable against pattern
         let cmd = "case $file in *.txt) echo match;; esac";
@@ -93,7 +120,10 @@ mod case_statement_expansions {
     #[test]
     fn test_case_statement_variable_in_commands() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("action".to_string(), "start".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("action".to_string(), "start".to_string())
+            .unwrap();
 
         // Test: case statement with variable used in commands
         let cmd = "case $action in start) state=running;; stop) state=stopped;; esac; echo $state";
@@ -116,7 +146,10 @@ mod case_statement_expansions {
     #[test]
     fn test_case_statement_multiple_matches_first_wins() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("num".to_string(), "5".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("num".to_string(), "5".to_string())
+            .unwrap();
 
         // Test: case statement where multiple patterns could match, first wins
         let cmd = "case $num in 5) echo five;; [0-9]) echo digit;; esac";

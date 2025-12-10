@@ -132,10 +132,8 @@ mod tests {
     #[test]
     fn test_alias_multiple() {
         let mut executor = CommandExecutor::new();
-        let result = execute(
-            &mut executor,
-            &["ll='ls -la'".to_string(), "gs='git status'".to_string()],
-        );
+        let result =
+            execute(&mut executor, &["ll='ls -la'".to_string(), "gs='git status'".to_string()]);
         assert_eq!(result.unwrap(), 0);
         assert_eq!(executor.alias_manager().get("ll"), Some("ls -la"));
         assert_eq!(executor.alias_manager().get("gs"), Some("git status"));

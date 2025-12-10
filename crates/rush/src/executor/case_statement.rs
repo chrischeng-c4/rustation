@@ -6,8 +6,8 @@
 //! - Variable expansion: $VAR, ${VAR}
 //! - Command substitution: $(cmd)
 
+use super::{CasePattern, CaseStatement, Command, CompoundList};
 use crate::error::{Result, RushError};
-use super::{CaseStatement, CasePattern, CompoundList, Command};
 use crate::executor::execute::CommandExecutor;
 use crate::executor::expansion::expand_variables;
 use crate::executor::substitution::expander::expand_substitutions;
@@ -89,8 +89,9 @@ pub fn parse_case_statement(input: &str) -> Result<CaseStatement> {
     let rest_after_in = &rest[in_pos + 2..].trim_start();
 
     // Find "esac" keyword
-    let esac_pos = find_keyword_position(rest_after_in, "esac")
-        .ok_or_else(|| RushError::Syntax("Expected 'esac' keyword in case statement".to_string()))?;
+    let esac_pos = find_keyword_position(rest_after_in, "esac").ok_or_else(|| {
+        RushError::Syntax("Expected 'esac' keyword in case statement".to_string())
+    })?;
 
     let patterns_str = rest_after_in[..esac_pos].trim();
 
@@ -130,7 +131,8 @@ fn parse_case_patterns(input: &str) -> Result<Vec<CasePattern>> {
             let rest_after_paren = &remaining[paren_pos + 1..].trim_start();
 
             // Look for ;; or ;& or ;;& to end this pattern block
-            let (commands_str, separator, commands_end) = extract_pattern_commands(rest_after_paren)?;
+            let (commands_str, separator, commands_end) =
+                extract_pattern_commands(rest_after_paren)?;
 
             let body = if commands_str.trim().is_empty() {
                 CompoundList::new(Vec::new())
@@ -141,8 +143,8 @@ fn parse_case_patterns(input: &str) -> Result<Vec<CasePattern>> {
             patterns.push(CasePattern {
                 patterns: pattern_list,
                 body,
-                fall_through: separator == "&",  // ;& means continue to next pattern
-                test_next: separator == ";&",    // ;;& means test next pattern
+                fall_through: separator == "&", // ;& means continue to next pattern
+                test_next: separator == ";&",   // ;;& means test next pattern
             });
 
             // Move position past this pattern block
@@ -185,7 +187,9 @@ fn extract_pattern_commands(input: &str) -> Result<(&str, &str, usize)> {
         pos += 1;
     }
 
-    Err(RushError::Syntax("Expected ';;' or ';&' to terminate pattern block in case statement".to_string()))
+    Err(RushError::Syntax(
+        "Expected ';;' or ';&' to terminate pattern block in case statement".to_string(),
+    ))
 }
 
 /// Parse a command list from input
@@ -248,7 +252,11 @@ fn find_keyword_position(input: &str, keyword: &str) -> Option<usize> {
         let after = if actual_pos + keyword_lower.len() >= lower.len() {
             true
         } else {
-            !lower.chars().nth(actual_pos + keyword_lower.len()).unwrap().is_alphanumeric()
+            !lower
+                .chars()
+                .nth(actual_pos + keyword_lower.len())
+                .unwrap()
+                .is_alphanumeric()
         };
 
         if before && after {
@@ -333,8 +341,7 @@ pub fn execute_case_statement(
 ) -> Result<i32> {
     // Phase 2: Expand the value (variable expansion and command substitution)
     let var_expanded = expand_variables(&case_stmt.value, executor);
-    let expanded_value = expand_substitutions(&var_expanded)
-        .unwrap_or_else(|_| var_expanded);
+    let expanded_value = expand_substitutions(&var_expanded).unwrap_or_else(|_| var_expanded);
 
     let mut last_exit_code = 0;
     let mut matched = false;
@@ -342,7 +349,10 @@ pub fn execute_case_statement(
     // Check each pattern
     for pattern in &case_stmt.patterns {
         // Check if value matches any of the patterns
-        let matches = pattern.patterns.iter().any(|p| pattern_matches(&expanded_value, p));
+        let matches = pattern
+            .patterns
+            .iter()
+            .any(|p| pattern_matches(&expanded_value, p));
 
         if matches && !matched {
             // Execute this pattern's commands
@@ -365,7 +375,10 @@ pub fn execute_case_statement(
 }
 
 /// Execute a compound list (sequence of commands) and return the exit code of the last command
-fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExecutor) -> Result<i32> {
+fn execute_compound_list(
+    compound_list: &CompoundList,
+    executor: &mut CommandExecutor,
+) -> Result<i32> {
     if compound_list.commands.is_empty() {
         return Ok(0);
     }
@@ -374,7 +387,9 @@ fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExe
 
     for cmd in &compound_list.commands {
         // Build command line from the command
-        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" ")).trim().to_string();
+        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" "))
+            .trim()
+            .to_string();
 
         // Execute the command through the executor
         last_exit_code = executor.execute(&cmd_line)?;

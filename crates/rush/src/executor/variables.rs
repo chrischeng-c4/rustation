@@ -55,11 +55,7 @@ pub struct VariableManager {
 impl VariableManager {
     /// Create a new variable manager
     pub fn new() -> Self {
-        Self {
-            variables: HashMap::new(),
-            exported: HashSet::new(),
-            scope_stack: Vec::new(),
-        }
+        Self { variables: HashMap::new(), exported: HashSet::new(), scope_stack: Vec::new() }
     }
 
     /// Push a new scope (called when entering a function)
@@ -209,7 +205,10 @@ impl VariableManager {
     /// * `Err(_)` - Invalid variable name
     pub fn append_to_array(&mut self, name: String, value: String) -> Result<()> {
         if !Self::is_valid_name(&name) {
-            return Err(RushError::Execution(format!("append_to_array: {}: invalid identifier", name)));
+            return Err(RushError::Execution(format!(
+                "append_to_array: {}: invalid identifier",
+                name
+            )));
         }
 
         match self.variables.get_mut(&name) {
@@ -220,7 +219,8 @@ impl VariableManager {
             Some(Variable::String(s)) => {
                 // Convert string to array: [old_string, new_value]
                 let old_value = s.clone();
-                self.variables.insert(name, Variable::Array(vec![old_value, value]));
+                self.variables
+                    .insert(name, Variable::Array(vec![old_value, value]));
             }
             None => {
                 // Create new array with single element
@@ -483,7 +483,8 @@ mod tests {
     #[test]
     fn test_set_and_get_array() {
         let mut vm = VariableManager::new();
-        vm.set_array("arr".to_string(), vec!["a".to_string(), "b".to_string(), "c".to_string()]).unwrap();
+        vm.set_array("arr".to_string(), vec!["a".to_string(), "b".to_string(), "c".to_string()])
+            .unwrap();
         let arr = vm.get_array("arr").unwrap();
         assert_eq!(arr.len(), 3);
         assert_eq!(arr[0], "a");
@@ -494,7 +495,11 @@ mod tests {
     #[test]
     fn test_array_get_element() {
         let mut vm = VariableManager::new();
-        vm.set_array("arr".to_string(), vec!["zero".to_string(), "one".to_string(), "two".to_string()]).unwrap();
+        vm.set_array(
+            "arr".to_string(),
+            vec!["zero".to_string(), "one".to_string(), "two".to_string()],
+        )
+        .unwrap();
         assert_eq!(vm.array_get("arr", 0), Some("zero"));
         assert_eq!(vm.array_get("arr", 1), Some("one"));
         assert_eq!(vm.array_get("arr", 2), Some("two"));
@@ -504,7 +509,8 @@ mod tests {
     #[test]
     fn test_array_length() {
         let mut vm = VariableManager::new();
-        vm.set_array("arr".to_string(), vec!["a".to_string(), "b".to_string()]).unwrap();
+        vm.set_array("arr".to_string(), vec!["a".to_string(), "b".to_string()])
+            .unwrap();
         assert_eq!(vm.array_length("arr"), Some(2));
     }
 
@@ -517,9 +523,12 @@ mod tests {
     #[test]
     fn test_append_to_array() {
         let mut vm = VariableManager::new();
-        vm.set_array("arr".to_string(), vec!["a".to_string()]).unwrap();
-        vm.append_to_array("arr".to_string(), "b".to_string()).unwrap();
-        vm.append_to_array("arr".to_string(), "c".to_string()).unwrap();
+        vm.set_array("arr".to_string(), vec!["a".to_string()])
+            .unwrap();
+        vm.append_to_array("arr".to_string(), "b".to_string())
+            .unwrap();
+        vm.append_to_array("arr".to_string(), "c".to_string())
+            .unwrap();
 
         let arr = vm.get_array("arr").unwrap();
         assert_eq!(arr.len(), 3);
@@ -531,7 +540,8 @@ mod tests {
     #[test]
     fn test_append_to_new_array() {
         let mut vm = VariableManager::new();
-        vm.append_to_array("new_arr".to_string(), "first".to_string()).unwrap();
+        vm.append_to_array("new_arr".to_string(), "first".to_string())
+            .unwrap();
         assert_eq!(vm.array_length("new_arr"), Some(1));
         assert_eq!(vm.array_get("new_arr", 0), Some("first"));
     }
@@ -540,7 +550,8 @@ mod tests {
     fn test_append_to_string_converts_to_array() {
         let mut vm = VariableManager::new();
         vm.set("var".to_string(), "original".to_string()).unwrap();
-        vm.append_to_array("var".to_string(), "appended".to_string()).unwrap();
+        vm.append_to_array("var".to_string(), "appended".to_string())
+            .unwrap();
 
         // Should be an array now
         let arr = vm.get_array("var").unwrap();
@@ -554,7 +565,8 @@ mod tests {
     fn test_get_type() {
         let mut vm = VariableManager::new();
         vm.set("str_var".to_string(), "value".to_string()).unwrap();
-        vm.set_array("arr_var".to_string(), vec!["a".to_string()]).unwrap();
+        vm.set_array("arr_var".to_string(), vec!["a".to_string()])
+            .unwrap();
 
         assert_eq!(vm.get_type("str_var"), Some("string"));
         assert_eq!(vm.get_type("arr_var"), Some("array"));

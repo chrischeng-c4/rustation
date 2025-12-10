@@ -7,28 +7,28 @@ use rush::{Config, Repl};
 // Module for control flow integration tests (Features 017-026)
 // and heredocs (Feature 027) and here-strings (Feature 028)
 mod integration {
-    pub mod conditionals_tests;
+    pub mod arithmetic_expansion_tests;
+    pub mod case_statements_command_substitution_tests;
+    pub mod case_statements_expansions_tests;
+    pub mod case_statements_globbing_tests;
     pub mod conditionals_expansions_tests;
     pub mod conditionals_pipes_tests;
     pub mod conditionals_redirections_tests;
-    pub mod for_loops_expansions_tests;
+    pub mod conditionals_tests;
+    pub mod edge_cases_tests;
     pub mod for_loops_command_substitution_tests;
+    pub mod for_loops_expansions_tests;
     pub mod for_loops_globbing_tests;
     pub mod for_loops_pipes_tests;
     pub mod for_loops_redirections_tests;
-    pub mod while_loops_expansions_tests;
-    pub mod while_loops_command_substitution_tests;
-    pub mod while_loops_pipes_tests;
-    pub mod while_loops_redirections_tests;
-    pub mod case_statements_expansions_tests;
-    pub mod case_statements_command_substitution_tests;
-    pub mod case_statements_globbing_tests;
+    pub mod here_strings_tests;
+    pub mod heredocs_tests;
     pub mod nested_structures_tests;
     pub mod posix_compliance_tests;
-    pub mod edge_cases_tests;
-    pub mod heredocs_tests;
-    pub mod here_strings_tests;
-    pub mod arithmetic_expansion_tests;
+    pub mod while_loops_command_substitution_tests;
+    pub mod while_loops_expansions_tests;
+    pub mod while_loops_pipes_tests;
+    pub mod while_loops_redirections_tests;
 }
 
 #[test]
@@ -651,7 +651,8 @@ fn test_array_out_of_bounds_access() {
     let mut executor = CommandExecutor::new();
 
     // Create a small array
-    executor.variable_manager_mut()
+    executor
+        .variable_manager_mut()
         .set_array("arr".to_string(), vec!["a".to_string(), "b".to_string()])
         .unwrap();
 
@@ -693,8 +694,12 @@ fn test_array_basic_expansion() {
     let mut executor = CommandExecutor::new();
 
     // Create array and test basic expansion
-    executor.variable_manager_mut()
-        .set_array("colors".to_string(), vec!["red".to_string(), "green".to_string(), "blue".to_string()])
+    executor
+        .variable_manager_mut()
+        .set_array(
+            "colors".to_string(),
+            vec!["red".to_string(), "green".to_string(), "blue".to_string()],
+        )
         .unwrap();
 
     // Direct index access works
@@ -706,8 +711,12 @@ fn test_array_basic_expansion() {
 fn test_array_all_elements_expansion() {
     let mut executor = CommandExecutor::new();
 
-    executor.variable_manager_mut()
-        .set_array("items".to_string(), vec!["one".to_string(), "two".to_string(), "three".to_string()])
+    executor
+        .variable_manager_mut()
+        .set_array(
+            "items".to_string(),
+            vec!["one".to_string(), "two".to_string(), "three".to_string()],
+        )
         .unwrap();
 
     // ${arr[@]} expansion
@@ -723,8 +732,17 @@ fn test_array_all_elements_expansion() {
 fn test_array_length_expansion() {
     let mut executor = CommandExecutor::new();
 
-    executor.variable_manager_mut()
-        .set_array("nums".to_string(), vec!["1".to_string(), "2".to_string(), "3".to_string(), "4".to_string()])
+    executor
+        .variable_manager_mut()
+        .set_array(
+            "nums".to_string(),
+            vec![
+                "1".to_string(),
+                "2".to_string(),
+                "3".to_string(),
+                "4".to_string(),
+            ],
+        )
         .unwrap();
 
     // Array length should be 4
@@ -737,7 +755,8 @@ fn test_array_empty_access() {
     let mut executor = CommandExecutor::new();
 
     // Create empty array
-    executor.variable_manager_mut()
+    executor
+        .variable_manager_mut()
         .set_array("empty".to_string(), vec![])
         .unwrap();
 
@@ -764,12 +783,16 @@ fn test_array_with_special_characters() {
     let mut executor = CommandExecutor::new();
 
     // Array with special characters in values
-    executor.variable_manager_mut()
-        .set_array("special".to_string(), vec![
-            "hello world".to_string(),
-            "foo\tbar".to_string(),
-            "a=b".to_string(),
-        ])
+    executor
+        .variable_manager_mut()
+        .set_array(
+            "special".to_string(),
+            vec![
+                "hello world".to_string(),
+                "foo\tbar".to_string(),
+                "a=b".to_string(),
+            ],
+        )
         .unwrap();
 
     // Should be able to access without error
@@ -782,12 +805,14 @@ fn test_array_append_operation() {
     let mut executor = CommandExecutor::new();
 
     // Create initial array
-    executor.variable_manager_mut()
+    executor
+        .variable_manager_mut()
         .set_array("arr".to_string(), vec!["a".to_string(), "b".to_string()])
         .unwrap();
 
     // Append to array
-    executor.variable_manager_mut()
+    executor
+        .variable_manager_mut()
         .append_to_array("arr".to_string(), "c".to_string())
         .unwrap();
 
@@ -806,7 +831,8 @@ fn test_array_large_index() {
 
     // Accessing large index on small array returns empty
     let mut executor = CommandExecutor::new();
-    executor.variable_manager_mut()
+    executor
+        .variable_manager_mut()
         .set_array("small".to_string(), vec!["only".to_string()])
         .unwrap();
 

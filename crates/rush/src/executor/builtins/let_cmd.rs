@@ -92,7 +92,10 @@ mod tests {
     #[test]
     fn test_let_increment() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "5".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "5".to_string())
+            .unwrap();
         let result = execute(&mut executor, &["x++".to_string()]);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 0); // 5 (old value) is non-zero
@@ -118,7 +121,10 @@ mod tests {
     #[test]
     fn test_let_compound_assignment() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "10".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "10".to_string())
+            .unwrap();
         let result = execute(&mut executor, &["x+=5".to_string()]);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 0);

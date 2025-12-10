@@ -83,7 +83,10 @@ mod tests {
     fn test_unalias_multiple() {
         let mut executor = CommandExecutor::new();
         executor.alias_manager_mut().add("ll", "ls -la").unwrap();
-        executor.alias_manager_mut().add("gs", "git status").unwrap();
+        executor
+            .alias_manager_mut()
+            .add("gs", "git status")
+            .unwrap();
         let result = execute(&mut executor, &["ll".to_string(), "gs".to_string()]);
         assert_eq!(result.unwrap(), 0);
         assert!(executor.alias_manager().get("ll").is_none());
@@ -94,7 +97,10 @@ mod tests {
     fn test_unalias_all() {
         let mut executor = CommandExecutor::new();
         executor.alias_manager_mut().add("ll", "ls -la").unwrap();
-        executor.alias_manager_mut().add("gs", "git status").unwrap();
+        executor
+            .alias_manager_mut()
+            .add("gs", "git status")
+            .unwrap();
         let result = execute(&mut executor, &["-a".to_string()]);
         assert_eq!(result.unwrap(), 0);
         assert!(executor.alias_manager().is_empty());
@@ -104,10 +110,7 @@ mod tests {
     fn test_unalias_mixed_results() {
         let mut executor = CommandExecutor::new();
         executor.alias_manager_mut().add("ll", "ls -la").unwrap();
-        let result = execute(
-            &mut executor,
-            &["ll".to_string(), "nonexistent".to_string()],
-        );
+        let result = execute(&mut executor, &["ll".to_string(), "nonexistent".to_string()]);
         assert_eq!(result.unwrap(), 1); // One failed
         assert!(executor.alias_manager().get("ll").is_none()); // But ll was removed
     }

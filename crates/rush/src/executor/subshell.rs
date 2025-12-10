@@ -2,8 +2,8 @@
 //!
 //! Implements subshell execution for command groups in parentheses.
 
+use super::{Command, CompoundList, Subshell};
 use crate::error::{Result, RushError};
-use super::{Subshell, CompoundList, Command};
 use crate::executor::execute::CommandExecutor;
 
 /// Check if a statement is a subshell (starts with parenthesis)
@@ -82,17 +82,17 @@ fn parse_simple_command(input: &str) -> Result<Command> {
 }
 
 /// Execute a subshell
-pub fn execute_subshell(
-    subshell: &Subshell,
-    executor: &mut CommandExecutor,
-) -> Result<i32> {
+pub fn execute_subshell(subshell: &Subshell, executor: &mut CommandExecutor) -> Result<i32> {
     // In a simplified implementation, execute in current shell
     // In a full implementation, this would fork a new process
     execute_compound_list(&subshell.body, executor)
 }
 
 /// Execute a compound list (sequence of commands)
-fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExecutor) -> Result<i32> {
+fn execute_compound_list(
+    compound_list: &CompoundList,
+    executor: &mut CommandExecutor,
+) -> Result<i32> {
     if compound_list.commands.is_empty() {
         return Ok(0);
     }
@@ -101,7 +101,9 @@ fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExe
 
     for cmd in &compound_list.commands {
         // Build command line from the command
-        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" ")).trim().to_string();
+        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" "))
+            .trim()
+            .to_string();
 
         // Execute the command through the executor
         last_exit_code = executor.execute(&cmd_line)?;

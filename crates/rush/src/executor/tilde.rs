@@ -132,8 +132,8 @@ fn expand_word(word: &str) -> String {
                     let mut prefix_end = i + 1;
                     while prefix_end < chars.len() {
                         match chars[prefix_end] {
-                            '/' => break,  // Slash ends the prefix but is part of remainder
-                            '"' | '\'' | ' ' | '\t' | '\\' => break,  // Special chars end the prefix
+                            '/' => break, // Slash ends the prefix but is part of remainder
+                            '"' | '\'' | ' ' | '\t' | '\\' => break, // Special chars end the prefix
                             _ => prefix_end += 1,
                         }
                     }
@@ -143,7 +143,9 @@ fn expand_word(word: &str) -> String {
                     let remainder_start = if prefix_end < chars.len() && chars[prefix_end] == '/' {
                         // Include the slash and everything after it
                         let mut rem_end = prefix_end;
-                        while rem_end < chars.len() && !matches!(chars[rem_end], '"' | '\'' | ' ' | '\t' | '\\') {
+                        while rem_end < chars.len()
+                            && !matches!(chars[rem_end], '"' | '\'' | ' ' | '\t' | '\\')
+                        {
                             rem_end += 1;
                         }
                         (prefix_end, rem_end)
@@ -152,7 +154,8 @@ fn expand_word(word: &str) -> String {
                     };
 
                     let full_tilde_expr = if remainder_start.1 > remainder_start.0 {
-                        let rem: String = chars[remainder_start.0..remainder_start.1].iter().collect();
+                        let rem: String =
+                            chars[remainder_start.0..remainder_start.1].iter().collect();
                         format!("{}{}", tilde_part, rem)
                     } else {
                         tilde_part

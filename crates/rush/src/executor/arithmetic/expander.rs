@@ -124,10 +124,7 @@ mod tests {
 
     #[test]
     fn test_multiple_expansions() {
-        assert_eq!(
-            expand("$((1 + 1)) and $((2 + 2))").unwrap(),
-            "2 and 4"
-        );
+        assert_eq!(expand("$((1 + 1)) and $((2 + 2))").unwrap(), "2 and 4");
     }
 
     #[test]

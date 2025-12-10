@@ -2,8 +2,8 @@
 //!
 //! Implements command group execution for curly-brace delimited command sequences.
 
+use super::{Command, CommandGroup, CompoundList};
 use crate::error::{Result, RushError};
-use super::{CommandGroup, CompoundList, Command};
 use crate::executor::execute::CommandExecutor;
 
 /// Check if a statement is a command group (starts with opening brace)
@@ -86,16 +86,16 @@ fn parse_simple_command(input: &str) -> Result<Command> {
 }
 
 /// Execute a command group
-pub fn execute_command_group(
-    group: &CommandGroup,
-    executor: &mut CommandExecutor,
-) -> Result<i32> {
+pub fn execute_command_group(group: &CommandGroup, executor: &mut CommandExecutor) -> Result<i32> {
     // Execute commands in current shell (unlike subshells)
     execute_compound_list(&group.body, executor)
 }
 
 /// Execute a compound list (sequence of commands)
-fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExecutor) -> Result<i32> {
+fn execute_compound_list(
+    compound_list: &CompoundList,
+    executor: &mut CommandExecutor,
+) -> Result<i32> {
     if compound_list.commands.is_empty() {
         return Ok(0);
     }
@@ -104,7 +104,9 @@ fn execute_compound_list(compound_list: &CompoundList, executor: &mut CommandExe
 
     for cmd in &compound_list.commands {
         // Build command line from the command
-        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" ")).trim().to_string();
+        let cmd_line = format!("{} {}", cmd.program, cmd.args.join(" "))
+            .trim()
+            .to_string();
 
         // Execute the command through the executor
         last_exit_code = executor.execute(&cmd_line)?;

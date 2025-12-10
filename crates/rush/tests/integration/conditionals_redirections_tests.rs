@@ -20,9 +20,13 @@ mod conditionals_redirections {
     #[test]
     fn test_if_then_else_with_redirections_syntax() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("x".to_string(), "1".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("x".to_string(), "1".to_string())
+            .unwrap();
 
-        let cmd = "if [ $x -eq 1 ]; then echo first; else echo second; fi > /tmp/if_else_output.txt";
+        let cmd =
+            "if [ $x -eq 1 ]; then echo first; else echo second; fi > /tmp/if_else_output.txt";
         let result = executor.execute(cmd);
 
         assert!(result.is_ok(), "If/else with output redirection should parse successfully");
@@ -31,7 +35,10 @@ mod conditionals_redirections {
     #[test]
     fn test_if_elif_else_with_redirections_syntax() {
         let mut executor = CommandExecutor::new();
-        executor.variable_manager_mut().set("level".to_string(), "2".to_string()).unwrap();
+        executor
+            .variable_manager_mut()
+            .set("level".to_string(), "2".to_string())
+            .unwrap();
 
         let cmd = "if [ $level -eq 1 ]; then echo one; elif [ $level -eq 2 ]; then echo two; else echo other; fi > /tmp/if_elif_else_output.txt";
         let result = executor.execute(cmd);
@@ -56,7 +63,10 @@ mod conditionals_redirections {
         let cmd = "if true; then echo test | cat; fi > /tmp/if_pipe_output.txt";
         let result = executor.execute(cmd);
 
-        assert!(result.is_ok(), "If statement with pipe and redirection should parse successfully");
+        assert!(
+            result.is_ok(),
+            "If statement with pipe and redirection should parse successfully"
+        );
     }
 
     #[test]
@@ -76,7 +86,10 @@ mod conditionals_redirections {
         let cmd = "if true; then if true; then echo nested; fi; fi > /tmp/nested_if_output.txt";
         let result = executor.execute(cmd);
 
-        assert!(result.is_ok(), "Nested if statements with redirection should parse successfully");
+        assert!(
+            result.is_ok(),
+            "Nested if statements with redirection should parse successfully"
+        );
     }
 
     #[test]
@@ -86,6 +99,9 @@ mod conditionals_redirections {
         let cmd = "if true; then echo data 2>&1; fi > /tmp/combined.txt";
         let result = executor.execute(cmd);
 
-        assert!(result.is_ok(), "If statement with multiple redirections should parse successfully");
+        assert!(
+            result.is_ok(),
+            "If statement with multiple redirections should parse successfully"
+        );
     }
 }
