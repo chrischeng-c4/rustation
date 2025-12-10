@@ -74,6 +74,8 @@ git commit -m "feat(NNN): description"
 - Rust 1.75+ (edition 2021) + reedline (already in project), std::io for terminal I/O (030-read-builtin)
 - N/A (variables stored in existing VariableManager) (030-read-builtin)
 - Rust 1.75+ (edition 2021) + None (pure Rust implementation) (034-brace-expansion)
+- Rust 1.75+ (edition 2021) + regex crate (for `=~` operator), nix crate (for file test operators) (038-test-command)
+- N/A (stateless command execution) (038-test-command)
 
 ## Recent Changes
 - 029-arithmetic-expansion: Added Rust 1.75+ (edition 2021) + No new dependencies (pure Rust implementation)

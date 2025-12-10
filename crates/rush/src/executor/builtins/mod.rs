@@ -18,6 +18,7 @@ pub mod pwd;
 pub mod read;
 pub mod source;
 pub mod test;
+pub mod test_extended;
 pub mod true_cmd;
 pub mod type_cmd;
 pub mod unalias;
@@ -45,6 +46,7 @@ pub fn execute_builtin(
         "false" => Some(false_cmd::execute(executor, args)),
         "test" => Some(test::execute(executor, args)),
         "[" => Some(bracket::execute(executor, args)),
+        "[[" => Some(test_extended::execute(executor, args)),
         "printf" => Some(printf::execute(executor, args)),
         "pwd" => Some(pwd::execute(executor, args)),
         "type" => Some(type_cmd::execute(executor, args)),
