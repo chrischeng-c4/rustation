@@ -1,0 +1,60 @@
+[package]
+name = "rscli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Rust Station development toolkit - CLI for developing rush shell"
+repository = "https://github.com/chrischeng-c4/rust-station"
+keywords = ["cli", "development", "testing", "shell"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "rscli"
+path = "src/main.rs"
+
+[lib]
+name = "rscli"
+path = "src/lib.rs"
+
+[dependencies]
+# Inter-crate dependencies
+rscli-core = { workspace = true }
+rscli-tui = { workspace = true }
+
+# CLI argument parsing
+clap = { version = "4.5", features = ["derive", "cargo"] }
+
+# Async runtime
+tokio = { workspace = true, features = ["full", "process"] }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# Configuration parsing
+toml = "0.8"
+
+# TUI framework (temporary - will be provided by rscli-tui after migration)
+ratatui = "0.29"
+crossterm = "0.28"
+arboard = "3.4"
+
+# Terminal output
+colored = "2.1"
+comfy-table = "7.1"
+
+# System utilities
+which = "8.0"
+glob = "0.3"
+
+# Async trait support
+async-trait = "0.1"
+
+[dev-dependencies]
+# Temporary files for testing
+tempfile = "3.8"

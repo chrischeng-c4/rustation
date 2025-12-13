@@ -1,0 +1,27 @@
+[package]
+name = "rscli-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "TUI interface for rscli development toolkit"
+
+[lib]
+name = "rscli_tui"
+path = "src/lib.rs"
+
+[dependencies]
+# Inter-crate dependencies
+rscli-core = { workspace = true }
+
+# Workspace dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+anyhow = { workspace = true }
+
+# TUI framework
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Clipboard support
+arboard = "3.4"

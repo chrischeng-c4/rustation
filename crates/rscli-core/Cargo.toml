@@ -1,0 +1,32 @@
+[package]
+name = "rscli-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Core domain logic for rscli development toolkit"
+
+[lib]
+name = "rscli_core"
+path = "src/lib.rs"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# Crate-specific dependencies
+dirs = "5.0"                    # XDG paths
+validator = { version = "0.18", features = ["derive"] }  # Config validation
+which = "8.0"                   # Command detection
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }  # HTTP health checks
+glob = "0.3"                    # File pattern matching
+async-trait = "0.1"             # Async trait support
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tempfile = "3.8"
