@@ -3,10 +3,23 @@
 use clap::Parser;
 use std::path::PathBuf;
 
+/// Full version string including git hash, date, and build profile
+/// Example: "0.35.0 (8ca3000, 2024-12-14) [debug]"
+const VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("GIT_HASH"),
+    ", ",
+    env!("BUILD_DATE"),
+    ") [",
+    env!("BUILD_PROFILE"),
+    "]"
+);
+
 /// rush - A modern, fast, fish-like shell written in Rust
 #[derive(Parser, Debug)]
 #[command(name = "rush")]
-#[command(version)]
+#[command(version = VERSION)]
 #[command(about = "A modern, fast, fish-like shell", long_about = None)]
 #[command(author)]
 pub struct Cli {

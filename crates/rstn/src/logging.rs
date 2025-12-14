@@ -277,7 +277,11 @@ mod tests {
     fn test_settings_defaults_enable_logging() {
         let settings = Settings::default();
         assert!(settings.logging_enabled);
-        assert_eq!(settings.log_level, "debug");
+        // Debug builds default to "trace", release builds to "info"
+        #[cfg(debug_assertions)]
+        assert_eq!(settings.log_level, "trace");
+        #[cfg(not(debug_assertions))]
+        assert_eq!(settings.log_level, "info");
         assert!(!settings.log_to_console);
     }
 }

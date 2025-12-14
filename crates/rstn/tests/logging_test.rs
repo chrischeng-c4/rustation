@@ -29,8 +29,13 @@ fn test_settings_default_values() {
     // Logging should be enabled by default for development
     assert!(settings.logging_enabled);
 
-    // Default log level should be debug
-    assert_eq!(settings.log_level, "debug");
+    // Default log level depends on build profile:
+    // - Debug builds: "trace" for maximum verbosity during development
+    // - Release builds: "info" for quieter production output
+    #[cfg(debug_assertions)]
+    assert_eq!(settings.log_level, "trace");
+    #[cfg(not(debug_assertions))]
+    assert_eq!(settings.log_level, "info");
 
     // Console logging should be off by default
     assert!(!settings.log_to_console);
@@ -44,7 +49,10 @@ fn test_settings_load_returns_defaults_when_no_file() {
 
     // Should have default values
     assert!(settings.logging_enabled);
-    assert_eq!(settings.log_level, "debug");
+    #[cfg(debug_assertions)]
+    assert_eq!(settings.log_level, "trace");
+    #[cfg(not(debug_assertions))]
+    assert_eq!(settings.log_level, "info");
 }
 
 #[test]

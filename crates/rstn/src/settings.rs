@@ -51,7 +51,15 @@ fn default_logging_enabled() -> bool {
 }
 
 fn default_log_level() -> String {
-    "debug".to_string() // Debug level for development
+    // Use trace logging for debug builds, info for release builds
+    #[cfg(debug_assertions)]
+    {
+        "trace".to_string()
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        "info".to_string()
+    }
 }
 
 fn default_log_to_console() -> bool {

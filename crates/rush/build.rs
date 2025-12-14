@@ -1,4 +1,4 @@
-//! Build script to capture git hash and build date at compile time
+//! Build script to capture git hash, build date, and profile at compile time
 
 use std::process::Command;
 
