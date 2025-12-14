@@ -249,6 +249,14 @@ impl App {
                 self.command_runner.start_command(&name, &args);
                 // Commands now run inline - no view switch needed
 
+                // Log shell command execution in worktree view
+                let cmd_str = if args.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{} {}", name, args.join(" "))
+                };
+                self.worktree_view.log_shell_command(&cmd_str, 0);
+
                 // Spawn the actual command
                 let sender = self.event_sender.clone();
                 let cmd_name = name.clone();
@@ -289,6 +297,8 @@ impl App {
                 // Start inline output in WorktreeView
                 if let Some(phase_enum) = spec_phase {
                     self.worktree_view.start_command(phase_enum, Some(&command));
+                    // Log the slash command execution
+                    self.worktree_view.log_slash_command(&command);
                 }
 
                 let max_turns = options.max_turns;
@@ -931,15 +941,14 @@ impl App {
             }
         } else {
             // No status block - use heuristic detection
-            // Check if the last non-empty output line looks like a question
-            let needs_input = self
-                .worktree_view
-                .output_lines
+            // Check if the last non-empty log entry looks like a question
+            let entries: Vec<_> = self.worktree_view.log_buffer.entries().collect();
+            let needs_input = entries
                 .iter()
                 .rev()
-                .find(|line| !line.trim().is_empty())
-                .map(|line| {
-                    let text = line.trim().to_lowercase();
+                .find(|entry| !entry.content.trim().is_empty())
+                .map(|entry| {
+                    let text = entry.content.trim().to_lowercase();
                     text.ends_with('?')
                         || text.contains("please describe")
                         || text.contains("what feature")

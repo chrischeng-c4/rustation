@@ -8,12 +8,13 @@
 //! - Showing test results for the current feature
 
 use crate::tui::event::WorktreeType;
+use crate::tui::logging::{FileChangeTracker, LogBuffer, LogCategory, LogEntry};
 use crate::tui::views::{AutoFlowState, ClaudeOptions, PhaseStatus, SpecPhase, View, ViewAction};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Tabs, Wrap};
 use ratatui::Frame;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -126,8 +127,10 @@ pub struct WorktreeView {
     // Auto-flow state for sequential phase execution
     pub auto_flow: AutoFlowState,
 
-    // Command output display
-    pub output_lines: Vec<String>,
+    // Command output display (using LogBuffer from Phase 1)
+    pub log_buffer: LogBuffer,
+    pub file_tracker: FileChangeTracker,
+    pub last_file_check_tick: u64,
     pub output_scroll: usize,
     pub is_running: bool,
     pub running_phase: Option<String>,
@@ -190,7 +193,9 @@ impl WorktreeView {
             tick_count: 0,
             last_refresh: 0,
             auto_flow: AutoFlowState::new(),
-            output_lines: Vec::new(),
+            log_buffer: LogBuffer::new(),
+            file_tracker: FileChangeTracker::new(),
+            last_file_check_tick: 0,
             output_scroll: 0,
             is_running: false,
             running_phase: None,
@@ -547,7 +552,7 @@ impl WorktreeView {
     pub fn start_command(&mut self, phase: SpecPhase, session_id: Option<&str>) {
         self.is_running = true;
         self.running_phase = Some(phase.name().to_string());
-        self.output_lines.clear();
+        // Note: We keep log_buffer for history, don't clear it
         self.output_scroll = 0;
         self.active_session_id = session_id.map(|s| s.to_string());
     }
@@ -559,18 +564,12 @@ impl WorktreeView {
 
     /// Check if output is being shown
     pub fn is_showing_output(&self) -> bool {
-        !self.output_lines.is_empty() || self.is_running
+        !self.log_buffer.is_empty() || self.is_running
     }
 
-    /// Add output line
+    /// Add output line (logs it with ClaudeStream category)
     pub fn add_output(&mut self, line: String) {
-        self.output_lines.push(line);
-
-        // Auto-scroll to bottom when new lines are added
-        // Calculate visible height (assuming ~20 lines visible in 30% of panel)
-        if self.output_lines.len() > 20 {
-            self.output_scroll = self.output_lines.len().saturating_sub(20);
-        }
+        self.log(LogCategory::ClaudeStream, line);
     }
 
     /// Mark command as done
@@ -594,9 +593,47 @@ impl WorktreeView {
         self.progress_message = None;
     }
 
-    /// Clear output
+    /// Log a message with timestamp and category
+    pub fn log(&mut self, category: LogCategory, content: String) {
+        let entry = LogEntry::new(category, content);
+        self.log_buffer.push(entry);
+
+        // Auto-scroll to bottom on new entries
+        let total_lines = self.log_buffer.len();
+        if total_lines > 20 {
+            self.output_scroll = total_lines.saturating_sub(20);
+        }
+    }
+
+    /// Log slash command execution
+    pub fn log_slash_command(&mut self, command: &str) {
+        self.log(LogCategory::SlashCommand, command.to_string());
+        self.log(LogCategory::System, "─".repeat(60)); // Separator
+    }
+
+    /// Log file change
+    pub fn log_file_change(&mut self, path: &Path) {
+        let filename = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+        self.log(
+            LogCategory::FileChange,
+            format!("File updated: {}", filename)
+        );
+    }
+
+    /// Log shell command
+    pub fn log_shell_command(&mut self, script: &str, exit_code: i32) {
+        self.log(
+            LogCategory::ShellOutput,
+            format!("{} completed (exit: {})", script, exit_code)
+        );
+    }
+
+    /// Clear output (note: this clears the log buffer)
     pub fn clear_output(&mut self) {
-        self.output_lines.clear();
+        // Note: We keep the log buffer for history
+        // This method is kept for backward compatibility but doesn't clear logs
         self.output_scroll = 0;
     }
 
@@ -767,15 +804,50 @@ impl WorktreeView {
     fn render_content(&self, frame: &mut Frame, area: Rect) {
         let is_focused = self.focus == WorktreeFocus::Content;
 
-        let title = if let Some(ref info) = self.feature_info {
-            format!(" {} - Feature #{} ", self.content_type.name(), info.number)
-        } else {
-            format!(" {} ", self.content_type.name())
+        // Split area: Tabs (3 lines) + Content (remaining)
+        let sections = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),  // Tab bar with border
+                Constraint::Min(0),     // Content area
+            ])
+            .split(area);
+
+        // Determine selected tab index
+        let selected_idx = match self.content_type {
+            ContentType::Spec => 0,
+            ContentType::Plan => 1,
+            ContentType::Tasks => 2,
         };
 
-        let block = Block::default()
+        // Render tab bar
+        let tab_titles = vec!["Spec", "Plan", "Tasks"];
+        let tab_title = if let Some(ref info) = self.feature_info {
+            format!(" Content - Feature #{} ", info.number)
+        } else {
+            " Content ".to_string()
+        };
+
+        let tabs = Tabs::new(tab_titles)
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .title(tab_title)
+                .border_style(if is_focused {
+                    Style::default().fg(Color::Yellow)
+                } else {
+                    Style::default()
+                }))
+            .select(selected_idx)
+            .style(Style::default().fg(Color::White))
+            .highlight_style(Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD));
+
+        frame.render_widget(tabs, sections[0]);
+
+        // Render content area
+        let content_block = Block::default()
             .borders(Borders::ALL)
-            .title(title)
             .border_style(if is_focused {
                 Style::default().fg(Color::Yellow)
             } else {
@@ -786,7 +858,7 @@ impl WorktreeView {
             content
                 .lines()
                 .skip(self.content_scroll)
-                .take(area.height.saturating_sub(2) as usize)
+                .take(sections[1].height.saturating_sub(2) as usize)
                 .map(|line| Line::from(line.to_string()))
                 .collect()
         } else if self.feature_info.is_some() {
@@ -798,7 +870,7 @@ impl WorktreeView {
                 )),
                 Line::from(""),
                 Line::from(Span::styled(
-                    "Press 's' to switch to another content type",
+                    "Press ← → or h/l to switch tabs",
                     Style::default().fg(Color::DarkGray),
                 )),
             ]
@@ -826,13 +898,13 @@ impl WorktreeView {
         };
 
         let paragraph = Paragraph::new(content_lines)
-            .block(block)
+            .block(content_block)
             .wrap(Wrap { trim: false });
 
-        frame.render_widget(paragraph, area);
+        frame.render_widget(paragraph, sections[1]);
     }
 
-    /// Render output panel (bottom-right section)
+    /// Render output panel (bottom-right section) with comprehensive logging
     fn render_output(&self, frame: &mut Frame, area: Rect) {
         // Dynamic title based on running state
         let title = if self.is_running {
@@ -844,7 +916,7 @@ impl WorktreeView {
                 format!(" Output {} Running... ", spinner_char)
             }
         } else {
-            " Output ".to_string()
+            format!(" Output (1000 line history) ")
         };
 
         let block = Block::default()
@@ -852,8 +924,8 @@ impl WorktreeView {
             .title(title)
             .border_style(Style::default());
 
-        // Build output lines with styling
-        let lines: Vec<Line> = if self.output_lines.is_empty() && !self.is_running {
+        // Build output lines with timestamps, icons, and category-based styling
+        let lines: Vec<Line> = if self.log_buffer.is_empty() && !self.is_running {
             // Show placeholder when no output
             vec![
                 Line::from(""),
@@ -868,26 +940,24 @@ impl WorktreeView {
                 )),
             ]
         } else {
-            self.output_lines
-                .iter()
+            let visible_height = area.height.saturating_sub(2) as usize;
+            self.log_buffer
+                .entries()
                 .skip(self.output_scroll)
-                .map(|line| {
-                    // Apply color coding for common patterns
-                    let style = if line.starts_with("✓") || line.contains("success") {
-                        Style::default().fg(Color::Green)
-                    } else if line.starts_with("✗")
-                        || line.starts_with("❌")
-                        || line.contains("error")
-                    {
-                        Style::default().fg(Color::Red)
-                    } else if line.starts_with("⚠") || line.contains("warning") {
-                        Style::default().fg(Color::Yellow)
-                    } else if line.starts_with("─") {
-                        Style::default().fg(Color::DarkGray)
-                    } else {
-                        Style::default().fg(Color::White)
-                    };
-                    Line::from(Span::styled(line.as_str(), style))
+                .take(visible_height)
+                .map(|entry| {
+                    let timestamp = entry.format_timestamp();
+                    let icon = entry.category_icon();
+                    let color = entry.category.color();
+
+                    Line::from(vec![
+                        Span::styled(
+                            format!("[{}] ", timestamp),
+                            Style::default().fg(Color::DarkGray)
+                        ),
+                        Span::raw(format!("{} ", icon)),
+                        Span::styled(&entry.content, Style::default().fg(color)),
+                    ])
                 })
                 .collect()
         };
@@ -897,6 +967,35 @@ impl WorktreeView {
             .wrap(Wrap { trim: false });
 
         frame.render_widget(paragraph, area);
+    }
+
+    /// Check for file changes and reload content if modified
+    fn check_file_changes(&mut self) {
+        if let Some(ref info) = self.feature_info {
+            let files = vec![
+                info.spec_dir.join("spec.md"),
+                info.spec_dir.join("plan.md"),
+                info.spec_dir.join("tasks.md"),
+            ];
+
+            let changed = self.file_tracker.check_files(&files);
+
+            for path in changed {
+                // Reload file content
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    match filename {
+                        "spec.md" => self.spec_content = Some(content),
+                        "plan.md" => self.plan_content = Some(content),
+                        "tasks.md" => self.tasks_content = Some(content),
+                        _ => {}
+                    }
+                }
+
+                // Log the change
+                self.log_file_change(&path);
+            }
+        }
     }
 }
 
@@ -935,11 +1034,26 @@ impl View for WorktreeView {
     fn handle_key(&mut self, key: KeyEvent) -> ViewAction {
         match key.code {
             KeyCode::Char('h') | KeyCode::Left => {
-                self.focus_left();
+                if self.focus == WorktreeFocus::Content {
+                    // Cycle tabs left when Content is focused
+                    self.content_type = match self.content_type {
+                        ContentType::Spec => ContentType::Tasks,
+                        ContentType::Plan => ContentType::Spec,
+                        ContentType::Tasks => ContentType::Plan,
+                    };
+                    self.content_scroll = 0;
+                } else {
+                    self.focus_left();
+                }
                 ViewAction::None
             }
             KeyCode::Char('l') | KeyCode::Right => {
-                self.focus_right();
+                if self.focus == WorktreeFocus::Content {
+                    // Cycle tabs right when Content is focused
+                    self.switch_content();
+                } else {
+                    self.focus_right();
+                }
                 ViewAction::None
             }
             KeyCode::Char('j') | KeyCode::Down => {
@@ -1028,6 +1142,12 @@ impl View for WorktreeView {
         // Update spinner animation when running
         if self.is_running {
             self.spinner_frame = (self.spinner_frame + 1) % 8;
+        }
+
+        // Check for file changes every 10 ticks (1 second at 100ms/tick)
+        if self.tick_count - self.last_file_check_tick >= 10 {
+            self.check_file_changes();
+            self.last_file_check_tick = self.tick_count;
         }
 
         // Refresh feature detection periodically

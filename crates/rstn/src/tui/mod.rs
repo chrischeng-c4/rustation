@@ -8,6 +8,7 @@
 pub mod app;
 pub mod claude_stream;
 pub mod event;
+pub mod logging;
 pub mod protocol;
 pub mod views;
 pub mod widgets;
