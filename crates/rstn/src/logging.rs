@@ -152,8 +152,7 @@ fn compress_file(source: &PathBuf, dest: &PathBuf) -> std::io::Result<()> {
 
 /// Remove log files older than specified days
 fn cleanup_old_logs(log_dir: &PathBuf, days: u64) {
-    let cutoff = std::time::SystemTime::now()
-        - std::time::Duration::from_secs(days * 24 * 60 * 60);
+    let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(days * 24 * 60 * 60);
 
     let entries = match fs::read_dir(log_dir) {
         Ok(e) => e,

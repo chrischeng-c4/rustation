@@ -67,7 +67,11 @@ impl ClaudeStreamMessage {
     /// Extract all text content from message
     pub fn get_text(&self) -> Option<String> {
         let msg = self.message.as_ref()?;
-        let texts: Vec<&str> = msg.content.iter().filter_map(|c| c.text.as_deref()).collect();
+        let texts: Vec<&str> = msg
+            .content
+            .iter()
+            .filter_map(|c| c.text.as_deref())
+            .collect();
         if texts.is_empty() {
             None
         } else {

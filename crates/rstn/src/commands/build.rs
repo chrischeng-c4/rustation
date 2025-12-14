@@ -100,7 +100,12 @@ pub async fn ci(fix: bool, verbose: bool) -> Result<()> {
     }
     println!(
         "{}",
-        format!("✓ Tests passed ({}/{})", test_results.passed, test_results.total()).green()
+        format!(
+            "✓ Tests passed ({}/{})",
+            test_results.passed,
+            test_results.total()
+        )
+        .green()
     );
     println!();
 
@@ -121,7 +126,12 @@ pub async fn ci(fix: bool, verbose: bool) -> Result<()> {
 
     // Summary
     println!("{}", "CI Summary:".bright_blue().bold());
-    println!("  {} Tests: {}/{} passed", "✓".green(), test_results.passed, test_results.total());
+    println!(
+        "  {} Tests: {}/{} passed",
+        "✓".green(),
+        test_results.passed,
+        test_results.total()
+    );
     println!("  {} Lint: OK", "✓".green());
     println!("  {} Format: OK", "✓".green());
     println!("  {} Build: OK", "✓".green());

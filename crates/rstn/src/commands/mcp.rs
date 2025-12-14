@@ -11,14 +11,22 @@ pub async fn list(verbose: bool) -> Result<()> {
         .await
         .map_err(|e| RscliError::Other(e.into()))?;
 
-    println!("{}", format!("Loading MCP registry from: {}", registry_path.display()).bright_blue());
+    println!(
+        "{}",
+        format!("Loading MCP registry from: {}", registry_path.display()).bright_blue()
+    );
     println!();
 
     let registry = mcp::load_registry(&registry_path)
         .await
         .map_err(|e| RscliError::Other(e.into()))?;
 
-    println!("{}", format!("Found {} MCP server(s)", registry.servers.len()).bright_green().bold());
+    println!(
+        "{}",
+        format!("Found {} MCP server(s)", registry.servers.len())
+            .bright_green()
+            .bold()
+    );
     println!();
 
     let mut table = Table::new();
@@ -98,9 +106,18 @@ pub async fn generate(component: Option<String>, output: Option<PathBuf>) -> Res
         .await
         .map_err(|e| RscliError::Other(e.into()))?;
 
-    println!("{}", "✓ MCP configuration generated successfully!".green().bold());
-    println!("Output: {}", output_path.display().to_string().bright_cyan());
-    println!("Servers: {}", config.mcp_servers.len().to_string().bright_green());
+    println!(
+        "{}",
+        "✓ MCP configuration generated successfully!".green().bold()
+    );
+    println!(
+        "Output: {}",
+        output_path.display().to_string().bright_cyan()
+    );
+    println!(
+        "Servers: {}",
+        config.mcp_servers.len().to_string().bright_green()
+    );
     println!();
 
     Ok(())
@@ -122,15 +139,17 @@ pub async fn validate() -> Result<()> {
         .await
         .map_err(|e| RscliError::Other(e.into()))?;
 
-    let config: mcp::McpConfig = serde_json::from_str(&content)
-        .map_err(|e| RscliError::Other(e.into()))?;
+    let config: mcp::McpConfig =
+        serde_json::from_str(&content).map_err(|e| RscliError::Other(e.into()))?;
 
-    let warnings = mcp::validate_mcp_config(&config)
-        .map_err(|e| RscliError::Other(e.into()))?;
+    let warnings = mcp::validate_mcp_config(&config).map_err(|e| RscliError::Other(e.into()))?;
 
     if warnings.is_empty() {
         println!("{}", "✓ Configuration is valid!".green().bold());
-        println!("Servers configured: {}", config.mcp_servers.len().to_string().bright_green());
+        println!(
+            "Servers configured: {}",
+            config.mcp_servers.len().to_string().bright_green()
+        );
     } else {
         println!("{}", "⚠ Configuration has warnings:".yellow().bold());
         for warning in &warnings {
@@ -157,7 +176,10 @@ pub async fn info(server_name: String) -> Result<()> {
         .find(|s| s.name == server_name)
         .ok_or_else(|| RscliError::Other(anyhow::anyhow!("Server '{}' not found", server_name)))?;
 
-    println!("{}", format!("MCP Server: {}", server.name).bright_blue().bold());
+    println!(
+        "{}",
+        format!("MCP Server: {}", server.name).bright_blue().bold()
+    );
     println!();
     println!("{}: {}", "Command".bright_cyan(), server.command);
     println!("{}: {}", "Args".bright_cyan(), server.args.join(" "));

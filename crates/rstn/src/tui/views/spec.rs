@@ -463,7 +463,12 @@ impl SpecView {
                         PhaseStatus::Completed => '✓',
                         PhaseStatus::NeedsUpdate => '!',
                     };
-                    lines.push(format!("  [{}] {} - {}", status_char, phase.hotkey(), phase.name()));
+                    lines.push(format!(
+                        "  [{}] {} - {}",
+                        status_char,
+                        phase.hotkey(),
+                        phase.name()
+                    ));
                 }
                 lines.join("\n")
             }
@@ -471,26 +476,47 @@ impl SpecView {
                 // Return feature info and settings
                 vec![
                     "=== Feature Info ===".to_string(),
-                    format!("Number: {}", self.feature.number.as_deref().unwrap_or("N/A")),
+                    format!(
+                        "Number: {}",
+                        self.feature.number.as_deref().unwrap_or("N/A")
+                    ),
                     format!("Name: {}", self.feature.name.as_deref().unwrap_or("N/A")),
-                    format!("Branch: {}", self.feature.branch.as_deref().unwrap_or("N/A")),
+                    format!(
+                        "Branch: {}",
+                        self.feature.branch.as_deref().unwrap_or("N/A")
+                    ),
                     String::new(),
                     "=== Auto-Flow Settings ===".to_string(),
                     format!("Max Turns: {}", self.auto_flow.options.max_turns),
-                    format!("Skip Permissions: {}", if self.auto_flow.options.skip_permissions { "Yes" } else { "No" }),
-                ].join("\n")
+                    format!(
+                        "Skip Permissions: {}",
+                        if self.auto_flow.options.skip_permissions {
+                            "Yes"
+                        } else {
+                            "No"
+                        }
+                    ),
+                ]
+                .join("\n")
             }
             SpecFocus::Wizard => {
                 // Return wizard state if active, otherwise output
                 if self.wizard.active {
                     let mut lines = vec![
                         "=== SDD Wizard ===".to_string(),
-                        format!("Step {}/{}", self.wizard.current_step + 1, self.wizard.steps.len()),
+                        format!(
+                            "Step {}/{}",
+                            self.wizard.current_step + 1,
+                            self.wizard.steps.len()
+                        ),
                     ];
                     if let Some(step) = self.wizard.steps.get(self.wizard.current_step) {
                         lines.push(format!("Phase: {}", step.phase.name()));
                         lines.push(format!("Prompt: {}", step.prompt));
-                        lines.push(format!("Completed: {}", if step.completed { "Yes" } else { "No" }));
+                        lines.push(format!(
+                            "Completed: {}",
+                            if step.completed { "Yes" } else { "No" }
+                        ));
                     }
                     lines.join("\n")
                 } else if self.auto_flow.active && !self.auto_flow.last_output.is_empty() {
@@ -592,7 +618,7 @@ impl View for SpecView {
                 self.auto_flow.reset();
                 self.auto_flow.active = true;
                 self.focus = SpecFocus::Wizard; // Reuse wizard focus
-                // Start first phase immediately
+                                                // Start first phase immediately
                 return self.get_next_auto_flow_action();
             }
             // Start wizard
@@ -955,7 +981,9 @@ impl SpecView {
             )]));
         }
 
-        let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+        let paragraph = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false });
         frame.render_widget(paragraph, area);
     }
 
@@ -981,7 +1009,9 @@ impl SpecView {
             })
             .collect();
 
-        let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+        let paragraph = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false });
         frame.render_widget(paragraph, area);
     }
 

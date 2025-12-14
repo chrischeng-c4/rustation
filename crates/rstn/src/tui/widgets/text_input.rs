@@ -319,7 +319,9 @@ impl TextInput {
         // Add prompt
         spans.push(Span::styled(
             format!("{} ", self.prompt),
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         ));
 
         // Add input value or placeholder
@@ -327,16 +329,18 @@ impl TextInput {
             // Show placeholder
             spans.push(Span::styled(
                 &self.placeholder,
-                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::ITALIC),
             ));
         } else {
             // Show value with cursor
-            let before_cursor = self.value.chars().take(self.cursor_position).collect::<String>();
-            let cursor_char = self
+            let before_cursor = self
                 .value
                 .chars()
-                .nth(self.cursor_position)
-                .unwrap_or(' ');
+                .take(self.cursor_position)
+                .collect::<String>();
+            let cursor_char = self.value.chars().nth(self.cursor_position).unwrap_or(' ');
             let after_cursor = self
                 .value
                 .chars()
@@ -385,7 +389,8 @@ impl TextInput {
     fn render_multiline(&self, area: Rect, buf: &mut Buffer) {
         // Calculate visible lines
         let visible_height = area.height as usize;
-        let visible_lines = self.lines
+        let visible_lines = self
+            .lines
             .iter()
             .skip(self.scroll_offset)
             .take(visible_height)
@@ -409,7 +414,10 @@ impl TextInput {
         // Build text with cursor
         let before = line.chars().take(self.cursor_column).collect::<String>();
         let cursor_char = line.chars().nth(self.cursor_column).unwrap_or(' ');
-        let after = line.chars().skip(self.cursor_column + 1).collect::<String>();
+        let after = line
+            .chars()
+            .skip(self.cursor_column + 1)
+            .collect::<String>();
 
         let mut x_offset = 0;
 
@@ -433,7 +441,12 @@ impl TextInput {
 
         // Render text after cursor
         if !after.is_empty() {
-            buf.set_string(area.x + x_offset, y, &after, Style::default().fg(Color::White));
+            buf.set_string(
+                area.x + x_offset,
+                y,
+                &after,
+                Style::default().fg(Color::White),
+            );
         }
     }
 }
@@ -526,10 +539,8 @@ mod tests {
 
     #[test]
     fn test_placeholder() {
-        let input = TextInput::with_placeholder(
-            "Enter:".to_string(),
-            "Type something...".to_string(),
-        );
+        let input =
+            TextInput::with_placeholder("Enter:".to_string(), "Type something...".to_string());
         assert_eq!(input.placeholder, "Type something...");
         assert!(input.is_empty());
     }

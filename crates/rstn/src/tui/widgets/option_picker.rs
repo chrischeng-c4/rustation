@@ -138,7 +138,9 @@ impl Widget for &OptionPicker {
         let prompt_line = Line::from(vec![
             Span::styled(
                 &self.prompt,
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 if self.multi_select {
@@ -162,7 +164,11 @@ impl Widget for &OptionPicker {
             let is_selected = self.multi_select && self.selected_ids.contains(&option.id);
 
             let prefix = if is_highlighted {
-                if is_selected { "▶ [✓] " } else { "▶ [ ] " }
+                if is_selected {
+                    "▶ [✓] "
+                } else {
+                    "▶ [ ] "
+                }
             } else if is_selected {
                 "  [✓] "
             } else if self.multi_select {

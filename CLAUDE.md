@@ -80,6 +80,8 @@ git commit -m "feat(NNN): description"
 - In-memory HashMap in CommandExecutor (trap registry persists for shell session lifetime) (037-trap-builtin)
 - Rust 1.75+ (edition 2021) + regex 1.10 (for `=~` operator and pattern matching) (038-test-command)
 - N/A (stateless command execution, uses existing VariableManager for BASH_REMATCH) (038-test-command)
+- Rust 1.75+ (edition 2021) + ratatui 0.29+ (TUI framework), crossterm (terminal I/O), tokio (async runtime) (046-fix-tui-input)
+- N/A (in-memory state only) (046-fix-tui-input)
 
 ## Recent Changes
 - 029-arithmetic-expansion: Added Rust 1.75+ (edition 2021) + No new dependencies (pure Rust implementation)

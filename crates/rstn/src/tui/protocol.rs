@@ -176,9 +176,7 @@ pub fn parse_protocol_message(output_lines: &[String]) -> Option<ProtocolMessage
 pub fn filter_protocol_markers(output_lines: &[String]) -> Vec<String> {
     output_lines
         .iter()
-        .filter(|line| {
-            !line.contains(PROTOCOL_START_MARKER) && !line.contains(PROTOCOL_END_MARKER)
-        })
+        .filter(|line| !line.contains(PROTOCOL_START_MARKER) && !line.contains(PROTOCOL_END_MARKER))
         .cloned()
         .collect()
 }

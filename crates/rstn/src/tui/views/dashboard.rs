@@ -79,8 +79,9 @@ impl Dashboard {
     /// Check if git info should be refreshed
     pub fn should_refresh_git(&self) -> bool {
         // Refresh on first tick or every GIT_REFRESH_INTERVAL ticks
-        self.tick_count == 1 ||
-        (self.is_git_repo && (self.tick_count - self.last_git_refresh) >= GIT_REFRESH_INTERVAL)
+        self.tick_count == 1
+            || (self.is_git_repo
+                && (self.tick_count - self.last_git_refresh) >= GIT_REFRESH_INTERVAL)
     }
 
     fn get_quick_actions() -> Vec<(&'static str, &'static str)> {
@@ -320,7 +321,12 @@ impl Dashboard {
         text.push(Line::from(""));
         text.push(Line::from(vec![
             Span::styled("Press ", Style::default().fg(Color::DarkGray)),
-            Span::styled("w", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "w",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" to manage worktrees", Style::default().fg(Color::DarkGray)),
         ]));
 
@@ -432,15 +438,14 @@ impl Dashboard {
     /// Get only the focused pane content as text
     pub fn get_focused_pane_text(&self) -> String {
         match self.focused_panel {
-            DashboardPanel::ProjectInfo => {
-                vec![
-                    "=== Project Info ===".to_string(),
-                    format!("Project: {}", self.project_name),
-                    format!("Rust: {}", self.rust_version),
-                    String::new(),
-                    "rush - A shell in Rust".to_string(),
-                ].join("\n")
-            }
+            DashboardPanel::ProjectInfo => vec![
+                "=== Project Info ===".to_string(),
+                format!("Project: {}", self.project_name),
+                format!("Rust: {}", self.rust_version),
+                String::new(),
+                "rush - A shell in Rust".to_string(),
+            ]
+            .join("\n"),
             DashboardPanel::GitStatus => {
                 let mut lines = vec![
                     "=== Git Status ===".to_string(),
@@ -561,7 +566,11 @@ impl Dashboard {
         lines.push(String::new());
         lines.push("\x1b[36m=== Test Results ===\x1b[0m".to_string());
         if let Some(ref results) = self.test_results {
-            let failed_color = if results.failed > 0 { "\x1b[31m" } else { "\x1b[32m" };
+            let failed_color = if results.failed > 0 {
+                "\x1b[31m"
+            } else {
+                "\x1b[32m"
+            };
             lines.push(format!("Passed: \x1b[32m{}\x1b[0m", results.passed));
             lines.push(format!("Failed: {}{}\x1b[0m", failed_color, results.failed));
             lines.push(format!("Ignored: \x1b[33m{}\x1b[0m", results.ignored));

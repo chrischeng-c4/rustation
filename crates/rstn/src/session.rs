@@ -14,12 +14,19 @@ pub fn get_data_dir() -> PathBuf {
     // If new path doesn't exist but old one does, migrate
     if !new_path.exists() && old_path.exists() {
         if let Err(e) = std::fs::rename(&old_path, &new_path) {
-            eprintln!("Warning: Could not migrate config from {} to {}: {}",
-                old_path.display(), new_path.display(), e);
+            eprintln!(
+                "Warning: Could not migrate config from {} to {}: {}",
+                old_path.display(),
+                new_path.display(),
+                e
+            );
             eprintln!("You may need to manually copy your settings.");
         } else {
-            println!("Migrated configuration from {} to {}",
-                old_path.display(), new_path.display());
+            println!(
+                "Migrated configuration from {} to {}",
+                old_path.display(),
+                new_path.display()
+            );
         }
     }
 
@@ -102,6 +109,8 @@ mod tests {
     #[test]
     fn test_get_session_path() {
         let path = get_session_path("041");
-        assert!(path.to_string_lossy().contains(".rustation/sessions/041.session"));
+        assert!(path
+            .to_string_lossy()
+            .contains(".rustation/sessions/041.session"));
     }
 }

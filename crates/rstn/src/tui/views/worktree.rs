@@ -89,7 +89,7 @@ impl ContentType {
 /// Focus area in the worktree view
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorktreeFocus {
-    Commands,  // Unified panel for SDD phases and Git actions
+    Commands, // Unified panel for SDD phases and Git actions
     Content,
 }
 
@@ -111,7 +111,7 @@ pub struct WorktreeView {
     // UI state
     pub focus: WorktreeFocus,
     pub phase_state: ListState,
-    pub command_state: ListState,  // Unified command list state
+    pub command_state: ListState, // Unified command list state
     pub content_scroll: usize,
     pub content_type: ContentType,
 
@@ -510,8 +510,9 @@ impl WorktreeView {
 
     /// Update the status of a specific phase
     pub fn update_phase_status(&mut self, phase_name: &str, status: PhaseStatus) {
-        if let Some((_, existing_status)) = self.phases.iter_mut()
-            .find(|(p, _)| p.name() == phase_name) {
+        if let Some((_, existing_status)) =
+            self.phases.iter_mut().find(|(p, _)| p.name() == phase_name)
+        {
             *existing_status = status;
         }
     }
@@ -684,10 +685,12 @@ impl WorktreeView {
         let mut items = Vec::new();
 
         // SDD WORKFLOW section header
-        items.push(ListItem::new(vec![Line::from(vec![
-            Span::styled("SDD WORKFLOW", Style::default()
-                .fg(Color::Cyan).add_modifier(Modifier::BOLD))
-        ])]));
+        items.push(ListItem::new(vec![Line::from(vec![Span::styled(
+            "SDD WORKFLOW",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )])]));
 
         // SDD phase commands
         for (phase, status) in &self.phases {
@@ -704,10 +707,12 @@ impl WorktreeView {
         items.push(ListItem::new(Line::from("")));
 
         // GIT ACTIONS section header
-        items.push(ListItem::new(vec![Line::from(vec![
-            Span::styled("GIT ACTIONS", Style::default()
-                .fg(Color::Cyan).add_modifier(Modifier::BOLD))
-        ])]));
+        items.push(ListItem::new(vec![Line::from(vec![Span::styled(
+            "GIT ACTIONS",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )])]));
 
         // Git commands
         for git_cmd in GitCommand::all() {
@@ -763,11 +768,7 @@ impl WorktreeView {
         let is_focused = self.focus == WorktreeFocus::Content;
 
         let title = if let Some(ref info) = self.feature_info {
-            format!(
-                " {} - Feature #{} ",
-                self.content_type.name(),
-                info.number
-            )
+            format!(" {} - Feature #{} ", self.content_type.name(), info.number)
         } else {
             format!(" {} ", self.content_type.name())
         };
@@ -874,7 +875,10 @@ impl WorktreeView {
                     // Apply color coding for common patterns
                     let style = if line.starts_with("✓") || line.contains("success") {
                         Style::default().fg(Color::Green)
-                    } else if line.starts_with("✗") || line.starts_with("❌") || line.contains("error") {
+                    } else if line.starts_with("✗")
+                        || line.starts_with("❌")
+                        || line.contains("error")
+                    {
                         Style::default().fg(Color::Red)
                     } else if line.starts_with("⚠") || line.contains("warning") {
                         Style::default().fg(Color::Yellow)
@@ -954,8 +958,8 @@ impl View for WorktreeView {
                 if self.focus == WorktreeFocus::Content {
                     if let Some(content) = self.get_current_content() {
                         let line_count = content.lines().count();
-                        self.content_scroll = (self.content_scroll + 10)
-                            .min(line_count.saturating_sub(1));
+                        self.content_scroll =
+                            (self.content_scroll + 10).min(line_count.saturating_sub(1));
                     }
                 }
                 ViewAction::None
@@ -995,7 +999,10 @@ impl View for WorktreeView {
                                             self.pending_input_phase = Some(*phase);
                                             ViewAction::RequestInput {
                                                 prompt: "Enter feature description:".to_string(),
-                                                placeholder: Some("e.g., Add user authentication with OAuth2".to_string()),
+                                                placeholder: Some(
+                                                    "e.g., Add user authentication with OAuth2"
+                                                        .to_string(),
+                                                ),
                                             }
                                         } else {
                                             self.run_phase(*phase)
@@ -1129,7 +1136,9 @@ mod tests {
         view.scroll_down();
         let expected_git_start = num_phases + 3;
         assert_eq!(view.command_state.selected(), Some(expected_git_start));
-        assert!(view.display_index_to_command_index(expected_git_start).is_some());
+        assert!(view
+            .display_index_to_command_index(expected_git_start)
+            .is_some());
 
         // Verify it's a git command
         if let Some(cmd_idx) = view.display_index_to_command_index(expected_git_start) {
@@ -1215,7 +1224,10 @@ mod tests {
 
         // Should request input
         match action {
-            ViewAction::RequestInput { prompt, placeholder } => {
+            ViewAction::RequestInput {
+                prompt,
+                placeholder,
+            } => {
                 assert!(prompt.contains("feature description"));
                 assert!(placeholder.is_some());
             }
@@ -1352,7 +1364,10 @@ mod tests {
 
         // Should request input for branch name
         match action {
-            ViewAction::RequestInput { prompt, placeholder } => {
+            ViewAction::RequestInput {
+                prompt,
+                placeholder,
+            } => {
                 assert!(prompt.contains("Rebase onto branch"));
                 assert_eq!(placeholder, Some("main".to_string()));
             }

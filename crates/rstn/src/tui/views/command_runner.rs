@@ -186,7 +186,10 @@ impl CommandRunner {
         } else {
             OutputLineType::Normal
         };
-        self.output_lines.push(OutputLine { text: line, line_type });
+        self.output_lines.push(OutputLine {
+            text: line,
+            line_type,
+        });
 
         // Auto-scroll to bottom
         if self.output_lines.len() > 20 {
@@ -253,10 +256,10 @@ impl CommandRunner {
             .iter()
             .map(|line| {
                 let color_code = match line.line_type {
-                    OutputLineType::Success => "\x1b[32m",  // Green
-                    OutputLineType::Error => "\x1b[31m",    // Red
-                    OutputLineType::Warning => "\x1b[33m",  // Yellow
-                    OutputLineType::Info => "\x1b[36m",     // Cyan
+                    OutputLineType::Success => "\x1b[32m",   // Green
+                    OutputLineType::Error => "\x1b[31m",     // Red
+                    OutputLineType::Warning => "\x1b[33m",   // Yellow
+                    OutputLineType::Info => "\x1b[36m",      // Cyan
                     OutputLineType::Command => "\x1b[35;1m", // Magenta bold
                     OutputLineType::Normal => "",
                 };
@@ -420,13 +423,17 @@ impl CommandRunner {
                     OutputLineType::Error => Style::default().fg(Color::Red),
                     OutputLineType::Warning => Style::default().fg(Color::Yellow),
                     OutputLineType::Info => Style::default().fg(Color::Cyan),
-                    OutputLineType::Command => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                    OutputLineType::Command => Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
                 };
                 Line::from(Span::styled(&line.text, style))
             })
             .collect();
 
-        let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+        let paragraph = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false });
         frame.render_widget(paragraph, area);
     }
 }

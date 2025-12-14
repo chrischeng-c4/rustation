@@ -99,7 +99,11 @@ impl SettingsView {
                 let _ = self.settings.save();
                 self.status_message = Some(format!(
                     "Auto-run {}",
-                    if self.settings.auto_run { "enabled" } else { "disabled" }
+                    if self.settings.auto_run {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    }
                 ));
             }
             SettingsItem::SkipPermissions => {
@@ -107,7 +111,11 @@ impl SettingsView {
                 let _ = self.settings.save();
                 self.status_message = Some(format!(
                     "Skip permissions {}",
-                    if self.settings.skip_permissions { "enabled" } else { "disabled" }
+                    if self.settings.skip_permissions {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    }
                 ));
             }
             SettingsItem::MaxTurns => {
@@ -116,7 +124,8 @@ impl SettingsView {
             SettingsItem::ClearCurrentSession => {
                 if let Some(ref feature) = self.current_feature {
                     if session::clear_session(feature).is_ok() {
-                        self.status_message = Some(format!("Cleared session for feature {}", feature));
+                        self.status_message =
+                            Some(format!("Cleared session for feature {}", feature));
                     } else {
                         self.status_message = Some("Failed to clear session".to_string());
                     }
@@ -159,12 +168,10 @@ impl SettingsView {
                     Span::styled("[OFF]", Style::default().fg(Color::Red))
                 }
             }
-            SettingsItem::MaxTurns => {
-                Span::styled(
-                    format!("[{}]", self.settings.max_turns),
-                    Style::default().fg(Color::Cyan),
-                )
-            }
+            SettingsItem::MaxTurns => Span::styled(
+                format!("[{}]", self.settings.max_turns),
+                Style::default().fg(Color::Cyan),
+            ),
             SettingsItem::SkipPermissions => {
                 if self.settings.skip_permissions {
                     Span::styled("[ON]", Style::default().fg(Color::Green))
@@ -200,16 +207,19 @@ impl View for SettingsView {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Min(10),    // Settings list
-                Constraint::Length(3),  // Status/help
+                Constraint::Length(3), // Title
+                Constraint::Min(10),   // Settings list
+                Constraint::Length(3), // Status/help
             ])
             .split(area);
 
         // Title
-        let title = Paragraph::new(Line::from(vec![
-            Span::styled("Settings", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        ]))
+        let title = Paragraph::new(Line::from(vec![Span::styled(
+            "Settings",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]))
         .block(Block::default().borders(Borders::ALL));
         frame.render_widget(title, chunks[0]);
 
@@ -222,7 +232,9 @@ impl View for SettingsView {
                 let prefix = if is_selected { "▶ " } else { "  " };
 
                 let style = if is_selected {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default()
                 };
@@ -238,15 +250,16 @@ impl View for SettingsView {
             })
             .collect();
 
-        let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title(" Options "));
+        let list =
+            List::new(items).block(Block::default().borders(Borders::ALL).title(" Options "));
         frame.render_widget(list, chunks[1]);
 
         // Status/help bar
         let help_text = if let Some(ref msg) = self.status_message {
-            Line::from(vec![
-                Span::styled(msg.as_str(), Style::default().fg(Color::Green)),
-            ])
+            Line::from(vec![Span::styled(
+                msg.as_str(),
+                Style::default().fg(Color::Green),
+            )])
         } else {
             let item = self.selected_item();
             Line::from(vec![
@@ -262,8 +275,7 @@ impl View for SettingsView {
             ])
         };
 
-        let help = Paragraph::new(help_text)
-            .block(Block::default().borders(Borders::ALL));
+        let help = Paragraph::new(help_text).block(Block::default().borders(Borders::ALL));
         frame.render_widget(help, chunks[2]);
     }
 

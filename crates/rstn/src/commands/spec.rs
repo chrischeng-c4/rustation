@@ -93,7 +93,10 @@ pub async fn status(feature_num: Option<String>, _verbose: bool) -> Result<()> {
         })?,
     };
 
-    println!("{}", format!("Feature {} Status", feature).bright_blue().bold());
+    println!(
+        "{}",
+        format!("Feature {} Status", feature).bright_blue().bold()
+    );
     println!("{}", "=".repeat(50));
     println!();
 

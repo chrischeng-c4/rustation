@@ -60,9 +60,7 @@ pub enum Event {
     /// Commit workflow started
     CommitStarted,
     /// Security scan blocked commit
-    CommitBlocked {
-        scan: rstn_core::SecurityScanResult,
-    },
+    CommitBlocked { scan: rstn_core::SecurityScanResult },
     /// Ready to commit with generated message
     CommitReady {
         message: String,
@@ -70,18 +68,11 @@ pub enum Event {
         sensitive_files: Vec<rstn_core::SensitiveFile>,
     },
     /// Commit execution completed
-    CommitCompleted {
-        success: bool,
-        output: String,
-    },
+    CommitCompleted { success: bool, output: String },
     /// Commit workflow error
-    CommitError {
-        error: String,
-    },
+    CommitError { error: String },
     /// Update completed successfully, ready to restart
-    UpdateCompleted {
-        installed_path: String,
-    },
+    UpdateCompleted { installed_path: String },
 }
 
 /// Event handler that runs in a separate thread

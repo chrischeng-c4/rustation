@@ -277,7 +277,8 @@ pub async fn run_cargo_command(name: &str, args: &[String]) -> Result<CommandOut
             // Spec commands use the .specify scripts
             cmd = Command::new("bash");
             if args.first().map(|s| s.as_str()) == Some("status") {
-                cmd.arg("-c").arg("echo 'Spec status: Use Claude Code /spec-status command'");
+                cmd.arg("-c")
+                    .arg("echo 'Spec status: Use Claude Code /spec-status command'");
             } else if args.first().map(|s| s.as_str()) == Some("list") {
                 cmd.arg("-c").arg("cat specs/features.json | head -50");
             } else {
@@ -285,14 +286,19 @@ pub async fn run_cargo_command(name: &str, args: &[String]) -> Result<CommandOut
             }
         }
         _ => {
-            return Err(RscliError::CommandNotFound(format!("Unknown command: {}", name)));
+            return Err(RscliError::CommandNotFound(format!(
+                "Unknown command: {}",
+                name
+            )));
         }
     }
 
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
-    let mut child = cmd.spawn().map_err(|e| RscliError::CommandNotFound(e.to_string()))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| RscliError::CommandNotFound(e.to_string()))?;
 
     let mut output = CommandOutput::default();
 
@@ -490,7 +496,8 @@ mod tests {
 
     #[test]
     fn test_parse_output_with_failures() {
-        let output = "test result: FAILED. 668 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out";
+        let output =
+            "test result: FAILED. 668 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out";
         let results = parse_test_output(output, "").unwrap();
         assert_eq!(results.passed, 668);
         assert_eq!(results.failed, 2);

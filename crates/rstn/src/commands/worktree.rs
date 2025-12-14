@@ -16,7 +16,12 @@ pub async fn list(verbose: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("{}", format!("Found {} worktree(s)", worktrees.len()).bright_blue().bold());
+    println!(
+        "{}",
+        format!("Found {} worktree(s)", worktrees.len())
+            .bright_blue()
+            .bold()
+    );
     println!();
 
     let mut table = Table::new();
@@ -123,7 +128,10 @@ pub async fn status() -> Result<()> {
 }
 
 pub async fn create(feature: String, base_path: Option<PathBuf>) -> Result<()> {
-    println!("{}", format!("Creating worktree for feature '{}'...", feature).bright_blue());
+    println!(
+        "{}",
+        format!("Creating worktree for feature '{}'...", feature).bright_blue()
+    );
 
     let worktree_path = worktree::create_worktree(&feature, base_path)
         .await
@@ -135,7 +143,10 @@ pub async fn create(feature: String, base_path: Option<PathBuf>) -> Result<()> {
     println!("Branch: {}", format!("feature/{}", feature).bright_green());
     println!();
     println!("To switch to this worktree:");
-    println!("  {}", format!("cd {}", worktree_path.display()).bright_cyan());
+    println!(
+        "  {}",
+        format!("cd {}", worktree_path.display()).bright_cyan()
+    );
     println!();
 
     Ok(())
@@ -143,9 +154,15 @@ pub async fn create(feature: String, base_path: Option<PathBuf>) -> Result<()> {
 
 pub async fn remove(path: String, force: bool) -> Result<()> {
     if force {
-        println!("{}", format!("Force removing worktree '{}'...", path).yellow());
+        println!(
+            "{}",
+            format!("Force removing worktree '{}'...", path).yellow()
+        );
     } else {
-        println!("{}", format!("Removing worktree '{}'...", path).bright_blue());
+        println!(
+            "{}",
+            format!("Removing worktree '{}'...", path).bright_blue()
+        );
     }
 
     worktree::remove_worktree(&path, force)

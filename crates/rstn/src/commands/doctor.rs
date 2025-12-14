@@ -61,11 +61,7 @@ fn check_command(cmd: &str, args: &[&str], name: &str) -> bool {
             if let Ok(output) = Command::new(cmd).args(args).output() {
                 if output.status.success() {
                     let output_str = String::from_utf8_lossy(&output.stdout);
-                    let version = output_str
-                        .lines()
-                        .next()
-                        .unwrap_or("")
-                        .trim();
+                    let version = output_str.lines().next().unwrap_or("").trim();
                     println!("  {} {}: {}", "✓".green(), name, version);
                     return true;
                 }

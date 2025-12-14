@@ -31,7 +31,10 @@ pub async fn list() -> Result<()> {
             service::ServiceState::Unknown => Cell::new("Unknown").fg(Color::Yellow),
         };
 
-        let pid_str = svc.pid.map(|p| p.to_string()).unwrap_or_else(|| "-".to_string());
+        let pid_str = svc
+            .pid
+            .map(|p| p.to_string())
+            .unwrap_or_else(|| "-".to_string());
 
         table.add_row(vec![
             Cell::new(&svc.name),
@@ -44,15 +47,25 @@ pub async fn list() -> Result<()> {
     println!("{table}");
     println!();
 
-    let running_count = services.iter().filter(|s| s.state == service::ServiceState::Running).count();
-    println!("Running: {}/{}", running_count.to_string().bright_green(), services.len());
+    let running_count = services
+        .iter()
+        .filter(|s| s.state == service::ServiceState::Running)
+        .count();
+    println!(
+        "Running: {}/{}",
+        running_count.to_string().bright_green(),
+        services.len()
+    );
     println!();
 
     Ok(())
 }
 
 pub async fn status(name: String) -> Result<()> {
-    println!("{}", format!("Checking status of '{}'...", name).bright_blue());
+    println!(
+        "{}",
+        format!("Checking status of '{}'...", name).bright_blue()
+    );
     println!();
 
     let svc = service::get_service_status(&name)
