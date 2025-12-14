@@ -6,6 +6,7 @@
 //! - Interactive command execution with live output
 
 pub mod app;
+pub mod claude_stream;
 pub mod event;
 pub mod protocol;
 pub mod views;

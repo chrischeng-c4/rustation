@@ -1,9 +1,10 @@
 //! Application state and main loop for the TUI
 
+use crate::tui::claude_stream::{ClaudeStreamMessage, RscliStatus};
 use crate::tui::event::{Event, EventHandler};
 use crate::tui::protocol::{OutputParser, ProtocolMessage};
-use crate::tui::views::{CommandRunner, Dashboard, SpecView, View, ViewAction, ViewType, WorktreeView};
-use crate::tui::widgets::TextInput;
+use crate::tui::views::{CommandRunner, Dashboard, SettingsView, SpecPhase, SpecView, View, ViewAction, ViewType, WorktreeView};
+use crate::tui::widgets::{InputDialog, OptionPicker, TextInput};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -14,6 +15,20 @@ use ratatui::Terminal;
 use std::io::{stdout, Stdout};
 use std::sync::mpsc;
 
+macro_rules! log_to_file {
+    ($($arg:tt)*) => {{
+        use std::io::Write;
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/rscli.log")
+        {
+            let _ = writeln!(file, "{}", format!($($arg)*));
+            let _ = file.flush();
+        }
+    }};
+}
+
 /// Result type for the app
 pub type AppResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -21,8 +36,7 @@ pub type AppResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CurrentView {
     Worktree,
-    Commands,
-    Spec,
+    Settings,
     Dashboard,
 }
 
@@ -36,9 +50,11 @@ pub struct App {
     pub worktree_view: WorktreeView,
     /// Dashboard view state
     pub dashboard: Dashboard,
-    /// Command runner view state
+    /// Settings view state
+    pub settings_view: SettingsView,
+    /// Command runner (internal, for running commands)
     pub command_runner: CommandRunner,
-    /// Spec-driven development view state
+    /// Spec-driven development view state (internal)
     pub spec_view: SpecView,
     /// Status message to show at bottom
     pub status_message: Option<String>,
@@ -50,10 +66,18 @@ pub struct App {
     pub copy_visual_view: bool,
     /// Protocol parser for Claude Code ↔ TUI communication
     pub protocol_parser: OutputParser,
-    /// Text input widget for interactive user input
+    /// Text input widget for interactive user input (footer)
     pub text_input: Option<TextInput>,
+    /// Input dialog for modal prompts (centered popup)
+    pub input_dialog: Option<InputDialog>,
     /// Whether the app is in input mode (capturing text input)
     pub input_mode: bool,
+    /// Option picker widget for structured choices
+    pub option_picker: Option<OptionPicker>,
+    /// Whether the app is in picker mode (selecting options)
+    pub picker_mode: bool,
+    /// Pending auto-continue: (next_phase, delay_ms)
+    pub pending_auto_continue: Option<(String, u64)>,
 }
 
 impl Default for App {
@@ -70,6 +94,7 @@ impl App {
             current_view: CurrentView::Worktree,
             worktree_view: WorktreeView::new(),
             dashboard: Dashboard::new(),
+            settings_view: SettingsView::new(),
             command_runner: CommandRunner::new(),
             spec_view: SpecView::new(),
             status_message: None,
@@ -78,7 +103,11 @@ impl App {
             copy_visual_view: false,
             protocol_parser: OutputParser::new(),
             text_input: None,
+            input_dialog: None,
             input_mode: false,
+            option_picker: None,
+            picker_mode: false,
+            pending_auto_continue: None,
         }
     }
 
@@ -94,13 +123,14 @@ impl App {
         match key.code {
             // Quit on Ctrl+C or q (when not in command view with running command)
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                log_to_file!("Quit triggered: Ctrl+C");
                 self.running = false;
                 return;
             }
             KeyCode::Char('q')
-                if (self.current_view == CurrentView::Dashboard || self.current_view == CurrentView::Worktree)
-                    && !self.command_runner.is_running() =>
+                if !self.worktree_view.is_running =>
             {
+                log_to_file!("Quit triggered: 'q' key");
                 self.running = false;
                 return;
             }
@@ -108,29 +138,25 @@ impl App {
             KeyCode::Char('[') => {
                 self.current_view = match self.current_view {
                     CurrentView::Worktree => CurrentView::Dashboard,
-                    CurrentView::Commands => CurrentView::Worktree,
-                    CurrentView::Spec => CurrentView::Commands,
-                    CurrentView::Dashboard => CurrentView::Spec,
+                    CurrentView::Settings => CurrentView::Worktree,
+                    CurrentView::Dashboard => CurrentView::Settings,
                 };
                 self.status_message = Some(format!("Switched to {} view", match self.current_view {
                     CurrentView::Worktree => "Worktree",
-                    CurrentView::Commands => "Commands",
-                    CurrentView::Spec => "Spec",
+                    CurrentView::Settings => "Settings",
                     CurrentView::Dashboard => "Dashboard",
                 }));
                 return;
             }
             KeyCode::Char(']') => {
                 self.current_view = match self.current_view {
-                    CurrentView::Worktree => CurrentView::Commands,
-                    CurrentView::Commands => CurrentView::Spec,
-                    CurrentView::Spec => CurrentView::Dashboard,
+                    CurrentView::Worktree => CurrentView::Settings,
+                    CurrentView::Settings => CurrentView::Dashboard,
                     CurrentView::Dashboard => CurrentView::Worktree,
                 };
                 self.status_message = Some(format!("Switched to {} view", match self.current_view {
                     CurrentView::Worktree => "Worktree",
-                    CurrentView::Commands => "Commands",
-                    CurrentView::Spec => "Spec",
+                    CurrentView::Settings => "Settings",
                     CurrentView::Dashboard => "Dashboard",
                 }));
                 return;
@@ -151,13 +177,8 @@ impl App {
                         self.dashboard.next_pane();
                         self.status_message = Some("Switched to next pane".to_string());
                     }
-                    CurrentView::Commands => {
-                        self.command_runner.next_pane();
-                        self.status_message = Some("Switched to next pane".to_string());
-                    }
-                    CurrentView::Spec => {
-                        self.spec_view.next_pane();
-                        self.status_message = Some("Switched to next pane".to_string());
+                    CurrentView::Settings => {
+                        // Settings view doesn't have panes
                     }
                 }
                 return;
@@ -168,14 +189,10 @@ impl App {
                 return;
             }
             KeyCode::Char('2') => {
-                self.current_view = CurrentView::Commands;
+                self.current_view = CurrentView::Settings;
                 return;
             }
             KeyCode::Char('3') => {
-                self.current_view = CurrentView::Spec;
-                return;
-            }
-            KeyCode::Char('4') => {
                 self.current_view = CurrentView::Dashboard;
                 return;
             }
@@ -195,9 +212,8 @@ impl App {
         // Delegate to current view and handle returned action
         let action = match self.current_view {
             CurrentView::Worktree => self.worktree_view.handle_key(key),
+            CurrentView::Settings => self.settings_view.handle_key(key),
             CurrentView::Dashboard => self.dashboard.handle_key(key),
-            CurrentView::Commands => self.command_runner.handle_key(key),
-            CurrentView::Spec => self.spec_view.handle_key(key),
         };
 
         self.handle_view_action(action);
@@ -210,13 +226,14 @@ impl App {
             ViewAction::SwitchView(view_type) => {
                 self.current_view = match view_type {
                     ViewType::Dashboard => CurrentView::Dashboard,
-                    ViewType::Commands => CurrentView::Commands,
-                    ViewType::Spec => CurrentView::Spec,
+                    ViewType::Commands => CurrentView::Worktree, // Commands now inline
+                    ViewType::Spec => CurrentView::Worktree,     // Spec now inline
                 };
             }
             ViewAction::RunCommand { name, args } => {
+                // Keep command_runner for backwards compat, but don't switch views
                 self.command_runner.start_command(&name, &args);
-                self.current_view = CurrentView::Commands;
+                // Commands now run inline - no view switch needed
 
                 // Spawn the actual command
                 let sender = self.event_sender.clone();
@@ -252,12 +269,12 @@ impl App {
                 // Track running phase for auto-flow
                 self.running_spec_phase = Some(phase.clone());
 
-                // Start the spec phase command
-                self.command_runner.start_command(&format!("spec:{}", phase), &[]);
+                // Parse phase enum from name
+                let spec_phase = SpecPhase::from_name(&phase);
 
-                // Only switch to Commands view if NOT in auto-flow mode
-                if !self.spec_view.auto_flow.active {
-                    self.current_view = CurrentView::Commands;
+                // Start inline output in WorktreeView
+                if let Some(phase_enum) = spec_phase {
+                    self.worktree_view.start_command(phase_enum, Some(&command));
                 }
 
                 let max_turns = options.max_turns;
@@ -266,12 +283,15 @@ impl App {
                     phase, max_turns
                 ));
 
+                // Get session ID from WorktreeView (feature-specific)
+                let session_id = self.worktree_view.get_session_id();
+
                 // Convert view options to CLI options
                 let cli_options = crate::runners::cargo::ClaudeCliOptions {
                     max_turns: Some(options.max_turns),
                     skip_permissions: options.skip_permissions,
                     continue_session: options.continue_session,
-                    session_id: options.session_id.clone(),
+                    session_id: session_id.or(options.session_id.clone()),
                     allowed_tools: options.allowed_tools.clone(),
                 };
 
@@ -279,67 +299,90 @@ impl App {
                 let sender = self.event_sender.clone();
                 let cmd = command.clone();
                 let phase_name = phase.clone();
-                let is_auto_flow = self.spec_view.auto_flow.active;
+                let _is_auto_flow = self.worktree_view.auto_flow.active;
 
                 tokio::spawn(async move {
-                    let result =
-                        crate::runners::cargo::run_claude_command_with_options(&cmd, &cli_options)
-                            .await;
+                    // Use streaming function with sender for real-time output
+                    let result = crate::runners::cargo::run_claude_command_streaming(
+                        &cmd,
+                        &cli_options,
+                        sender.clone(),
+                    )
+                    .await;
+
                     if let Some(sender) = sender {
                         match result {
-                            Ok(output) => {
-                                if is_auto_flow {
-                                    // Send phase completed event for auto-flow
-                                    let _ = sender.send(Event::SpecPhaseCompleted {
-                                        phase: phase_name,
-                                        success: output.success,
-                                        output: output.lines,
-                                    });
-                                } else {
-                                    let _ = sender.send(Event::CommandDone {
-                                        success: output.success,
-                                        lines: output.lines,
-                                    });
-                                }
+                            Ok(claude_result) => {
+                                // Send completion event with parsed status
+                                let _ = sender.send(Event::ClaudeCompleted {
+                                    phase: phase_name,
+                                    success: claude_result.success,
+                                    session_id: claude_result.session_id,
+                                    status: claude_result.status,
+                                });
                             }
                             Err(e) => {
-                                let error_lines = vec![
-                                    format!("─ SDD Phase: {} ─", phase_name),
-                                    format!("Failed to run Claude CLI: {}", e),
-                                    String::new(),
-                                    "Make sure 'claude' CLI is installed and available in PATH."
-                                        .to_string(),
-                                    "Install: npm install -g @anthropic-ai/claude-code".to_string(),
-                                ];
-                                if is_auto_flow {
-                                    let _ = sender.send(Event::SpecPhaseCompleted {
-                                        phase: phase_name,
-                                        success: false,
-                                        output: error_lines,
-                                    });
-                                } else {
-                                    let _ = sender.send(Event::CommandDone {
-                                        success: false,
-                                        lines: error_lines,
-                                    });
-                                }
+                                // Send error as ClaudeCompleted with error status
+                                let error_status = RscliStatus {
+                                    status: "error".to_string(),
+                                    prompt: None,
+                                    message: Some(format!(
+                                        "Failed to run Claude CLI: {}. Make sure 'claude' CLI is installed.",
+                                        e
+                                    )),
+                                };
+                                let _ = sender.send(Event::ClaudeCompleted {
+                                    phase: phase_name,
+                                    success: false,
+                                    session_id: None,
+                                    status: Some(error_status),
+                                });
+                            }
+                        }
+                    }
+                });
+            }
+            ViewAction::RunEnhancedCommit => {
+                // Run enhanced commit workflow with security scanning
+                self.status_message = Some("Scanning staged changes for security issues...".to_string());
+
+                let sender = self.event_sender.clone();
+                tokio::spawn(async move {
+                    let result = rscli_core::git::interactive_commit().await;
+
+                    if let Some(sender) = sender {
+                        match result {
+                            Ok(rscli_core::CommitResult::Blocked(scan)) => {
+                                let _ = sender.send(Event::CommitBlocked { scan });
+                            }
+                            Ok(rscli_core::CommitResult::ReadyToCommit {
+                                message,
+                                warnings,
+                                sensitive_files,
+                            }) => {
+                                let _ = sender.send(Event::CommitReady {
+                                    message,
+                                    warnings,
+                                    sensitive_files,
+                                });
+                            }
+                            Err(e) => {
+                                let _ = sender.send(Event::CommitError {
+                                    error: e.to_string(),
+                                });
                             }
                         }
                     }
                 });
             }
             ViewAction::StartWizard => {
-                // Switch to spec view and activate wizard
-                self.current_view = CurrentView::Spec;
-                self.spec_view.wizard.active = true;
-                self.spec_view.wizard.current_step = 0;
-                self.status_message = Some("SDD Wizard started - follow the guided workflow".to_string());
+                // Start wizard mode in worktree view
+                self.worktree_view.auto_flow.active = true;
+                self.status_message = Some("SDD Workflow started - phases will run sequentially".to_string());
             }
             ViewAction::ShowWorktrees => {
-                // Run worktree list command
-                self.command_runner.start_command("worktree-list", &[]);
-                self.current_view = CurrentView::Commands;
-                self.status_message = Some("Listing git worktrees...".to_string());
+                // Just show a status message - worktrees are shown in worktree view
+                self.status_message = Some("Worktree info shown in Worktree tab".to_string());
 
                 // Spawn worktree list command
                 let sender = self.event_sender.clone();
@@ -374,7 +417,21 @@ impl App {
                 });
             }
             ViewAction::Quit => {
+                log_to_file!("Quit triggered: ViewAction::Quit");
                 self.running = false;
+            }
+            ViewAction::RequestInput { prompt, placeholder } => {
+                let mut dialog = InputDialog::new("Input Required", prompt);
+                if let Some(ph) = placeholder {
+                    dialog = dialog.placeholder(ph);
+                }
+                self.input_dialog = Some(dialog);
+                self.input_mode = true;
+            }
+            ViewAction::RunGitCommand(_) => {
+                // Git commands are handled via handle_git_command() which returns
+                // ViewAction::RunCommand, so this case should never be reached
+                // but we handle it for exhaustiveness
             }
         }
     }
@@ -390,8 +447,12 @@ impl App {
             self.handle_protocol_message(msg);
         }
 
-        // Always add to command runner for display
-        // (protocol markers will be filtered out later if needed)
+        // Add to WorktreeView's inline output if it's showing output
+        if self.worktree_view.is_showing_output() {
+            self.worktree_view.add_output(line.clone());
+        }
+
+        // Also add to command runner for backwards compatibility
         self.command_runner.add_output(line);
     }
 
@@ -413,7 +474,7 @@ impl App {
     pub fn run_update(&mut self) {
         self.status_message = Some("Building rscli (release)...".to_string());
         self.command_runner.start_command("update", &[]);
-        self.current_view = CurrentView::Commands;
+        // Commands now run inline, no view switch needed
 
         let sender = self.event_sender.clone();
 
@@ -482,7 +543,42 @@ impl App {
 
     /// Handle key events when in input mode
     pub fn handle_key_event_in_input_mode(&mut self, key: KeyEvent) {
-        if let Some(ref mut input) = self.text_input {
+        // Prioritize input_dialog (modal) over text_input (footer)
+        if let Some(ref mut dialog) = self.input_dialog {
+            match key.code {
+                KeyCode::Char(c) => {
+                    dialog.insert_char(c);
+                }
+                KeyCode::Backspace => {
+                    dialog.delete_char();
+                }
+                KeyCode::Left => {
+                    dialog.move_cursor_left();
+                }
+                KeyCode::Right => {
+                    dialog.move_cursor_right();
+                }
+                KeyCode::Home => {
+                    dialog.move_cursor_start();
+                }
+                KeyCode::End => {
+                    dialog.move_cursor_end();
+                }
+                KeyCode::Enter => {
+                    let value = dialog.value().to_string();
+                    self.submit_user_input(value);
+                    self.input_dialog = None;
+                    self.input_mode = false;
+                }
+                KeyCode::Esc => {
+                    self.input_dialog = None;
+                    self.input_mode = false;
+                    self.worktree_view.pending_follow_up = false;
+                    self.status_message = Some("Input cancelled".to_string());
+                }
+                _ => {}
+            }
+        } else if let Some(ref mut input) = self.text_input {
             match key.code {
                 KeyCode::Char(c) => {
                     input.insert_char(c);
@@ -524,12 +620,70 @@ impl App {
 
     /// Submit user input back to the running process
     pub fn submit_user_input(&mut self, value: String) {
-        // TODO: Send input back to Claude CLI
-        // For now, just show a status message
-        self.status_message = Some(format!("Submitted: {}", value));
+        // Check if this is a commit message
+        if self.worktree_view.pending_commit_message.is_some() {
+            self.worktree_view.pending_commit_message = None;
 
-        // In the future, this will send the input to the running Claude CLI process
-        // via stdin or by re-running with the input as an argument
+            // Execute commit
+            self.handle_view_action(ViewAction::RunCommand {
+                name: "git".to_string(),
+                args: vec!["commit".to_string(), "-m".to_string(), value],
+            });
+            return;
+        }
+
+        // Check for pending git command (non-commit commands)
+        if let Some(git_cmd) = self.worktree_view.pending_git_command.take() {
+            use crate::tui::views::GitCommand;
+            match git_cmd {
+                GitCommand::Commit => {
+                    self.handle_view_action(ViewAction::RunCommand {
+                        name: "git".to_string(),
+                        args: vec!["commit".to_string(), "-m".to_string(), value],
+                    });
+                }
+                GitCommand::Rebase => {
+                    self.handle_view_action(ViewAction::RunCommand {
+                        name: "git".to_string(),
+                        args: vec!["rebase".to_string(), value],
+                    });
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        // Check if this is a follow-up response to Claude's question
+        if self.worktree_view.pending_follow_up {
+            // Resume conversation with user response
+            self.worktree_view.pending_follow_up = false;
+            let session_id = self.worktree_view.active_session_id.clone();
+
+            // Build options with session ID for resume
+            let mut options = self.worktree_view.get_claude_options();
+            options.session_id = session_id;
+
+            // User's response becomes the prompt, resumed via --resume
+            self.handle_view_action(ViewAction::RunSpecPhase {
+                phase: "follow-up".to_string(),
+                command: value,
+                options,
+            });
+        } else if let Some(phase) = self.worktree_view.pending_input_phase.take() {
+            // Initial phase input - construct command with user input
+            let command = format!("{} {}", phase.command(), value);
+            let options = self.worktree_view.get_claude_options();
+
+            // Run the phase with user input
+            self.handle_view_action(ViewAction::RunSpecPhase {
+                phase: phase.name().to_string(),
+                command,
+                options,
+            });
+        } else {
+            // Fallback: just show a status message
+            self.status_message = Some(format!("Submitted: {}", value));
+        }
     }
 
     /// Handle protocol messages from Claude Code
@@ -540,12 +694,12 @@ impl App {
                 placeholder,
                 next_action: _,
             } => {
-                // Show input widget at bottom status bar
-                let mut input = TextInput::new(prompt);
+                // Use centered dialog for better UX
+                let mut dialog = InputDialog::new("Input Required", prompt);
                 if let Some(ph) = placeholder {
-                    input.placeholder = ph;
+                    dialog = dialog.placeholder(ph);
                 }
-                self.text_input = Some(input);
+                self.input_dialog = Some(dialog);
                 self.input_mode = true;
                 self.status_message = Some("Input requested - type your response".to_string());
             }
@@ -572,6 +726,74 @@ impl App {
                 }
                 self.status_message = Some(full_message);
             }
+            ProtocolMessage::SelectOption {
+                prompt,
+                options,
+                multi_select,
+                default,
+            } => {
+                // Show option picker widget
+                let mut picker = if multi_select {
+                    OptionPicker::with_multi_select(prompt, options)
+                } else {
+                    OptionPicker::new(prompt, options)
+                };
+                if let Some(ref default_id) = default {
+                    picker.set_default(default_id);
+                }
+                self.option_picker = Some(picker);
+                self.picker_mode = true;
+                self.status_message = Some("Select an option".to_string());
+            }
+            ProtocolMessage::AutoContinue {
+                next_phase,
+                delay_ms,
+                message,
+            } => {
+                // Show message and schedule next phase
+                if let Some(msg) = message {
+                    self.status_message = Some(msg);
+                }
+                // Schedule next phase start after delay
+                self.pending_auto_continue = Some((next_phase, delay_ms));
+            }
+            ProtocolMessage::Confirm { prompt, default } => {
+                // Show confirmation dialog as option picker with Yes/No
+                let options = vec![
+                    crate::tui::protocol::SelectOptionItem {
+                        id: "yes".to_string(),
+                        label: "Yes".to_string(),
+                        description: None,
+                    },
+                    crate::tui::protocol::SelectOptionItem {
+                        id: "no".to_string(),
+                        label: "No".to_string(),
+                        description: None,
+                    },
+                ];
+                let mut picker = OptionPicker::new(prompt, options);
+                picker.set_default(if default { "yes" } else { "no" });
+                self.option_picker = Some(picker);
+                self.picker_mode = true;
+            }
+            ProtocolMessage::Progress {
+                phase,
+                step,
+                total_steps,
+                message,
+            } => {
+                // Update progress in WorktreeView
+                self.worktree_view.update_progress(&phase, step, total_steps, &message);
+                self.status_message = Some(format!("[{}/{}] {}", step, total_steps, message));
+            }
+            ProtocolMessage::SessionInfo { session_id, feature } => {
+                // Save session ID
+                self.worktree_view.active_session_id = Some(session_id.clone());
+                if let Some(feat) = feature {
+                    let _ = crate::session::save_session_id(&feat, &session_id);
+                    self.status_message = Some(format!("Session saved for feature {}", feat));
+                }
+            }
         }
     }
 
@@ -580,7 +802,13 @@ impl App {
         // Clear running phase
         self.running_spec_phase = None;
 
-        // Also add output to command runner for reference
+        // Add output to WorktreeView's inline output panel
+        for line in &output {
+            self.worktree_view.add_output(line.clone());
+        }
+        self.worktree_view.command_done();
+
+        // Also add output to command runner for reference (kept for backwards compat)
         for line in &output {
             self.command_runner.add_output(line.clone());
         }
@@ -590,7 +818,7 @@ impl App {
         self.spec_view.handle_phase_completed(phase.clone(), success, output);
         self.spec_view.output_scroll = 0; // Reset scroll for new output
 
-        // Update WorktreeView phase status (if on Worktree tab)
+        // Update WorktreeView phase status
         let status = if success {
             crate::tui::views::PhaseStatus::Completed
         } else {
@@ -599,7 +827,7 @@ impl App {
         self.worktree_view.update_phase_status(&phase, status);
 
         // Check for auto-flow continuation in WorktreeView
-        if self.current_view == CurrentView::Worktree && self.worktree_view.auto_flow.active {
+        if self.worktree_view.auto_flow.active {
             if !self.worktree_view.auto_flow.is_complete() && success {
                 // Auto-advance to next phase
                 self.worktree_view.auto_flow.advance();
@@ -621,13 +849,104 @@ impl App {
                 });
             }
         } else {
-            // Normal status message for SpecView
+            // Normal status message
             self.status_message = Some(if success {
-                format!("{} phase completed - review and press Enter to continue", phase)
+                format!("{} phase completed - press Esc to dismiss output", phase)
             } else {
-                format!("{} phase failed - review output and press Enter to continue or Esc to stop", phase)
+                format!("{} phase failed - press Esc to dismiss output", phase)
             });
         }
+    }
+
+    /// Handle Claude streaming JSON message (real-time output)
+    fn handle_claude_stream(&mut self, msg: ClaudeStreamMessage) {
+        // Display assistant messages in output panel (strip status block)
+        if msg.msg_type == "assistant" {
+            if let Some(text) = msg.get_display_text() {
+                for line in text.lines() {
+                    self.worktree_view.add_output(line.to_string());
+                }
+            }
+        }
+    }
+
+    /// Handle Claude command completed with parsed status
+    fn handle_claude_completed(
+        &mut self,
+        phase: String,
+        success: bool,
+        session_id: Option<String>,
+        status: Option<RscliStatus>,
+    ) {
+        // Save session ID for this feature
+        if let Some(sid) = session_id {
+            self.worktree_view.active_session_id = Some(sid.clone());
+            if let Some(ref info) = self.worktree_view.feature_info {
+                let _ = crate::session::save_session_id(&info.number, &sid);
+            }
+        }
+
+        // Handle based on parsed JSON status
+        if let Some(status) = status {
+            match status.status.as_str() {
+                "needs_input" => {
+                    // Use the prompt from JSON, or fallback
+                    let prompt = status
+                        .prompt
+                        .unwrap_or_else(|| "Enter your response:".to_string());
+                    self.worktree_view.pending_follow_up = true;
+                    // Use centered input dialog for better UX
+                    self.input_dialog = Some(InputDialog::new("Claude Input", prompt));
+                    self.input_mode = true;
+                    self.status_message = Some("Waiting for your response...".to_string());
+                }
+                "error" => {
+                    let msg = status
+                        .message
+                        .unwrap_or_else(|| "Unknown error".to_string());
+                    self.worktree_view.command_done();
+                    self.status_message = Some(format!("{} error: {}", phase, msg));
+                }
+                "completed" | _ => {
+                    self.worktree_view.command_done();
+                    self.status_message = Some(format!("{} phase completed", phase));
+                }
+            }
+        } else {
+            // No status block - use heuristic detection
+            // Check if the last non-empty output line looks like a question
+            let needs_input = self
+                .worktree_view
+                .output_lines
+                .iter()
+                .rev()
+                .find(|line| !line.trim().is_empty())
+                .map(|line| {
+                    let text = line.trim().to_lowercase();
+                    text.ends_with('?')
+                        || text.contains("please describe")
+                        || text.contains("what feature")
+                        || text.contains("please provide")
+                        || text.contains("could you")
+                        || text.contains("would you like")
+                })
+                .unwrap_or(false);
+
+            if needs_input && self.worktree_view.active_session_id.is_some() {
+                // Looks like Claude asked a question - prompt for input
+                self.worktree_view.pending_follow_up = true;
+                // Use centered input dialog for better UX
+                self.input_dialog = Some(InputDialog::new("Claude Input", "Enter your response:"));
+                self.input_mode = true;
+                self.status_message = Some("Claude is waiting for your input...".to_string());
+            } else {
+                // Truly completed
+                self.worktree_view.command_done();
+                self.status_message = Some(format!("{} phase finished", phase));
+            }
+        }
+
+        self.running_spec_phase = None;
     }
 
     /// Refresh git worktree information
@@ -752,9 +1071,8 @@ impl App {
     pub fn copy_current_pane(&mut self) {
         let (content, pane_name) = match self.current_view {
             CurrentView::Worktree => (self.worktree_view.get_focused_pane_text(), "current pane"),
+            CurrentView::Settings => ("".to_string(), "settings"), // Settings doesn't have copyable panes
             CurrentView::Dashboard => (self.dashboard.get_focused_pane_text(), "current pane"),
-            CurrentView::Commands => (self.command_runner.get_focused_pane_text(), "current pane"),
-            CurrentView::Spec => (self.spec_view.get_focused_pane_text(), "current pane"),
         };
 
         if content.is_empty() {
@@ -783,9 +1101,8 @@ impl App {
     pub fn copy_current_tab_styled(&mut self) {
         let (content, tab_name) = match self.current_view {
             CurrentView::Worktree => (self.worktree_view.get_styled_output(), "Worktree"),
+            CurrentView::Settings => ("".to_string(), "Settings"), // Settings doesn't have styled output
             CurrentView::Dashboard => (self.dashboard.get_styled_output(), "Dashboard"),
-            CurrentView::Commands => (self.command_runner.get_styled_output(), "Commands"),
-            CurrentView::Spec => (self.spec_view.get_styled_output(), "Spec"),
         };
 
         if content.is_empty() {
@@ -848,25 +1165,48 @@ impl App {
 
     /// Run the TUI application
     pub fn run(&mut self) -> AppResult<()> {
+        log_to_file!("App::run() starting");
+
         // Setup terminal
+        log_to_file!("enable_raw_mode()...");
         enable_raw_mode()?;
+        log_to_file!("enable_raw_mode() OK");
+
         let mut stdout = stdout();
+        log_to_file!("EnterAlternateScreen...");
         execute!(stdout, EnterAlternateScreen)?;
+        log_to_file!("EnterAlternateScreen OK");
+
+        log_to_file!("Creating CrosstermBackend...");
         let backend = CrosstermBackend::new(stdout);
+        log_to_file!("CrosstermBackend OK");
+
+        log_to_file!("Creating Terminal...");
         let mut terminal = Terminal::new(backend)?;
+        log_to_file!("Terminal OK");
+
+        log_to_file!("terminal.clear()...");
         terminal.clear()?;
+        log_to_file!("terminal.clear() OK");
 
         // Create event handler
+        log_to_file!("Creating EventHandler...");
         let event_handler = EventHandler::new(100); // 100ms tick rate
+        log_to_file!("EventHandler OK");
+
         self.event_sender = Some(event_handler.sender());
 
         // Main loop
+        log_to_file!("Entering main_loop...");
         let result = self.main_loop(&mut terminal, &event_handler);
+        log_to_file!("main_loop returned: {:?}", result.as_ref().map(|_| "Ok"));
 
         // Restore terminal
+        log_to_file!("Restoring terminal...");
         disable_raw_mode()?;
         execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
         terminal.show_cursor()?;
+        log_to_file!("Terminal restored");
 
         result
     }
@@ -876,14 +1216,20 @@ impl App {
         terminal: &mut Terminal<CrosstermBackend<Stdout>>,
         event_handler: &EventHandler,
     ) -> AppResult<()> {
+        log_to_file!("main_loop: starting, running={}", self.running);
+        let mut iteration = 0;
         while self.running {
+            iteration += 1;
+            log_to_file!("main_loop iteration {}: drawing UI", iteration);
             // Draw UI
             terminal.draw(|frame| {
                 self.render(frame);
             })?;
+            log_to_file!("main_loop iteration {}: UI drawn", iteration);
 
             // Check if visual copy was requested
             if self.copy_visual_view {
+                log_to_file!("main_loop iteration {}: processing visual copy", iteration);
                 self.copy_visual_view = false; // Reset flag
 
                 // Capture the visual buffer
@@ -896,9 +1242,8 @@ impl App {
                                     let lines = content.lines().count();
                                     let tab_name = match self.current_view {
                                         CurrentView::Worktree => "Worktree",
+                                        CurrentView::Settings => "Settings",
                                         CurrentView::Dashboard => "Dashboard",
-                                        CurrentView::Commands => "Commands",
-                                        CurrentView::Spec => "Spec",
                                     };
                                     self.status_message = Some(format!(
                                         "Copied {} visual view ({} lines)",
@@ -921,10 +1266,19 @@ impl App {
             }
 
             // Handle events
+            log_to_file!("main_loop iteration {}: waiting for event", iteration);
             match event_handler.next()? {
-                Event::Tick => self.tick(),
-                Event::Key(key) => self.handle_key_event(key),
-                Event::Mouse(_) => {} // Could add mouse support later
+                Event::Tick => {
+                    log_to_file!("main_loop iteration {}: Event::Tick", iteration);
+                    self.tick();
+                }
+                Event::Key(key) => {
+                    log_to_file!("main_loop iteration {}: Event::Key({:?})", iteration, key);
+                    self.handle_key_event(key);
+                }
+                Event::Mouse(_) => {
+                    log_to_file!("main_loop iteration {}: Event::Mouse", iteration);
+                } // Could add mouse support later
                 Event::Resize(_, _) => {} // Terminal handles resize automatically
                 Event::CommandOutput(line) => self.handle_command_output(line),
                 Event::CommandDone { success, lines } => self.handle_command_done(success, lines),
@@ -952,8 +1306,58 @@ impl App {
                         error,
                     );
                 }
+                Event::ClaudeStream(msg) => {
+                    self.handle_claude_stream(msg);
+                }
+                Event::ClaudeCompleted {
+                    phase,
+                    success,
+                    session_id,
+                    status,
+                } => {
+                    log_to_file!("main_loop iteration {}: Event::ClaudeCompleted", iteration);
+                    self.handle_claude_completed(phase, success, session_id, status);
+                }
+                Event::CommitStarted => {
+                    self.status_message = Some("Commit workflow started...".to_string());
+                }
+                Event::CommitBlocked { scan } => {
+                    self.show_commit_blocked_dialog(scan);
+                }
+                Event::CommitReady {
+                    message,
+                    warnings,
+                    sensitive_files,
+                } => {
+                    // Store in worktree view
+                    self.worktree_view.pending_commit_message = Some(message.clone());
+                    self.worktree_view.commit_warnings = warnings.clone();
+
+                    // Show editable dialog
+                    self.input_dialog = Some(InputDialog::with_description(
+                        "Commit Changes",
+                        Self::format_warnings(&warnings, &sensitive_files),
+                        "Message:",
+                    ).placeholder(message));
+                    self.input_mode = true;
+                }
+                Event::CommitCompleted { success, output } => {
+                    self.worktree_view.add_output(output);
+                    if success {
+                        self.worktree_view.add_output("✓ Commit successful".to_string());
+                        self.status_message = Some("Commit successful!".to_string());
+                    } else {
+                        self.status_message = Some("Commit failed - see output for details".to_string());
+                    }
+                }
+                Event::CommitError { error } => {
+                    self.worktree_view.add_output(format!("❌ Error: {}", error));
+                    self.status_message = Some(format!("Commit error: {}", error));
+                }
             }
+            log_to_file!("main_loop iteration {}: event handled, running={}", iteration, self.running);
         }
+        log_to_file!("main_loop: exited (running={})", self.running);
         Ok(())
     }
 
@@ -976,12 +1380,11 @@ impl App {
             .split(size);
 
         // Render tabs
-        let tab_titles = vec!["[1] Worktree", "[2] Commands", "[3] Spec-Kit", "[4] Dashboard"];
+        let tab_titles = vec!["[1] Worktree", "[2] Settings", "[3] Dashboard"];
         let selected_tab = match self.current_view {
             CurrentView::Worktree => 0,
-            CurrentView::Commands => 1,
-            CurrentView::Spec => 2,
-            CurrentView::Dashboard => 3,
+            CurrentView::Settings => 1,
+            CurrentView::Dashboard => 2,
         };
         let tabs = Tabs::new(tab_titles)
             .block(
@@ -997,8 +1400,7 @@ impl App {
         // Render current view
         match self.current_view {
             CurrentView::Worktree => self.worktree_view.render(frame, chunks[1]),
-            CurrentView::Commands => self.command_runner.render(frame, chunks[1]),
-            CurrentView::Spec => self.spec_view.render(frame, chunks[1]),
+            CurrentView::Settings => self.settings_view.render(frame, chunks[1]),
             CurrentView::Dashboard => self.dashboard.render(frame, chunks[1]),
         }
 
@@ -1039,9 +1441,9 @@ impl App {
         let shortcuts_bar = Paragraph::new(shortcuts);
         frame.render_widget(shortcuts_bar, footer_chunks[0]);
 
-        // Status message bar OR input field
-        if self.input_mode && self.text_input.is_some() {
-            // Render input field
+        // Status message bar OR input field (footer input, not dialog)
+        if self.input_mode && self.text_input.is_some() && self.input_dialog.is_none() {
+            // Render footer input field (only if no dialog is open)
             if let Some(ref input) = self.text_input {
                 frame.render_widget(input, footer_chunks[1]);
             }
@@ -1054,5 +1456,62 @@ impl App {
             let status_bar = Paragraph::new(status).style(Style::default().fg(Color::Cyan));
             frame.render_widget(status_bar, footer_chunks[1]);
         }
+
+        // Render input dialog as overlay (on top of everything)
+        if let Some(ref dialog) = self.input_dialog {
+            dialog.render(size, frame.buffer_mut());
+        }
+    }
+
+    /// Show commit blocked dialog with security details
+    fn show_commit_blocked_dialog(&mut self, scan: rscli_core::SecurityScanResult) {
+        use rscli_core::Severity;
+
+        let details = scan
+            .warnings
+            .iter()
+            .filter(|w| matches!(w.severity, Severity::Critical))
+            .map(|w| format!("{}:{} - {}", w.file_path, w.line_number, w.message))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        self.worktree_view.add_output("❌ COMMIT BLOCKED".to_string());
+        self.worktree_view.add_output("".to_string());
+        self.worktree_view.add_output("Critical security issues detected:".to_string());
+        for line in details.lines() {
+            self.worktree_view.add_output(format!("  {}", line));
+        }
+        self.status_message = Some("Commit blocked due to security issues".to_string());
+    }
+
+    /// Format warnings and sensitive files for display
+    fn format_warnings(
+        warnings: &[rscli_core::SecurityWarning],
+        sensitive_files: &[rscli_core::SensitiveFile],
+    ) -> String {
+        let mut desc = String::new();
+
+        if !warnings.is_empty() {
+            desc.push_str("⚠️ Security Warnings:\n");
+            for w in warnings.iter().take(3) {
+                desc.push_str(&format!(
+                    "  • {}:{} - {}\n",
+                    w.file_path, w.line_number, w.message
+                ));
+            }
+            if warnings.len() > 3 {
+                desc.push_str(&format!("  ... and {} more\n", warnings.len() - 3));
+            }
+            desc.push('\n');
+        }
+
+        if !sensitive_files.is_empty() {
+            desc.push_str("📁 Sensitive Files:\n");
+            for f in sensitive_files.iter().take(3) {
+                desc.push_str(&format!("  • {} ({})\n", f.path, f.reason));
+            }
+        }
+
+        desc
     }
 }

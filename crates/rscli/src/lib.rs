@@ -3,6 +3,8 @@
 pub mod cli;
 pub mod commands;
 pub mod runners;
+pub mod session;
+pub mod settings;
 pub mod tui;
 pub mod ui;
 pub mod version;

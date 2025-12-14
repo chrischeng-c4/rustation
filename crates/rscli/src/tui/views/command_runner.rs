@@ -128,6 +128,7 @@ pub enum OutputLineType {
     Error,
     Warning,
     Info,
+    Command, // For displaying executed commands
 }
 
 impl CommandRunner {
@@ -256,6 +257,7 @@ impl CommandRunner {
                     OutputLineType::Error => "\x1b[31m",    // Red
                     OutputLineType::Warning => "\x1b[33m",  // Yellow
                     OutputLineType::Info => "\x1b[36m",     // Cyan
+                    OutputLineType::Command => "\x1b[35;1m", // Magenta bold
                     OutputLineType::Normal => "",
                 };
                 let reset = if color_code.is_empty() { "" } else { "\x1b[0m" };
@@ -418,6 +420,7 @@ impl CommandRunner {
                     OutputLineType::Error => Style::default().fg(Color::Red),
                     OutputLineType::Warning => Style::default().fg(Color::Yellow),
                     OutputLineType::Info => Style::default().fg(Color::Cyan),
+                    OutputLineType::Command => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
                 };
                 Line::from(Span::styled(&line.text, style))
             })

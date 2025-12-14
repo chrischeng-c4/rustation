@@ -27,17 +27,45 @@ pub struct FeatureInfo {
     pub spec_dir: PathBuf,
 }
 
-/// Quick action item
-#[derive(Debug, Clone)]
-pub struct QuickAction {
-    pub key: &'static str,
-    pub description: &'static str,
+/// Git command types
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GitCommand {
+    Commit,
+    Push,
+    Status,
+    AddAll,
+    Rebase,
 }
 
-impl QuickAction {
-    fn new(key: &'static str, description: &'static str) -> Self {
-        Self { key, description }
+impl GitCommand {
+    /// Get all git commands in display order
+    pub fn all() -> &'static [GitCommand] {
+        &[
+            GitCommand::Commit,
+            GitCommand::Push,
+            GitCommand::Status,
+            GitCommand::AddAll,
+            GitCommand::Rebase,
+        ]
     }
+
+    /// Get display name for this git command
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            GitCommand::Commit => "Commit",
+            GitCommand::Push => "Push",
+            GitCommand::Status => "Status",
+            GitCommand::AddAll => "Add All",
+            GitCommand::Rebase => "Rebase",
+        }
+    }
+}
+
+/// Unified command that can be either an SDD phase or a Git action
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Command {
+    SddPhase(SpecPhase, PhaseStatus),
+    GitAction(GitCommand),
 }
 
 /// Content type to display in middle panel
@@ -61,9 +89,8 @@ impl ContentType {
 /// Focus area in the worktree view
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorktreeFocus {
-    Phases,
+    Commands,  // Unified panel for SDD phases and Git actions
     Content,
-    Actions,
 }
 
 /// Worktree-focused development workspace view
@@ -84,9 +111,13 @@ pub struct WorktreeView {
     // UI state
     pub focus: WorktreeFocus,
     pub phase_state: ListState,
-    pub action_state: ListState,
+    pub command_state: ListState,  // Unified command list state
     pub content_scroll: usize,
     pub content_type: ContentType,
+
+    // Unified command list (SDD phases + Git actions)
+    pub commands: Vec<Command>,
+    pub pending_git_command: Option<GitCommand>,
 
     // Refresh tracking
     pub tick_count: u64,
@@ -94,6 +125,27 @@ pub struct WorktreeView {
 
     // Auto-flow state for sequential phase execution
     pub auto_flow: AutoFlowState,
+
+    // Command output display
+    pub output_lines: Vec<String>,
+    pub output_scroll: usize,
+    pub is_running: bool,
+    pub running_phase: Option<String>,
+    pub spinner_frame: usize,
+
+    // Input handling
+    pub pending_input_phase: Option<SpecPhase>,
+    pub active_session_id: Option<String>,
+    pub pending_follow_up: bool,
+
+    // Progress tracking
+    pub progress_step: Option<u32>,
+    pub progress_total: Option<u32>,
+    pub progress_message: Option<String>,
+
+    // Commit workflow state
+    pub pending_commit_message: Option<String>,
+    pub commit_warnings: Vec<rscli_core::SecurityWarning>,
 }
 
 impl WorktreeView {
@@ -103,13 +155,22 @@ impl WorktreeView {
         let mut phase_state = ListState::default();
         phase_state.select(Some(0));
 
-        let mut action_state = ListState::default();
-        action_state.select(Some(0));
+        let mut command_state = ListState::default();
+        command_state.select(Some(1)); // Start on first SDD phase (Specify), not header
 
         let phases = SpecPhase::all()
             .iter()
             .map(|&p| (p, PhaseStatus::NotStarted))
-            .collect();
+            .collect::<Vec<_>>();
+
+        // Build unified command list (SDD phases + Git commands)
+        let mut commands = Vec::new();
+        for (phase, status) in &phases {
+            commands.push(Command::SddPhase(*phase, *status));
+        }
+        for git_cmd in GitCommand::all() {
+            commands.push(Command::GitAction(*git_cmd));
+        }
 
         Self {
             feature_info: None,
@@ -119,14 +180,29 @@ impl WorktreeView {
             tasks_content: None,
             phases,
             current_phase: None,
-            focus: WorktreeFocus::Content,
+            focus: WorktreeFocus::Commands,
             phase_state,
-            action_state,
+            command_state,
             content_scroll: 0,
             content_type: ContentType::Spec,
+            commands,
+            pending_git_command: None,
             tick_count: 0,
             last_refresh: 0,
             auto_flow: AutoFlowState::new(),
+            output_lines: Vec::new(),
+            output_scroll: 0,
+            is_running: false,
+            running_phase: None,
+            spinner_frame: 0,
+            pending_input_phase: None,
+            active_session_id: None,
+            pending_follow_up: false,
+            progress_step: None,
+            progress_total: None,
+            progress_message: None,
+            pending_commit_message: None,
+            commit_warnings: Vec::new(),
         }
     }
 
@@ -284,53 +360,6 @@ impl WorktreeView {
         self.current_phase = Some(SpecPhase::Review);
     }
 
-    /// Get context-aware quick actions based on current phase
-    fn get_quick_actions(&self) -> Vec<QuickAction> {
-        let mut actions = vec![];
-
-        if self.feature_info.is_none() {
-            actions.push(QuickAction::new("n", "Create new feature"));
-            return actions;
-        }
-
-        match self.current_phase {
-            Some(SpecPhase::Specify) | Some(SpecPhase::Clarify) => {
-                actions.push(QuickAction::new("e", "Edit spec.md"));
-                actions.push(QuickAction::new("c", "Run /speckit.clarify"));
-                actions.push(QuickAction::new("p", "Run /speckit.plan"));
-            }
-            Some(SpecPhase::Plan) => {
-                actions.push(QuickAction::new("v", "View plan.md"));
-                actions.push(QuickAction::new("t", "Run /speckit.tasks"));
-                actions.push(QuickAction::new("e", "Edit plan.md"));
-            }
-            Some(SpecPhase::Tasks) => {
-                actions.push(QuickAction::new("v", "View tasks.md"));
-                actions.push(QuickAction::new("i", "Run /speckit.implement"));
-                actions.push(QuickAction::new("t", "Run tests"));
-            }
-            Some(SpecPhase::Implement) | Some(SpecPhase::Analyze) => {
-                actions.push(QuickAction::new("t", "Run tests"));
-                actions.push(QuickAction::new("b", "Build project"));
-                actions.push(QuickAction::new("l", "Run lint"));
-                actions.push(QuickAction::new("i", "Run /speckit.implement"));
-            }
-            Some(SpecPhase::Review) => {
-                actions.push(QuickAction::new("r", "Run /speckit.review"));
-                actions.push(QuickAction::new("t", "Run tests"));
-                actions.push(QuickAction::new("p", "Create PR"));
-            }
-            None => {
-                actions.push(QuickAction::new("n", "Create new feature"));
-            }
-        }
-
-        // Common actions
-        actions.push(QuickAction::new("s", "Switch content"));
-
-        actions
-    }
-
     /// Get repository root
     fn get_repo_root(&self) -> Result<PathBuf, std::io::Error> {
         std::env::current_dir()
@@ -345,21 +374,48 @@ impl WorktreeView {
         }
     }
 
+    /// Map display index to command index (accounting for headers and separators)
+    fn display_index_to_command_index(&self, display_idx: usize) -> Option<usize> {
+        // Display indices:
+        // 0: "SDD WORKFLOW" header (not selectable)
+        // 1-7: SDD phases (commands 0-6)
+        // 8: separator (not selectable)
+        // 9: "GIT ACTIONS" header (not selectable)
+        // 10+: Git commands (commands 7+)
+
+        let num_sdd_phases = self.phases.len();
+
+        if display_idx == 0 {
+            // "SDD WORKFLOW" header - not selectable
+            None
+        } else if display_idx <= num_sdd_phases {
+            // SDD phases: display index 1-7 maps to commands 0-6
+            Some(display_idx - 1)
+        } else if display_idx == num_sdd_phases + 1 {
+            // Separator - not selectable
+            None
+        } else if display_idx == num_sdd_phases + 2 {
+            // "GIT ACTIONS" header - not selectable
+            None
+        } else {
+            // Git commands: display index 10+ maps to commands 7+
+            Some(display_idx - 3)
+        }
+    }
+
     /// Move focus left
     fn focus_left(&mut self) {
         self.focus = match self.focus {
-            WorktreeFocus::Content => WorktreeFocus::Phases,
-            WorktreeFocus::Actions => WorktreeFocus::Content,
-            WorktreeFocus::Phases => WorktreeFocus::Actions,
+            WorktreeFocus::Content => WorktreeFocus::Commands,
+            WorktreeFocus::Commands => WorktreeFocus::Content,
         };
     }
 
     /// Move focus right
     fn focus_right(&mut self) {
         self.focus = match self.focus {
-            WorktreeFocus::Phases => WorktreeFocus::Content,
-            WorktreeFocus::Content => WorktreeFocus::Actions,
-            WorktreeFocus::Actions => WorktreeFocus::Phases,
+            WorktreeFocus::Commands => WorktreeFocus::Content,
+            WorktreeFocus::Content => WorktreeFocus::Commands,
         };
     }
 
@@ -371,10 +427,22 @@ impl WorktreeView {
     /// Scroll content down
     fn scroll_down(&mut self) {
         match self.focus {
-            WorktreeFocus::Phases => {
-                let i = self.phase_state.selected().unwrap_or(0);
-                let new_i = (i + 1).min(self.phases.len().saturating_sub(1));
-                self.phase_state.select(Some(new_i));
+            WorktreeFocus::Commands => {
+                let current_idx = self.command_state.selected().unwrap_or(0);
+                // Calculate total display items: header + phases + separator + header + git commands
+                let num_sdd_phases = self.phases.len();
+                let total_display_items = 1 + num_sdd_phases + 1 + 1 + GitCommand::all().len();
+
+                // Find next selectable item
+                let mut new_idx = current_idx + 1;
+                while new_idx < total_display_items {
+                    if self.display_index_to_command_index(new_idx).is_some() {
+                        self.command_state.select(Some(new_idx));
+                        return;
+                    }
+                    new_idx += 1;
+                }
+                // If we couldn't find a next selectable item, stay at current
             }
             WorktreeFocus::Content => {
                 if let Some(content) = self.get_current_content() {
@@ -384,30 +452,33 @@ impl WorktreeView {
                     }
                 }
             }
-            WorktreeFocus::Actions => {
-                let actions = self.get_quick_actions();
-                let i = self.action_state.selected().unwrap_or(0);
-                let new_i = (i + 1).min(actions.len().saturating_sub(1));
-                self.action_state.select(Some(new_i));
-            }
         }
     }
 
     /// Scroll content up
     fn scroll_up(&mut self) {
         match self.focus {
-            WorktreeFocus::Phases => {
-                let i = self.phase_state.selected().unwrap_or(0);
-                let new_i = i.saturating_sub(1);
-                self.phase_state.select(Some(new_i));
+            WorktreeFocus::Commands => {
+                let current_idx = self.command_state.selected().unwrap_or(0);
+
+                // Find previous selectable item
+                if current_idx > 0 {
+                    let mut new_idx = current_idx - 1;
+                    loop {
+                        if self.display_index_to_command_index(new_idx).is_some() {
+                            self.command_state.select(Some(new_idx));
+                            return;
+                        }
+                        if new_idx == 0 {
+                            break;
+                        }
+                        new_idx -= 1;
+                    }
+                }
+                // If we couldn't find a previous selectable item, stay at current
             }
             WorktreeFocus::Content => {
                 self.content_scroll = self.content_scroll.saturating_sub(1);
-            }
-            WorktreeFocus::Actions => {
-                let i = self.action_state.selected().unwrap_or(0);
-                let new_i = i.saturating_sub(1);
-                self.action_state.select(Some(new_i));
             }
         }
     }
@@ -420,13 +491,6 @@ impl WorktreeView {
             ContentType::Tasks => ContentType::Spec,
         };
         self.content_scroll = 0;
-    }
-
-    /// Get the currently selected phase from the phases list
-    fn get_selected_phase(&self) -> Option<SpecPhase> {
-        self.phase_state
-            .selected()
-            .and_then(|i| self.phases.get(i).map(|(phase, _status)| *phase))
     }
 
     /// Run the selected phase and switch to Commands view
@@ -467,30 +531,127 @@ impl WorktreeView {
         }
     }
 
+    /// Get default Claude CLI options
+    pub fn get_claude_options(&self) -> ClaudeOptions {
+        ClaudeOptions {
+            max_turns: 50,
+            skip_permissions: false,
+            continue_session: false,
+            session_id: None,
+            allowed_tools: Vec::new(),
+        }
+    }
+
+    /// Start a command and track it
+    pub fn start_command(&mut self, phase: SpecPhase, session_id: Option<&str>) {
+        self.is_running = true;
+        self.running_phase = Some(phase.name().to_string());
+        self.output_lines.clear();
+        self.output_scroll = 0;
+        self.active_session_id = session_id.map(|s| s.to_string());
+    }
+
+    /// Get the current session ID if active
+    pub fn get_session_id(&self) -> Option<String> {
+        self.active_session_id.clone()
+    }
+
+    /// Check if output is being shown
+    pub fn is_showing_output(&self) -> bool {
+        !self.output_lines.is_empty() || self.is_running
+    }
+
+    /// Add output line
+    pub fn add_output(&mut self, line: String) {
+        self.output_lines.push(line);
+    }
+
+    /// Mark command as done
+    pub fn command_done(&mut self) {
+        self.is_running = false;
+        self.running_phase = None;
+        self.active_session_id = None;
+    }
+
+    /// Update progress display
+    pub fn update_progress(&mut self, _phase: &str, step: u32, total: u32, message: &str) {
+        self.progress_step = Some(step);
+        self.progress_total = Some(total);
+        self.progress_message = Some(message.to_string());
+    }
+
+    /// Clear progress display
+    pub fn clear_progress(&mut self) {
+        self.progress_step = None;
+        self.progress_total = None;
+        self.progress_message = None;
+    }
+
+    /// Clear output
+    pub fn clear_output(&mut self) {
+        self.output_lines.clear();
+        self.output_scroll = 0;
+    }
+
+    /// Handle git command execution
+    fn handle_git_command(&mut self, git_cmd: GitCommand) -> ViewAction {
+        match git_cmd {
+            GitCommand::Commit => {
+                // NEW: Enhanced commit workflow with security scanning
+                ViewAction::RunEnhancedCommit
+            }
+            GitCommand::Push => {
+                // Run git push directly
+                ViewAction::RunCommand {
+                    name: "git".to_string(),
+                    args: vec!["push".to_string()],
+                }
+            }
+            GitCommand::Status => {
+                // Run git status directly
+                ViewAction::RunCommand {
+                    name: "git".to_string(),
+                    args: vec!["status".to_string()],
+                }
+            }
+            GitCommand::AddAll => {
+                // Run git add --all directly
+                ViewAction::RunCommand {
+                    name: "git".to_string(),
+                    args: vec!["add".to_string(), "--all".to_string()],
+                }
+            }
+            GitCommand::Rebase => {
+                // Store pending git command and request branch name
+                self.pending_git_command = Some(git_cmd);
+                ViewAction::RequestInput {
+                    prompt: "Rebase onto branch:".to_string(),
+                    placeholder: Some("main".to_string()),
+                }
+            }
+        }
+    }
+
     /// Get focused pane text for copying
     pub fn get_focused_pane_text(&self) -> String {
         match self.focus {
-            WorktreeFocus::Phases => {
-                // Return phase list
-                self.phases
-                    .iter()
-                    .map(|(phase, status)| {
-                        format!("{} {}", status.symbol(), phase.display_name())
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n")
+            WorktreeFocus::Commands => {
+                // Return command list (SDD phases + Git actions)
+                let mut lines = Vec::new();
+                lines.push("SDD WORKFLOW".to_string());
+                for (phase, status) in &self.phases {
+                    lines.push(format!("{} {}", status.symbol(), phase.display_name()));
+                }
+                lines.push(String::new());
+                lines.push("GIT ACTIONS".to_string());
+                for git_cmd in GitCommand::all() {
+                    lines.push(format!("• {}", git_cmd.display_name()));
+                }
+                lines.join("\n")
             }
             WorktreeFocus::Content => {
                 // Return current content
                 self.get_current_content().unwrap_or("").to_string()
-            }
-            WorktreeFocus::Actions => {
-                // Return quick actions list
-                self.get_quick_actions()
-                    .iter()
-                    .map(|action| format!("[{}] {}", action.key, action.description))
-                    .collect::<Vec<_>>()
-                    .join("\n")
             }
         }
     }
@@ -502,31 +663,53 @@ impl WorktreeView {
         self.get_focused_pane_text()
     }
 
-    /// Render left panel (phases)
-    fn render_phases(&self, frame: &mut Frame, area: Rect) {
-        let is_focused = self.focus == WorktreeFocus::Phases;
+    /// Render left panel (commands - unified SDD phases and Git actions)
+    fn render_commands(&self, frame: &mut Frame, area: Rect) {
+        let is_focused = self.focus == WorktreeFocus::Commands;
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(" SDD Phases ")
+            .title(" Commands ")
             .border_style(if is_focused {
                 Style::default().fg(Color::Yellow)
             } else {
                 Style::default()
             });
 
-        let items: Vec<ListItem> = self
-            .phases
-            .iter()
-            .map(|(phase, status)| {
-                let symbol = status.symbol();
-                let color = status.color();
-                ListItem::new(vec![Line::from(vec![
-                    Span::styled(symbol, Style::default().fg(color)),
-                    Span::raw(" "),
-                    Span::styled(phase.display_name(), Style::default().fg(Color::White)),
-                ])])
-            })
-            .collect();
+        let mut items = Vec::new();
+
+        // SDD WORKFLOW section header
+        items.push(ListItem::new(vec![Line::from(vec![
+            Span::styled("SDD WORKFLOW", Style::default()
+                .fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        ])]));
+
+        // SDD phase commands
+        for (phase, status) in &self.phases {
+            let symbol = status.symbol();
+            let color = status.color();
+            items.push(ListItem::new(vec![Line::from(vec![
+                Span::styled(symbol, Style::default().fg(color)),
+                Span::raw(" "),
+                Span::styled(phase.display_name(), Style::default().fg(Color::White)),
+            ])]));
+        }
+
+        // Separator
+        items.push(ListItem::new(Line::from("")));
+
+        // GIT ACTIONS section header
+        items.push(ListItem::new(vec![Line::from(vec![
+            Span::styled("GIT ACTIONS", Style::default()
+                .fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        ])]));
+
+        // Git commands
+        for git_cmd in GitCommand::all() {
+            items.push(ListItem::new(vec![Line::from(vec![
+                Span::raw("• "),
+                Span::styled(git_cmd.display_name(), Style::default().fg(Color::White)),
+            ])]));
+        }
 
         // Add feature info at bottom
         let mut footer_lines = vec![];
@@ -554,7 +737,7 @@ impl WorktreeView {
             )
             .highlight_symbol("▶ ");
 
-        frame.render_stateful_widget(list, area, &mut self.phase_state.clone());
+        frame.render_stateful_widget(list, area, &mut self.command_state.clone());
 
         // Render footer with feature info
         if !footer_lines.is_empty() && area.height > 10 {
@@ -641,80 +824,6 @@ impl WorktreeView {
 
         frame.render_widget(paragraph, area);
     }
-
-    /// Render right panel (actions)
-    fn render_actions(&self, frame: &mut Frame, area: Rect) {
-        let is_focused = self.focus == WorktreeFocus::Actions;
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Quick Actions ")
-            .border_style(if is_focused {
-                Style::default().fg(Color::Yellow)
-            } else {
-                Style::default()
-            });
-
-        let actions = self.get_quick_actions();
-        let items: Vec<ListItem> = actions
-            .iter()
-            .map(|action| {
-                ListItem::new(vec![
-                    Line::from(vec![
-                        Span::styled(
-                            format!("[{}]", action.key),
-                            Style::default()
-                                .fg(Color::Cyan)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                        Span::raw(" "),
-                        Span::styled(action.description, Style::default().fg(Color::White)),
-                    ]),
-                ])
-            })
-            .collect();
-
-        // Add current phase info
-        let mut footer_lines = vec![Line::from("")];
-        if let Some(phase) = self.current_phase {
-            let default_status = PhaseStatus::NotStarted;
-            let status = self
-                .phases
-                .iter()
-                .find(|(p, _)| p == &phase)
-                .map(|(_, s)| s)
-                .unwrap_or(&default_status);
-
-            footer_lines.push(Line::from(vec![
-                Span::styled("Current: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(status.symbol(), Style::default().fg(status.color())),
-                Span::raw(" "),
-                Span::styled(phase.display_name(), Style::default().fg(Color::Yellow)),
-            ]));
-        }
-
-        let list = List::new(items)
-            .block(block)
-            .highlight_style(
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .highlight_symbol("▶ ");
-
-        frame.render_stateful_widget(list, area, &mut self.action_state.clone());
-
-        // Render footer with current phase
-        if !footer_lines.is_empty() && area.height > 10 {
-            let footer_area = Rect {
-                x: area.x + 1,
-                y: area.y + area.height.saturating_sub(3),
-                width: area.width.saturating_sub(2),
-                height: 2,
-            };
-            let footer = Paragraph::new(footer_lines);
-            frame.render_widget(footer, footer_area);
-        }
-    }
 }
 
 impl Default for WorktreeView {
@@ -725,19 +834,17 @@ impl Default for WorktreeView {
 
 impl View for WorktreeView {
     fn render(&self, frame: &mut Frame, area: Rect) {
-        // Split into 3 columns
+        // Split into 2 columns: Commands (30%) | Content (70%)
         let columns = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(25), // Phases
-                Constraint::Percentage(50), // Content
-                Constraint::Percentage(25), // Actions
+                Constraint::Percentage(30), // Commands (SDD phases + Git actions)
+                Constraint::Percentage(70), // Content
             ])
             .split(area);
 
-        self.render_phases(frame, columns[0]);
+        self.render_commands(frame, columns[0]);
         self.render_content(frame, columns[1]);
-        self.render_actions(frame, columns[2]);
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> ViewAction {
@@ -794,10 +901,31 @@ impl View for WorktreeView {
                 ViewAction::None
             }
             KeyCode::Enter => {
-                // Start the selected phase if in Phases panel
-                if self.focus == WorktreeFocus::Phases {
-                    if let Some(phase) = self.get_selected_phase() {
-                        return self.run_phase(phase);
+                // Execute selected command (SDD phase or Git action)
+                if self.focus == WorktreeFocus::Commands {
+                    if let Some(display_idx) = self.command_state.selected() {
+                        // Map display index to actual command index
+                        if let Some(cmd_idx) = self.display_index_to_command_index(display_idx) {
+                            if let Some(command) = self.commands.get(cmd_idx) {
+                                return match command {
+                                    Command::SddPhase(phase, _) => {
+                                        // Specify phase needs user input first
+                                        if *phase == SpecPhase::Specify {
+                                            self.pending_input_phase = Some(*phase);
+                                            ViewAction::RequestInput {
+                                                prompt: "Enter feature description:".to_string(),
+                                                placeholder: Some("e.g., Add user authentication with OAuth2".to_string()),
+                                            }
+                                        } else {
+                                            self.run_phase(*phase)
+                                        }
+                                    }
+                                    Command::GitAction(git_cmd) => {
+                                        self.handle_git_command(*git_cmd)
+                                    }
+                                };
+                            }
+                        }
                     }
                 }
                 ViewAction::None
@@ -813,6 +941,426 @@ impl View for WorktreeView {
         if self.tick_count % Self::REFRESH_INTERVAL == 0 {
             // Refresh will be triggered by GitInfoUpdated event
             // No action needed here
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    /// Helper to create a test worktree view
+    fn create_test_view() -> WorktreeView {
+        WorktreeView::new()
+    }
+
+    /// Helper to simulate key press
+    fn key_event(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::empty())
+    }
+
+    #[test]
+    fn test_display_index_to_command_index_mapping() {
+        let view = create_test_view();
+        let num_phases = view.phases.len();
+
+        // Index 0: "SDD WORKFLOW" header - should return None
+        assert_eq!(view.display_index_to_command_index(0), None);
+
+        // Indices 1-7: SDD phases - should map to commands 0-6
+        for i in 1..=num_phases {
+            assert_eq!(
+                view.display_index_to_command_index(i),
+                Some(i - 1),
+                "Display index {} should map to command index {}",
+                i,
+                i - 1
+            );
+        }
+
+        // Index 8: separator - should return None
+        assert_eq!(view.display_index_to_command_index(num_phases + 1), None);
+
+        // Index 9: "GIT ACTIONS" header - should return None
+        assert_eq!(view.display_index_to_command_index(num_phases + 2), None);
+
+        // Indices 10+: Git commands - should map to commands 7+
+        let git_count = GitCommand::all().len();
+        for i in 0..git_count {
+            let display_idx = num_phases + 3 + i;
+            let expected_cmd_idx = num_phases + i;
+            assert_eq!(
+                view.display_index_to_command_index(display_idx),
+                Some(expected_cmd_idx),
+                "Display index {} should map to command index {}",
+                display_idx,
+                expected_cmd_idx
+            );
+        }
+    }
+
+    #[test]
+    fn test_initial_selection_on_selectable_item() {
+        let view = create_test_view();
+
+        // Initial selection should be on index 1 (first SDD phase - Specify)
+        assert_eq!(view.command_state.selected(), Some(1));
+
+        // Verify index 1 maps to a valid command (command 0 = Specify)
+        assert_eq!(view.display_index_to_command_index(1), Some(0));
+
+        // Verify command 0 is indeed Specify
+        match &view.commands[0] {
+            Command::SddPhase(phase, _) => {
+                assert_eq!(phase.name(), "specify");
+            }
+            _ => panic!("First command should be SDD phase Specify"),
+        }
+    }
+
+    #[test]
+    fn test_scroll_down_skips_headers_and_separators() {
+        let mut view = create_test_view();
+        let num_phases = view.phases.len();
+
+        // Set focus to Commands panel
+        view.focus = WorktreeFocus::Commands;
+
+        // Start at first SDD phase (Specify, index 1)
+        view.command_state.select(Some(1));
+
+        // Scroll down through all SDD phases
+        for i in 2..=num_phases {
+            view.scroll_down();
+            assert_eq!(view.command_state.selected(), Some(i));
+            // Verify it's a selectable item
+            assert!(view.display_index_to_command_index(i).is_some());
+        }
+
+        // Next scroll should skip separator (index 8) and header (index 9)
+        // and land on first git command (index 10)
+        view.scroll_down();
+        let expected_git_start = num_phases + 3;
+        assert_eq!(view.command_state.selected(), Some(expected_git_start));
+        assert!(view.display_index_to_command_index(expected_git_start).is_some());
+
+        // Verify it's a git command
+        if let Some(cmd_idx) = view.display_index_to_command_index(expected_git_start) {
+            match &view.commands[cmd_idx] {
+                Command::GitAction(_) => {} // Expected
+                _ => panic!("Should be a git command"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_scroll_up_skips_headers_and_separators() {
+        let mut view = create_test_view();
+        let num_phases = view.phases.len();
+
+        // Set focus to Commands panel
+        view.focus = WorktreeFocus::Commands;
+
+        // Start at first git command (index 10)
+        let git_start_idx = num_phases + 3;
+        view.command_state.select(Some(git_start_idx));
+
+        // Scroll up should skip header (index 9) and separator (index 8)
+        // and land on last SDD phase (index 7)
+        view.scroll_up();
+        assert_eq!(view.command_state.selected(), Some(num_phases));
+        assert!(view.display_index_to_command_index(num_phases).is_some());
+
+        // Verify it's an SDD phase
+        if let Some(cmd_idx) = view.display_index_to_command_index(num_phases) {
+            match &view.commands[cmd_idx] {
+                Command::SddPhase(_, _) => {} // Expected
+                _ => panic!("Should be an SDD phase"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_scroll_down_stops_at_last_item() {
+        let mut view = create_test_view();
+        let num_phases = view.phases.len();
+        let git_count = GitCommand::all().len();
+        let last_idx = num_phases + 3 + git_count - 1;
+
+        // Set focus to Commands panel
+        view.focus = WorktreeFocus::Commands;
+
+        // Move to last item
+        view.command_state.select(Some(last_idx));
+
+        // Try to scroll down - should stay at last item
+        view.scroll_down();
+        assert_eq!(view.command_state.selected(), Some(last_idx));
+    }
+
+    #[test]
+    fn test_scroll_up_stops_at_first_selectable_item() {
+        let mut view = create_test_view();
+
+        // Set focus to Commands panel
+        view.focus = WorktreeFocus::Commands;
+
+        // Start at first SDD phase (index 1)
+        view.command_state.select(Some(1));
+
+        // Try to scroll up - should stay at first selectable item
+        view.scroll_up();
+        assert_eq!(view.command_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn test_enter_on_specify_requests_input() {
+        let mut view = create_test_view();
+
+        // Set focus to Commands panel
+        view.focus = WorktreeFocus::Commands;
+
+        // Select Specify (display index 1 = command index 0)
+        view.command_state.select(Some(1));
+
+        // Press Enter
+        let action = view.handle_key(key_event(KeyCode::Enter));
+
+        // Should request input
+        match action {
+            ViewAction::RequestInput { prompt, placeholder } => {
+                assert!(prompt.contains("feature description"));
+                assert!(placeholder.is_some());
+            }
+            _ => panic!("Expected RequestInput action for Specify phase"),
+        }
+
+        // Verify pending_input_phase is set
+        assert_eq!(view.pending_input_phase, Some(SpecPhase::Specify));
+    }
+
+    #[test]
+    fn test_enter_on_clarify_runs_phase() {
+        let mut view = create_test_view();
+        view.focus = WorktreeFocus::Commands;
+
+        // Select Clarify (display index 2 = command index 1)
+        view.command_state.select(Some(2));
+
+        let action = view.handle_key(key_event(KeyCode::Enter));
+
+        // Should run the phase
+        match action {
+            ViewAction::RunSpecPhase { phase, command, .. } => {
+                assert_eq!(phase, "clarify");
+                assert!(command.contains("clarify"));
+            }
+            _ => panic!("Expected RunSpecPhase action for Clarify phase"),
+        }
+    }
+
+    #[test]
+    fn test_enter_on_git_commit_requests_input() {
+        let mut view = create_test_view();
+        view.focus = WorktreeFocus::Commands;
+
+        // Find and select Git Commit command
+        let num_phases = view.phases.len();
+        let commit_display_idx = num_phases + 3; // First git command (Commit)
+
+        view.command_state.select(Some(commit_display_idx));
+
+        let action = view.handle_key(key_event(KeyCode::Enter));
+
+        // Should request input for commit message
+        match action {
+            ViewAction::RequestInput { prompt, placeholder } => {
+                assert!(prompt.contains("commit message"));
+                assert!(placeholder.is_some());
+            }
+            _ => panic!("Expected RequestInput action for Git Commit"),
+        }
+
+        // Verify pending_git_command is set
+        assert_eq!(view.pending_git_command, Some(GitCommand::Commit));
+    }
+
+    #[test]
+    fn test_enter_on_git_push_runs_command() {
+        let mut view = create_test_view();
+        view.focus = WorktreeFocus::Commands;
+
+        // Find and select Git Push command (second git command)
+        let num_phases = view.phases.len();
+        let push_display_idx = num_phases + 4;
+
+        view.command_state.select(Some(push_display_idx));
+
+        let action = view.handle_key(key_event(KeyCode::Enter));
+
+        // Should run git push command
+        match action {
+            ViewAction::RunCommand { name, args } => {
+                assert_eq!(name, "git");
+                assert_eq!(args, vec!["push".to_string()]);
+            }
+            _ => panic!("Expected RunCommand action for Git Push"),
+        }
+    }
+
+    #[test]
+    fn test_enter_on_git_status_runs_command() {
+        let mut view = create_test_view();
+        view.focus = WorktreeFocus::Commands;
+
+        // Find and select Git Status command (third git command)
+        let num_phases = view.phases.len();
+        let status_display_idx = num_phases + 5;
+
+        view.command_state.select(Some(status_display_idx));
+
+        let action = view.handle_key(key_event(KeyCode::Enter));
+
+        // Should run git status command
+        match action {
+            ViewAction::RunCommand { name, args } => {
+                assert_eq!(name, "git");
+                assert_eq!(args, vec!["status".to_string()]);
+            }
+            _ => panic!("Expected RunCommand action for Git Status"),
+        }
+    }
+
+    #[test]
+    fn test_enter_on_git_add_all_runs_command() {
+        let mut view = create_test_view();
+        view.focus = WorktreeFocus::Commands;
+
+        // Find and select Git Add All command (fourth git command)
+        let num_phases = view.phases.len();
+        let add_all_display_idx = num_phases + 6;
+
+        view.command_state.select(Some(add_all_display_idx));
+
+        let action = view.handle_key(key_event(KeyCode::Enter));
+
+        // Should run git add --all command
+        match action {
+            ViewAction::RunCommand { name, args } => {
+                assert_eq!(name, "git");
+                assert_eq!(args, vec!["add".to_string(), "--all".to_string()]);
+            }
+            _ => panic!("Expected RunCommand action for Git Add All"),
+        }
+    }
+
+    #[test]
+    fn test_enter_on_git_rebase_requests_input() {
+        let mut view = create_test_view();
+        view.focus = WorktreeFocus::Commands;
+
+        // Find and select Git Rebase command (fifth git command)
+        let num_phases = view.phases.len();
+        let rebase_display_idx = num_phases + 7;
+
+        view.command_state.select(Some(rebase_display_idx));
+
+        let action = view.handle_key(key_event(KeyCode::Enter));
+
+        // Should request input for branch name
+        match action {
+            ViewAction::RequestInput { prompt, placeholder } => {
+                assert!(prompt.contains("Rebase onto branch"));
+                assert_eq!(placeholder, Some("main".to_string()));
+            }
+            _ => panic!("Expected RequestInput action for Git Rebase"),
+        }
+
+        // Verify pending_git_command is set
+        assert_eq!(view.pending_git_command, Some(GitCommand::Rebase));
+    }
+
+    #[test]
+    fn test_enter_on_header_does_nothing() {
+        let mut view = create_test_view();
+        view.focus = WorktreeFocus::Commands;
+
+        // Try to select header (index 0) - this shouldn't happen in practice
+        // due to scroll methods, but test the safety
+        view.command_state.select(Some(0));
+
+        let action = view.handle_key(key_event(KeyCode::Enter));
+
+        // Should return None since header is not selectable
+        match action {
+            ViewAction::None => {} // Expected
+            _ => panic!("Expected None action for header"),
+        }
+    }
+
+    #[test]
+    fn test_focus_navigation() {
+        let mut view = create_test_view();
+
+        // Start with Content focus (default)
+        assert_eq!(view.focus, WorktreeFocus::Content);
+
+        // Move left to Commands
+        view.focus_left();
+        assert_eq!(view.focus, WorktreeFocus::Commands);
+
+        // Move right back to Content
+        view.focus_right();
+        assert_eq!(view.focus, WorktreeFocus::Content);
+
+        // Test wrapping
+        view.focus_right();
+        assert_eq!(view.focus, WorktreeFocus::Commands);
+
+        view.focus_left();
+        assert_eq!(view.focus, WorktreeFocus::Content);
+    }
+
+    #[test]
+    fn test_j_k_navigation() {
+        let mut view = create_test_view();
+        view.focus = WorktreeFocus::Commands;
+
+        // Start at first SDD phase (index 1)
+        view.command_state.select(Some(1));
+
+        // Press 'j' to move down
+        view.handle_key(key_event(KeyCode::Char('j')));
+        assert_eq!(view.command_state.selected(), Some(2));
+
+        // Press 'k' to move up
+        view.handle_key(key_event(KeyCode::Char('k')));
+        assert_eq!(view.command_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn test_commands_vector_matches_phases_and_git() {
+        let view = create_test_view();
+
+        // Commands should contain all SDD phases + all git commands
+        let expected_count = view.phases.len() + GitCommand::all().len();
+        assert_eq!(view.commands.len(), expected_count);
+
+        // First N commands should be SDD phases
+        for i in 0..view.phases.len() {
+            match &view.commands[i] {
+                Command::SddPhase(_, _) => {} // Expected
+                _ => panic!("Command {} should be an SDD phase", i),
+            }
+        }
+
+        // Remaining commands should be git commands
+        for i in view.phases.len()..view.commands.len() {
+            match &view.commands[i] {
+                Command::GitAction(_) => {} // Expected
+                _ => panic!("Command {} should be a git command", i),
+            }
         }
     }
 }

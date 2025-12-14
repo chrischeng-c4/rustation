@@ -26,6 +26,7 @@ which = "8.0"                   # Command detection
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }  # HTTP health checks
 glob = "0.3"                    # File pattern matching
 async-trait = "0.1"             # Async trait support
+regex = "1.10"                  # Secret pattern matching for security scanning
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

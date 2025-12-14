@@ -1,5 +1,6 @@
 //! Event handling for the TUI application
 
+use crate::tui::claude_stream::{ClaudeStreamMessage, RscliStatus};
 use crossterm::event::{self, Event as CrosstermEvent, KeyEvent, MouseEvent};
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -46,6 +47,36 @@ pub enum Event {
         worktree_type: WorktreeType,
         is_git_repo: bool,
         error: Option<String>,
+    },
+    /// Claude streaming JSON message received (real-time output)
+    ClaudeStream(ClaudeStreamMessage),
+    /// Claude command completed with parsed status
+    ClaudeCompleted {
+        phase: String,
+        success: bool,
+        session_id: Option<String>,
+        status: Option<RscliStatus>,
+    },
+    /// Commit workflow started
+    CommitStarted,
+    /// Security scan blocked commit
+    CommitBlocked {
+        scan: rscli_core::SecurityScanResult,
+    },
+    /// Ready to commit with generated message
+    CommitReady {
+        message: String,
+        warnings: Vec<rscli_core::SecurityWarning>,
+        sensitive_files: Vec<rscli_core::SensitiveFile>,
+    },
+    /// Commit execution completed
+    CommitCompleted {
+        success: bool,
+        output: String,
+    },
+    /// Commit workflow error
+    CommitError {
+        error: String,
     },
 }
 

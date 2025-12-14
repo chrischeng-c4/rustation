@@ -2,13 +2,15 @@
 
 mod command_runner;
 mod dashboard;
+mod settings;
 mod spec;
 mod worktree;
 
-pub use command_runner::CommandRunner;
+pub use command_runner::{CommandRunner, OutputLine, OutputLineType};
 pub use dashboard::Dashboard;
+pub use settings::SettingsView;
 pub use spec::{AutoFlowState, ClaudeOptions, PhaseStatus, SpecPhase, SpecView};
-pub use worktree::WorktreeView;
+pub use worktree::{GitCommand, WorktreeView};
 
 use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
@@ -35,6 +37,15 @@ pub enum ViewAction {
     ShowWorktrees,
     /// Quit the application
     Quit,
+    /// Request text input from user
+    RequestInput {
+        prompt: String,
+        placeholder: Option<String>,
+    },
+    /// Run a git command
+    RunGitCommand(GitCommand),
+    /// Run enhanced commit workflow with security scanning
+    RunEnhancedCommit,
 }
 
 /// View types for switching

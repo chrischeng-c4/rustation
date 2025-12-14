@@ -16,6 +16,20 @@ macro_rules! debug {
     };
 }
 
+macro_rules! log_to_file {
+    ($($arg:tt)*) => {{
+        use std::io::Write;
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/rscli.log")
+        {
+            let _ = writeln!(file, "{}", format!($($arg)*));
+            let _ = file.flush();
+        }
+    }};
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "rscli")]
 #[command(version = version::FULL_VERSION)]
@@ -56,21 +70,29 @@ async fn main() -> Result<()> {
 }
 
 fn run_tui_mode() -> Result<()> {
+    log_to_file!("=== rscli starting TUI mode ===");
     debug!("Starting TUI mode");
 
     // Check if we have a TTY
+    log_to_file!("TTY check...");
     if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        log_to_file!("TTY check FAILED");
         eprintln!("ERROR: TUI mode requires a terminal. Stdout is not a TTY.");
         eprintln!("Use --cli flag for non-interactive mode: rscli --cli <command>");
         debug!("TTY check failed: stdout is not a terminal");
         return Err(rscli::RscliError::Other(anyhow::anyhow!("No TTY available")));
     }
+    log_to_file!("TTY check passed");
 
+    log_to_file!("Creating App instance...");
     debug!("Creating App instance");
     let mut app = App::new();
+    log_to_file!("App created");
 
+    log_to_file!("Calling app.run()...");
     debug!("Running app main loop");
     let result = app.run();
+    log_to_file!("app.run() returned: {:?}", result.as_ref().map(|_| "Ok"));
 
     debug!("App finished with result: {:?}", result.as_ref().map(|_| "Ok").map_err(|e| e.to_string()));
     result.map_err(|e| rscli::RscliError::Other(anyhow::anyhow!("{}", e)))

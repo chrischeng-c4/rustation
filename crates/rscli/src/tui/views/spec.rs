@@ -45,6 +45,19 @@ impl SpecPhase {
         }
     }
 
+    pub fn from_name(name: &str) -> Option<SpecPhase> {
+        match name.to_lowercase().as_str() {
+            "specify" => Some(SpecPhase::Specify),
+            "clarify" => Some(SpecPhase::Clarify),
+            "plan" => Some(SpecPhase::Plan),
+            "tasks" => Some(SpecPhase::Tasks),
+            "analyze" => Some(SpecPhase::Analyze),
+            "implement" => Some(SpecPhase::Implement),
+            "review" => Some(SpecPhase::Review),
+            _ => None,
+        }
+    }
+
     pub fn display_name(&self) -> &'static str {
         match self {
             SpecPhase::Specify => "Specify",

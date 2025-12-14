@@ -58,6 +58,84 @@ pub enum ProtocolMessage {
         #[serde(default)]
         details: Vec<String>,
     },
+
+    /// Present options for user to select (structured choices)
+    #[serde(rename = "select_option")]
+    SelectOption {
+        /// Prompt text to display
+        prompt: String,
+        /// Available options
+        options: Vec<SelectOptionItem>,
+        /// Allow multiple selections
+        #[serde(default)]
+        multi_select: bool,
+        /// Default option ID
+        #[serde(skip_serializing_if = "Option::is_none")]
+        default: Option<String>,
+    },
+
+    /// Auto-continue to next phase without user input
+    #[serde(rename = "auto_continue")]
+    AutoContinue {
+        /// Next phase to run
+        next_phase: String,
+        /// Delay in milliseconds before starting
+        #[serde(default)]
+        delay_ms: u64,
+        /// Optional status message
+        #[serde(skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+    },
+
+    /// Yes/No confirmation prompt
+    #[serde(rename = "confirm")]
+    Confirm {
+        /// Prompt text
+        prompt: String,
+        /// Default value (true = yes)
+        #[serde(default = "default_true")]
+        default: bool,
+    },
+
+    /// Progress update
+    #[serde(rename = "progress")]
+    Progress {
+        /// Current phase name
+        phase: String,
+        /// Current step number
+        step: u32,
+        /// Total steps
+        total_steps: u32,
+        /// Status message
+        message: String,
+    },
+
+    /// Session info for persistence
+    #[serde(rename = "session_info")]
+    SessionInfo {
+        /// Session ID for resuming
+        session_id: String,
+        /// Feature number (optional)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        feature: Option<String>,
+    },
+}
+
+/// Default function for true
+fn default_true() -> bool {
+    true
+}
+
+/// Option item for select_option
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SelectOptionItem {
+    /// Unique identifier
+    pub id: String,
+    /// Display label
+    pub label: String,
+    /// Optional description
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 /// Parse a protocol message from output lines

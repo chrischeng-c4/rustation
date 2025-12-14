@@ -1,8 +1,32 @@
 //! Cargo command wrapper
 
+use crate::tui::claude_stream::{ClaudeStreamMessage, RscliStatus};
+use crate::tui::event::Event;
 use crate::{Result, RscliError};
 use std::process::{Output, Stdio};
+use std::sync::mpsc;
 use tokio::process::Command;
+
+/// System prompt for RSCLI JSON status output
+///
+/// This is appended via `--append-system-prompt` to instruct Claude
+/// to output structured status blocks that rscli can parse.
+const RSCLI_SYSTEM_PROMPT: &str = r#"
+## RSCLI Integration Protocol
+
+At the END of your response, output a JSON status block:
+
+```rscli-status
+{"status":"needs_input","prompt":"Your prompt here"}
+```
+
+Status values:
+- "needs_input": Need user input. Include "prompt" field with the question.
+- "completed": Phase finished successfully.
+- "error": Error occurred. Include "message" field with error details.
+
+Always include this status block at the very end of your response.
+"#;
 
 /// Test results summary
 #[derive(Debug, Clone)]
@@ -310,66 +334,55 @@ pub struct ClaudeCliOptions {
     pub allowed_tools: Vec<String>,
 }
 
+/// Result from a Claude streaming command
+#[derive(Debug, Clone, Default)]
+pub struct ClaudeResult {
+    /// Session ID for resuming conversation
+    pub session_id: Option<String>,
+    /// Parsed RSCLI status from Claude's output
+    pub status: Option<RscliStatus>,
+    /// Whether the command exited successfully
+    pub success: bool,
+}
+
 /// Run a Claude Code CLI command in headless mode
 /// Uses `claude -p "command"` to execute spec-kit workflows
 pub async fn run_claude_command(command: &str) -> Result<CommandOutput> {
-    run_claude_command_with_options(command, &ClaudeCliOptions::default()).await
+    run_claude_command_with_options(command, &ClaudeCliOptions::default(), None).await
 }
 
-/// Run a Claude Code CLI command with options
+/// Run a Claude Code CLI command with options (legacy, returns CommandOutput)
 pub async fn run_claude_command_with_options(
     command: &str,
     options: &ClaudeCliOptions,
+    sender: Option<mpsc::Sender<Event>>,
 ) -> Result<CommandOutput> {
-    // Try common claude locations
-    let claude_paths = [
-        std::env::var("HOME")
-            .map(|h| format!("{}/.claude/local/claude", h))
-            .unwrap_or_default(),
-        "/usr/local/bin/claude".to_string(),
-        "claude".to_string(),
-    ];
+    let result = run_claude_command_streaming(command, options, sender).await?;
 
-    let mut claude_path = None;
-    for path in &claude_paths {
-        if !path.is_empty() && (path == "claude" || std::path::Path::new(path).exists()) {
-            claude_path = Some(path.clone());
-            break;
-        }
-    }
+    // Convert ClaudeResult to CommandOutput for backwards compatibility
+    Ok(CommandOutput {
+        lines: vec![], // Lines were sent via events
+        success: result.success,
+    })
+}
 
-    let mut cmd = if let Some(path) = claude_path {
-        Command::new(path)
-    } else {
-        // Fall back to shell invocation to resolve aliases
-        let mut c = Command::new("sh");
-        c.arg("-c");
+/// Run a Claude Code CLI command with streaming JSON output
+///
+/// This uses `--output-format stream-json` to get JSONL output and
+/// `--append-system-prompt` to instruct Claude about the RSCLI protocol.
+pub async fn run_claude_command_streaming(
+    command: &str,
+    options: &ClaudeCliOptions,
+    sender: Option<mpsc::Sender<Event>>,
+) -> Result<ClaudeResult> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
 
-        // Build command string with options
-        let mut cmd_str = String::from("claude");
+    // Find claude binary
+    let claude_path = find_claude_path();
 
-        // Add options
-        if let Some(max) = options.max_turns {
-            cmd_str.push_str(&format!(" --max-turns {}", max));
-        }
-        if options.skip_permissions {
-            cmd_str.push_str(" --dangerously-skip-permissions");
-        }
-        if let Some(ref session) = options.session_id {
-            cmd_str.push_str(&format!(" --resume '{}'", session));
-        } else if options.continue_session {
-            cmd_str.push_str(" --continue");
-        }
-        if !options.allowed_tools.is_empty() {
-            cmd_str.push_str(&format!(" --allowedTools '{}'", options.allowed_tools.join(",")));
-        }
+    let mut cmd = Command::new(claude_path.as_deref().unwrap_or("claude"));
 
-        cmd_str.push_str(&format!(" -p '{}' --output-format text", command));
-        c.arg(cmd_str);
-        return run_command_and_collect(c).await;
-    };
-
-    // Build args for direct invocation
+    // Add options
     if let Some(max) = options.max_turns {
         cmd.arg("--max-turns").arg(max.to_string());
     }
@@ -386,15 +399,10 @@ pub async fn run_claude_command_with_options(
             .arg(options.allowed_tools.join(","));
     }
 
+    // Core args: prompt, streaming JSON, and system prompt
     cmd.arg("-p").arg(command);
-    cmd.arg("--output-format").arg("text");
-
-    run_command_and_collect(cmd).await
-}
-
-async fn run_command_and_collect(mut cmd: Command) -> Result<CommandOutput> {
-    use std::process::Stdio;
-    use tokio::io::{AsyncBufReadExt, BufReader};
+    cmd.arg("--output-format").arg("stream-json");
+    cmd.arg("--append-system-prompt").arg(RSCLI_SYSTEM_PROMPT);
 
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -403,29 +411,67 @@ async fn run_command_and_collect(mut cmd: Command) -> Result<CommandOutput> {
         .spawn()
         .map_err(|e| RscliError::CommandNotFound(format!("claude: {}", e)))?;
 
-    let mut output = CommandOutput::default();
+    let mut result = ClaudeResult::default();
 
-    // Read stdout
+    // Read stdout line by line (JSONL format)
     if let Some(stdout) = child.stdout.take() {
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
+
         while let Ok(Some(line)) = lines.next_line().await {
-            output.lines.push(line);
+            // Try to parse as JSON
+            if let Ok(msg) = serde_json::from_str::<ClaudeStreamMessage>(&line) {
+                // Track session_id
+                if msg.session_id.is_some() {
+                    result.session_id = msg.session_id.clone();
+                }
+
+                // Parse status from assistant messages
+                if msg.msg_type == "assistant" {
+                    if let Some(status) = msg.parse_status() {
+                        result.status = Some(status);
+                    }
+                }
+
+                // Send to TUI for real-time display
+                if let Some(ref s) = sender {
+                    let _ = s.send(Event::ClaudeStream(msg));
+                }
+            }
         }
     }
 
-    // Read stderr
+    // Also capture stderr (for error messages)
     if let Some(stderr) = child.stderr.take() {
         let reader = BufReader::new(stderr);
         let mut lines = reader.lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            output.lines.push(line);
+        while let Ok(Some(_line)) = lines.next_line().await {
+            // Stderr is typically not JSON, could log or ignore
         }
     }
 
-    let status = child.wait().await?;
-    output.success = status.success();
-    Ok(output)
+    let exit_status = child.wait().await?;
+    result.success = exit_status.success();
+
+    Ok(result)
+}
+
+/// Find the claude binary path
+fn find_claude_path() -> Option<String> {
+    let claude_paths = [
+        std::env::var("HOME")
+            .map(|h| format!("{}/.claude/local/claude", h))
+            .unwrap_or_default(),
+        "/usr/local/bin/claude".to_string(),
+        "claude".to_string(),
+    ];
+
+    for path in &claude_paths {
+        if !path.is_empty() && (path == "claude" || std::path::Path::new(path).exists()) {
+            return Some(path.clone());
+        }
+    }
+    None
 }
 
 #[cfg(test)]
