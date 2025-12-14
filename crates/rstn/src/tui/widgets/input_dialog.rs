@@ -137,10 +137,14 @@ impl InputDialog {
         };
 
         // Height: title(1) + border(2) + description(0-3) + input(dynamic) + help(1) + padding(2)
-        let desc_lines = self.description.as_ref().map(|d| {
-            // Estimate line count
-            (d.len() as u16 / width.saturating_sub(4)).max(1).min(3)
-        }).unwrap_or(0);
+        let desc_lines = self
+            .description
+            .as_ref()
+            .map(|d| {
+                // Estimate line count
+                (d.len() as u16 / width.saturating_sub(4)).max(1).min(3)
+            })
+            .unwrap_or(0);
         let height = (4 + desc_lines + input_height + 2).min(area.height.saturating_sub(4));
 
         // Center the dialog
@@ -169,20 +173,27 @@ impl InputDialog {
 
         // Layout inside the dialog
         let has_desc = self.description.is_some();
+        // Calculate input height: for multiline, we need 1 line for prompt + lines for actual input
+        let input_height = if self.input.multiline {
+            // prompt line + at least 1 input line (capped by max_lines)
+            1 + (self.input.max_lines as u16).min(5)
+        } else {
+            1
+        };
         let constraints = if has_desc {
             vec![
-                Constraint::Length(3), // Description
-                Constraint::Length(1), // Spacer
-                Constraint::Length(1), // Input
-                Constraint::Length(1), // Spacer
-                Constraint::Length(1), // Help text
+                Constraint::Length(3),            // Description
+                Constraint::Length(1),            // Spacer
+                Constraint::Length(input_height), // Input (dynamic for multiline)
+                Constraint::Length(1),            // Spacer
+                Constraint::Length(1),            // Help text
             ]
         } else {
             vec![
-                Constraint::Length(1), // Spacer
-                Constraint::Length(1), // Input
-                Constraint::Length(1), // Spacer
-                Constraint::Length(1), // Help text
+                Constraint::Length(1),            // Spacer
+                Constraint::Length(input_height), // Input (dynamic for multiline)
+                Constraint::Length(1),            // Spacer
+                Constraint::Length(1),            // Help text
             ]
         };
 
@@ -213,16 +224,36 @@ impl InputDialog {
         // Render help text
         let help = if self.input.multiline {
             Line::from(vec![
-                Span::styled("Alt+Enter", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Alt+Enter",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" Submit  ", Style::default().fg(Color::DarkGray)),
-                Span::styled("Esc", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Esc",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" Cancel", Style::default().fg(Color::DarkGray)),
             ])
         } else {
             Line::from(vec![
-                Span::styled("Enter", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Enter",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" Submit  ", Style::default().fg(Color::DarkGray)),
-                Span::styled("Esc", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Esc",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" Cancel", Style::default().fg(Color::DarkGray)),
             ])
         };
@@ -236,10 +267,8 @@ impl InputDialog {
             // For multiline mode, render the prompt above and use full area for TextInput
             if area.height > 0 {
                 // Render prompt on first line
-                let prompt_span = Span::styled(
-                    &self.input.prompt,
-                    Style::default().fg(Color::Yellow),
-                );
+                let prompt_span =
+                    Span::styled(&self.input.prompt, Style::default().fg(Color::Yellow));
                 buf.set_span(area.x, area.y, &prompt_span, area.width);
 
                 // Render multiline input using TextInput's widget implementation
@@ -260,10 +289,7 @@ impl InputDialog {
             // Split area for prompt and input
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Length(prompt_len + 1),
-                    Constraint::Min(1),
-                ])
+                .constraints([Constraint::Length(prompt_len + 1), Constraint::Min(1)])
                 .split(area);
 
             // Render prompt
@@ -318,7 +344,11 @@ impl InputDialog {
                 // Show cursor at start when empty
                 if let Some(cell) = buf.cell_mut((input_area.x, input_area.y)) {
                     cell.set_char('_');
-                    cell.set_style(Style::default().fg(Color::White).add_modifier(Modifier::SLOW_BLINK));
+                    cell.set_style(
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::SLOW_BLINK),
+                    );
                 }
             }
         }
@@ -339,11 +369,7 @@ mod tests {
 
     #[test]
     fn test_with_description() {
-        let dialog = InputDialog::with_description(
-            "Title",
-            "Some description",
-            "Prompt:",
-        );
+        let dialog = InputDialog::with_description("Title", "Some description", "Prompt:");
         assert_eq!(dialog.description, Some("Some description".to_string()));
     }
 
@@ -361,5 +387,182 @@ mod tests {
         assert_eq!(dialog.value(), "ab");
         dialog.delete_char();
         assert_eq!(dialog.value(), "a");
+    }
+
+    // T018: Verify new multiline dialog creates active input
+    #[test]
+    fn test_new_creates_active_input() {
+        let dialog = InputDialog::new("Title", "Prompt:");
+        assert!(dialog.input.active, "TextInput should be active by default");
+
+        let multiline_dialog = InputDialog::new_multiline("Title", "Prompt:", 5);
+        assert!(
+            multiline_dialog.input.active,
+            "Multiline TextInput should be active"
+        );
+        assert!(
+            multiline_dialog.input.multiline,
+            "Multiline flag should be set"
+        );
+        assert_eq!(multiline_dialog.input.max_lines, 5);
+    }
+
+    // T019: Verify insert_char forwards to input correctly
+    #[test]
+    fn test_insert_char_forwards_to_input() {
+        let mut dialog = InputDialog::new("Title", ">");
+        assert_eq!(dialog.value(), "");
+
+        dialog.insert_char('h');
+        assert_eq!(dialog.value(), "h");
+
+        dialog.insert_char('i');
+        assert_eq!(dialog.value(), "hi");
+
+        // Verify cursor position advances
+        assert_eq!(dialog.input.cursor_position, 2);
+    }
+
+    // T020: Verify multiline character insertion
+    #[test]
+    fn test_multiline_insert_char() {
+        let mut dialog = InputDialog::new_multiline("Title", ">", 10);
+
+        dialog.insert_char('a');
+        dialog.insert_char('b');
+        // In multiline mode, use get_multiline_value() or check lines directly
+        assert_eq!(dialog.input.lines[0], "ab");
+        assert_eq!(dialog.input.get_multiline_value(), "ab");
+
+        // Insert newline and more text
+        dialog.insert_newline();
+        dialog.insert_char('c');
+        dialog.insert_char('d');
+
+        // Value should contain newline
+        assert!(dialog.input.get_multiline_value().contains('\n'));
+        assert_eq!(dialog.input.lines.len(), 2);
+        assert_eq!(dialog.input.lines[0], "ab");
+        assert_eq!(dialog.input.lines[1], "cd");
+    }
+
+    // T021: Verify all cursor movement methods work
+    #[test]
+    fn test_cursor_movement_methods() {
+        let mut dialog = InputDialog::new("Title", ">");
+        dialog.insert_char('a');
+        dialog.insert_char('b');
+        dialog.insert_char('c');
+
+        // Initial cursor is at end
+        assert_eq!(dialog.input.cursor_position, 3);
+
+        // Move left
+        dialog.move_cursor_left();
+        assert_eq!(dialog.input.cursor_position, 2);
+
+        // Move left again
+        dialog.move_cursor_left();
+        assert_eq!(dialog.input.cursor_position, 1);
+
+        // Move right
+        dialog.move_cursor_right();
+        assert_eq!(dialog.input.cursor_position, 2);
+
+        // Move to start
+        dialog.move_cursor_start();
+        assert_eq!(dialog.input.cursor_position, 0);
+
+        // Move to end
+        dialog.move_cursor_end();
+        assert_eq!(dialog.input.cursor_position, 3);
+    }
+
+    // T022: Verify backspace deletes characters correctly
+    #[test]
+    fn test_backspace_deletes_char() {
+        let mut dialog = InputDialog::new("Title", ">");
+        dialog.insert_char('a');
+        dialog.insert_char('b');
+        dialog.insert_char('c');
+        assert_eq!(dialog.value(), "abc");
+
+        // Delete from end
+        dialog.delete_char();
+        assert_eq!(dialog.value(), "ab");
+
+        // Delete another
+        dialog.delete_char();
+        assert_eq!(dialog.value(), "a");
+
+        // Delete last char
+        dialog.delete_char();
+        assert_eq!(dialog.value(), "");
+
+        // Delete on empty should not panic
+        dialog.delete_char();
+        assert_eq!(dialog.value(), "");
+    }
+
+    // T023: Verify multiline newline insertion
+    #[test]
+    fn test_multiline_newline_insert() {
+        let mut dialog = InputDialog::new_multiline("Title", ">", 5);
+
+        // Type first line
+        dialog.insert_char('l');
+        dialog.insert_char('i');
+        dialog.insert_char('n');
+        dialog.insert_char('e');
+        dialog.insert_char('1');
+
+        // Insert newline
+        dialog.insert_newline();
+        assert_eq!(dialog.input.lines.len(), 2);
+        assert_eq!(dialog.input.cursor_line, 1);
+
+        // Type second line
+        dialog.insert_char('l');
+        dialog.insert_char('i');
+        dialog.insert_char('n');
+        dialog.insert_char('e');
+        dialog.insert_char('2');
+
+        assert_eq!(dialog.input.lines[0], "line1");
+        assert_eq!(dialog.input.lines[1], "line2");
+    }
+
+    // Additional: Verify multiline mode detection
+    #[test]
+    fn test_is_multiline() {
+        let single = InputDialog::new("Title", ">");
+        assert!(!single.is_multiline());
+
+        let multi = InputDialog::new_multiline("Title", ">", 5);
+        assert!(multi.is_multiline());
+    }
+
+    // Additional: Verify multiline cursor navigation
+    #[test]
+    fn test_multiline_cursor_navigation() {
+        let mut dialog = InputDialog::new_multiline("Title", ">", 5);
+
+        // Type two lines
+        dialog.insert_char('a');
+        dialog.insert_char('b');
+        dialog.insert_newline();
+        dialog.insert_char('c');
+        dialog.insert_char('d');
+
+        // Cursor should be on line 1
+        assert_eq!(dialog.input.cursor_line, 1);
+
+        // Move up
+        dialog.move_cursor_up();
+        assert_eq!(dialog.input.cursor_line, 0);
+
+        // Move down
+        dialog.move_cursor_down();
+        assert_eq!(dialog.input.cursor_line, 1);
     }
 }

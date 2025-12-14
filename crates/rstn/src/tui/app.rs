@@ -3,7 +3,10 @@
 use crate::tui::claude_stream::{ClaudeStreamMessage, RscliStatus};
 use crate::tui::event::{Event, EventHandler};
 use crate::tui::protocol::{OutputParser, ProtocolMessage};
-use crate::tui::views::{CommandRunner, Dashboard, SettingsView, SpecPhase, SpecView, View, ViewAction, ViewType, WorktreeView};
+use crate::tui::views::{
+    CommandRunner, Dashboard, SettingsView, SpecPhase, SpecView, View, ViewAction, ViewType,
+    WorktreeView,
+};
 use crate::tui::widgets::{InputDialog, OptionPicker, TextInput};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::execute;
@@ -103,6 +106,26 @@ impl App {
 
     /// Handle key events
     pub fn handle_key_event(&mut self, key: KeyEvent) {
+        // Debug logging for input mode investigation
+        debug!(
+            "handle_key_event: key={:?}, input_mode={}, input_dialog_exists={}",
+            key.code,
+            self.input_mode,
+            self.input_dialog.is_some()
+        );
+
+        // Defensive check: Ensure input_mode and input_dialog state are consistent
+        // If input_mode is true but no dialog exists, reset input_mode
+        if self.input_mode && self.input_dialog.is_none() {
+            debug!("State inconsistency detected: input_mode=true but input_dialog=None, resetting input_mode");
+            self.input_mode = false;
+        }
+        // If input_dialog exists but input_mode is false, enable input_mode
+        if self.input_dialog.is_some() && !self.input_mode {
+            debug!("State inconsistency detected: input_dialog exists but input_mode=false, enabling input_mode");
+            self.input_mode = true;
+        }
+
         // If in input mode, handle input separately
         if self.input_mode {
             self.handle_key_event_in_input_mode(key);
@@ -117,9 +140,7 @@ impl App {
                 self.running = false;
                 return;
             }
-            KeyCode::Char('q')
-                if !self.worktree_view.is_running =>
-            {
+            KeyCode::Char('q') if !self.worktree_view.is_running => {
                 debug!("Quit triggered: 'q' key");
                 self.running = false;
                 return;
@@ -131,11 +152,14 @@ impl App {
                     CurrentView::Settings => CurrentView::Worktree,
                     CurrentView::Dashboard => CurrentView::Settings,
                 };
-                self.status_message = Some(format!("Switched to {} view", match self.current_view {
-                    CurrentView::Worktree => "Worktree",
-                    CurrentView::Settings => "Settings",
-                    CurrentView::Dashboard => "Dashboard",
-                }));
+                self.status_message = Some(format!(
+                    "Switched to {} view",
+                    match self.current_view {
+                        CurrentView::Worktree => "Worktree",
+                        CurrentView::Settings => "Settings",
+                        CurrentView::Dashboard => "Dashboard",
+                    }
+                ));
                 return;
             }
             KeyCode::Char(']') => {
@@ -144,11 +168,14 @@ impl App {
                     CurrentView::Settings => CurrentView::Dashboard,
                     CurrentView::Dashboard => CurrentView::Worktree,
                 };
-                self.status_message = Some(format!("Switched to {} view", match self.current_view {
-                    CurrentView::Worktree => "Worktree",
-                    CurrentView::Settings => "Settings",
-                    CurrentView::Dashboard => "Dashboard",
-                }));
+                self.status_message = Some(format!(
+                    "Switched to {} view",
+                    match self.current_view {
+                        CurrentView::Worktree => "Worktree",
+                        CurrentView::Settings => "Settings",
+                        CurrentView::Dashboard => "Dashboard",
+                    }
+                ));
                 return;
             }
             // Update rstn: build and install to ~/.local/bin
@@ -210,7 +237,8 @@ impl App {
     }
 
     /// Handle actions returned from views
-    fn handle_view_action(&mut self, action: ViewAction) {
+    /// Handle a view action (public for testing)
+    pub fn handle_view_action(&mut self, action: ViewAction) {
         match action {
             ViewAction::None => {}
             ViewAction::SwitchView(view_type) => {
@@ -334,7 +362,8 @@ impl App {
             }
             ViewAction::RunEnhancedCommit => {
                 // Run enhanced commit workflow with security scanning
-                self.status_message = Some("Scanning staged changes for security issues...".to_string());
+                self.status_message =
+                    Some("Scanning staged changes for security issues...".to_string());
 
                 let sender = self.event_sender.clone();
                 tokio::spawn(async move {
@@ -368,7 +397,8 @@ impl App {
             ViewAction::StartWizard => {
                 // Start wizard mode in worktree view
                 self.worktree_view.auto_flow.active = true;
-                self.status_message = Some("SDD Workflow started - phases will run sequentially".to_string());
+                self.status_message =
+                    Some("SDD Workflow started - phases will run sequentially".to_string());
             }
             ViewAction::ShowWorktrees => {
                 // Just show a status message - worktrees are shown in worktree view
@@ -389,7 +419,8 @@ impl App {
                                 let stdout = String::from_utf8_lossy(&output.stdout);
                                 let stderr = String::from_utf8_lossy(&output.stderr);
                                 let combined = format!("{}{}", stdout, stderr);
-                                let lines: Vec<String> = combined.lines().map(|s| s.to_string()).collect();
+                                let lines: Vec<String> =
+                                    combined.lines().map(|s| s.to_string()).collect();
 
                                 let _ = sender.send(Event::CommandDone {
                                     success: output.status.success(),
@@ -410,7 +441,15 @@ impl App {
                 debug!("Quit triggered: ViewAction::Quit");
                 self.running = false;
             }
-            ViewAction::RequestInput { prompt, placeholder } => {
+            ViewAction::RequestInput {
+                prompt,
+                placeholder,
+            } => {
+                debug!(
+                    "ViewAction::RequestInput received: prompt='{}', placeholder={:?}",
+                    prompt, placeholder
+                );
+
                 // Detect if this is the Specify phase (requires multiline input)
                 let is_multiline = prompt.contains("feature description");
 
@@ -425,6 +464,19 @@ impl App {
                 }
                 self.input_dialog = Some(dialog);
                 self.input_mode = true;
+
+                // State validation: Both must be set for input to work
+                debug_assert!(
+                    self.input_mode && self.input_dialog.is_some(),
+                    "RequestInput: input_mode and input_dialog must both be set"
+                );
+
+                debug!(
+                    "RequestInput handled: input_mode={}, input_dialog_exists={}, is_multiline={}",
+                    self.input_mode,
+                    self.input_dialog.is_some(),
+                    is_multiline
+                );
             }
             ViewAction::RunGitCommand(_) => {
                 // Git commands are handled via handle_git_command() which returns
@@ -560,10 +612,18 @@ impl App {
 
     /// Handle key events when in input mode
     pub fn handle_key_event_in_input_mode(&mut self, key: KeyEvent) {
+        debug!(
+            "handle_key_event_in_input_mode: key={:?}, input_dialog_exists={}, text_input_exists={}",
+            key.code,
+            self.input_dialog.is_some(),
+            self.text_input.is_some()
+        );
+
         // Prioritize input_dialog (modal) over text_input (footer)
         if let Some(ref mut dialog) = self.input_dialog {
             match key.code {
                 KeyCode::Char(c) => {
+                    debug!("Inserting char '{}' into input dialog", c);
                     dialog.insert_char(c);
                 }
                 KeyCode::Backspace => {
@@ -823,10 +883,14 @@ impl App {
                 message,
             } => {
                 // Update progress in WorktreeView
-                self.worktree_view.update_progress(&phase, step, total_steps, &message);
+                self.worktree_view
+                    .update_progress(&phase, step, total_steps, &message);
                 self.status_message = Some(format!("[{}/{}] {}", step, total_steps, message));
             }
-            ProtocolMessage::SessionInfo { session_id, feature } => {
+            ProtocolMessage::SessionInfo {
+                session_id,
+                feature,
+            } => {
                 // Save session ID
                 self.worktree_view.active_session_id = Some(session_id.clone());
                 if let Some(feat) = feature {
@@ -838,7 +902,12 @@ impl App {
     }
 
     /// Handle spec phase completion for auto-flow mode
-    pub fn handle_spec_phase_completed(&mut self, phase: String, success: bool, output: Vec<String>) {
+    pub fn handle_spec_phase_completed(
+        &mut self,
+        phase: String,
+        success: bool,
+        output: Vec<String>,
+    ) {
         // Clear running phase
         self.running_spec_phase = None;
 
@@ -855,7 +924,8 @@ impl App {
         self.command_runner.command_finished(success);
 
         // Update spec view with phase completion
-        self.spec_view.handle_phase_completed(phase.clone(), success, output);
+        self.spec_view
+            .handle_phase_completed(phase.clone(), success, output);
         self.spec_view.output_scroll = 0; // Reset scroll for new output
 
         // Update WorktreeView phase status
@@ -874,7 +944,8 @@ impl App {
                 if let Some(next_phase) = self.worktree_view.auto_flow.current_phase() {
                     self.status_message = Some(format!(
                         "{} phase completed - auto-continuing to {}",
-                        phase, next_phase.display_name()
+                        phase,
+                        next_phase.display_name()
                     ));
                     // TODO: Auto-start next phase
                 } else {
@@ -991,8 +1062,8 @@ impl App {
 
     /// Refresh git worktree information
     fn refresh_git_info(&mut self) {
-        use rstn_core::git::worktree;
         use crate::tui::event::{Event, WorktreeType};
+        use rstn_core::git::worktree;
         use tokio::time::{timeout, Duration};
 
         let sender = self.event_sender.clone();
@@ -1154,8 +1225,10 @@ impl App {
             Ok(mut clipboard) => match clipboard.set_text(&content) {
                 Ok(_) => {
                     let lines = content.lines().count();
-                    self.status_message =
-                        Some(format!("Copied {} tab with styling ({} lines)", tab_name, lines));
+                    self.status_message = Some(format!(
+                        "Copied {} tab with styling ({} lines)",
+                        tab_name, lines
+                    ));
                 }
                 Err(e) => {
                     self.status_message = Some(format!("Failed to copy: {}", e));
@@ -1168,7 +1241,10 @@ impl App {
     }
 
     /// Capture visual view as it appears on screen (with box-drawing characters)
-    fn capture_visual_view(&self, terminal: &Terminal<CrosstermBackend<Stdout>>) -> AppResult<String> {
+    fn capture_visual_view(
+        &self,
+        terminal: &Terminal<CrosstermBackend<Stdout>>,
+    ) -> AppResult<String> {
         use ratatui::backend::TestBackend;
         use ratatui::Terminal as TestTerminal;
 
@@ -1270,8 +1346,8 @@ impl App {
         debug!("exec_restart: original args: {:?}", args);
 
         // Convert binary path to CString for exec
-        let path_cstr = CString::new(binary_path)
-            .map_err(|e| anyhow::anyhow!("Invalid path: {}", e))?;
+        let path_cstr =
+            CString::new(binary_path).map_err(|e| anyhow::anyhow!("Invalid path: {}", e))?;
 
         // Convert arguments to CStrings
         // First arg should be the program name (convention)
@@ -1280,8 +1356,7 @@ impl App {
         // Add remaining arguments (skip argv[0])
         for arg in args.iter().skip(1) {
             exec_args.push(
-                CString::new(arg.as_str())
-                    .map_err(|e| anyhow::anyhow!("Invalid arg: {}", e))?
+                CString::new(arg.as_str()).map_err(|e| anyhow::anyhow!("Invalid arg: {}", e))?,
             );
         }
 
@@ -1434,30 +1509,38 @@ impl App {
                     self.worktree_view.commit_warnings = warnings.clone();
 
                     // Show editable dialog
-                    self.input_dialog = Some(InputDialog::with_description(
-                        "Commit Changes",
-                        Self::format_warnings(&warnings, &sensitive_files),
-                        "Message:",
-                    ).placeholder(message));
+                    self.input_dialog = Some(
+                        InputDialog::with_description(
+                            "Commit Changes",
+                            Self::format_warnings(&warnings, &sensitive_files),
+                            "Message:",
+                        )
+                        .placeholder(message),
+                    );
                     self.input_mode = true;
                 }
                 Event::CommitCompleted { success, output } => {
                     self.worktree_view.add_output(output);
                     if success {
-                        self.worktree_view.add_output("✓ Commit successful".to_string());
+                        self.worktree_view
+                            .add_output("✓ Commit successful".to_string());
                         self.status_message = Some("Commit successful!".to_string());
                     } else {
-                        self.status_message = Some("Commit failed - see output for details".to_string());
+                        self.status_message =
+                            Some("Commit failed - see output for details".to_string());
                     }
                 }
                 Event::CommitError { error } => {
-                    self.worktree_view.add_output(format!("❌ Error: {}", error));
+                    self.worktree_view
+                        .add_output(format!("❌ Error: {}", error));
                     self.status_message = Some(format!("Commit error: {}", error));
                 }
                 Event::UpdateCompleted { installed_path } => {
                     // Show success message
-                    self.worktree_view.add_output("✓ Build successful!".to_string());
-                    self.worktree_view.add_output(format!("Installed to: {}", installed_path));
+                    self.worktree_view
+                        .add_output("✓ Build successful!".to_string());
+                    self.worktree_view
+                        .add_output(format!("Installed to: {}", installed_path));
                     self.worktree_view.add_output("Restarting...".to_string());
 
                     // Prepare for restart
@@ -1466,7 +1549,10 @@ impl App {
                     }
                 }
             }
-            debug!("main_loop iteration {}: event handled, running={}", iteration, self.running);
+            debug!(
+                "main_loop iteration {}: event handled, running={}",
+                iteration, self.running
+            );
         }
         debug!("main_loop: exited (running={})", self.running);
         Ok(())
@@ -1498,11 +1584,10 @@ impl App {
             CurrentView::Dashboard => 2,
         };
         let tabs = Tabs::new(tab_titles)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(format!(" rstn {} - Rustation Dev Toolkit ", crate::version::short_version())),
-            )
+            .block(Block::default().borders(Borders::ALL).title(format!(
+                " rstn {} - Rustation Dev Toolkit ",
+                crate::version::short_version()
+            )))
             .select(selected_tab)
             .style(Style::default().fg(Color::White))
             .highlight_style(Style::default().fg(Color::Yellow));
@@ -1516,8 +1601,8 @@ impl App {
         }
 
         // Render footer with shortcuts and status
-        use ratatui::text::{Line, Span};
         use ratatui::style::Modifier;
+        use ratatui::text::{Line, Span};
 
         let footer_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -1529,24 +1614,59 @@ impl App {
 
         // Shortcuts bar (always visible)
         let shortcuts = Line::from(vec![
-            Span::styled("[", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "[",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw("/"),
-            Span::styled("]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" Switch Tab", Style::default().fg(Color::DarkGray)),
             Span::raw("  "),
-            Span::styled("Tab", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Tab",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" Switch Pane", Style::default().fg(Color::DarkGray)),
             Span::raw("  "),
-            Span::styled("y", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "y",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" Copy", Style::default().fg(Color::DarkGray)),
             Span::raw(" "),
-            Span::styled("Y", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Y",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" Copy+Style", Style::default().fg(Color::DarkGray)),
             Span::raw("  "),
-            Span::styled("q", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "q",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" Quit", Style::default().fg(Color::DarkGray)),
             Span::raw("  "),
-            Span::styled("U", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "U",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" Update", Style::default().fg(Color::DarkGray)),
         ]);
         let shortcuts_bar = Paragraph::new(shortcuts);
@@ -1560,10 +1680,7 @@ impl App {
             }
         } else {
             // Render normal status message
-            let status = self
-                .status_message
-                .as_deref()
-                .unwrap_or("");
+            let status = self.status_message.as_deref().unwrap_or("");
             let status_bar = Paragraph::new(status).style(Style::default().fg(Color::Cyan));
             frame.render_widget(status_bar, footer_chunks[1]);
         }
@@ -1586,9 +1703,11 @@ impl App {
             .collect::<Vec<_>>()
             .join("\n");
 
-        self.worktree_view.add_output("❌ COMMIT BLOCKED".to_string());
+        self.worktree_view
+            .add_output("❌ COMMIT BLOCKED".to_string());
         self.worktree_view.add_output("".to_string());
-        self.worktree_view.add_output("Critical security issues detected:".to_string());
+        self.worktree_view
+            .add_output("Critical security issues detected:".to_string());
         for line in details.lines() {
             self.worktree_view.add_output(format!("  {}", line));
         }
@@ -1624,5 +1743,217 @@ impl App {
         }
 
         desc
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    // Helper to create key events
+    fn key_event(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::empty())
+    }
+
+    fn key_event_with_mod(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
+        KeyEvent::new(code, modifiers)
+    }
+
+    // T024: Test that RequestInput sets input_mode to true
+    #[test]
+    fn test_request_input_sets_input_mode() {
+        let mut app = App::new();
+
+        // Verify initial state
+        assert!(!app.input_mode, "input_mode should be false initially");
+        assert!(
+            app.input_dialog.is_none(),
+            "input_dialog should be None initially"
+        );
+
+        // Simulate ViewAction::RequestInput
+        app.handle_view_action(ViewAction::RequestInput {
+            prompt: "Enter feature description:".to_string(),
+            placeholder: Some("e.g., A new login system".to_string()),
+        });
+
+        // Verify input mode is enabled
+        assert!(
+            app.input_mode,
+            "input_mode should be true after RequestInput"
+        );
+    }
+
+    // T025: Test that RequestInput creates an input dialog
+    #[test]
+    fn test_request_input_creates_dialog() {
+        let mut app = App::new();
+
+        // Simulate ViewAction::RequestInput
+        app.handle_view_action(ViewAction::RequestInput {
+            prompt: "Enter test input:".to_string(),
+            placeholder: None,
+        });
+
+        // Verify dialog is created
+        assert!(
+            app.input_dialog.is_some(),
+            "input_dialog should be Some after RequestInput"
+        );
+
+        let dialog = app.input_dialog.as_ref().unwrap();
+        assert_eq!(dialog.title, "Input Required");
+    }
+
+    // T026: Test that key events in input mode route to input handler
+    #[test]
+    fn test_key_event_routes_to_input_mode_handler() {
+        let mut app = App::new();
+
+        // Setup input mode
+        app.handle_view_action(ViewAction::RequestInput {
+            prompt: "Enter:".to_string(),
+            placeholder: None,
+        });
+
+        assert!(app.input_mode);
+        assert!(app.input_dialog.is_some());
+
+        // Send character key events
+        app.handle_key_event(key_event(KeyCode::Char('h')));
+        app.handle_key_event(key_event(KeyCode::Char('i')));
+
+        // Verify characters were inserted into dialog
+        let dialog = app.input_dialog.as_ref().unwrap();
+        assert_eq!(dialog.value(), "hi");
+    }
+
+    // T027: Test that Enter submits single-line input
+    #[test]
+    fn test_enter_submits_single_line_input() {
+        let mut app = App::new();
+
+        // Create a single-line (non-multiline) dialog
+        app.handle_view_action(ViewAction::RequestInput {
+            prompt: "Enter branch name:".to_string(), // Not "feature description", so single-line
+            placeholder: None,
+        });
+
+        // Type some text
+        app.handle_key_event(key_event(KeyCode::Char('t')));
+        app.handle_key_event(key_event(KeyCode::Char('e')));
+        app.handle_key_event(key_event(KeyCode::Char('s')));
+        app.handle_key_event(key_event(KeyCode::Char('t')));
+
+        // Verify it's not multiline
+        let dialog = app.input_dialog.as_ref().unwrap();
+        assert!(!dialog.is_multiline(), "Should be single-line dialog");
+
+        // Submit with Enter
+        app.handle_key_event(key_event(KeyCode::Enter));
+
+        // After submit, input_mode should be false and dialog cleared
+        assert!(!app.input_mode, "input_mode should be false after submit");
+        assert!(
+            app.input_dialog.is_none(),
+            "input_dialog should be None after submit"
+        );
+    }
+
+    // T028: Test that Alt+Enter submits multiline input
+    #[test]
+    fn test_alt_enter_submits_multiline_input() {
+        let mut app = App::new();
+
+        // Create multiline dialog (feature description triggers multiline)
+        app.handle_view_action(ViewAction::RequestInput {
+            prompt: "Enter feature description:".to_string(),
+            placeholder: None,
+        });
+
+        // Verify it's multiline
+        let dialog = app.input_dialog.as_ref().unwrap();
+        assert!(dialog.is_multiline(), "Should be multiline dialog");
+
+        // Type some text
+        app.handle_key_event(key_event(KeyCode::Char('t')));
+        app.handle_key_event(key_event(KeyCode::Char('e')));
+        app.handle_key_event(key_event(KeyCode::Char('s')));
+        app.handle_key_event(key_event(KeyCode::Char('t')));
+
+        // Submit with Alt+Enter (multiline submit)
+        app.handle_key_event(key_event_with_mod(KeyCode::Enter, KeyModifiers::ALT));
+
+        // After submit, input_mode should be false and dialog cleared
+        assert!(
+            !app.input_mode,
+            "input_mode should be false after Alt+Enter submit"
+        );
+        assert!(
+            app.input_dialog.is_none(),
+            "input_dialog should be None after submit"
+        );
+    }
+
+    // T029: Test that Escape cancels input
+    #[test]
+    fn test_escape_cancels_input() {
+        let mut app = App::new();
+
+        // Setup input mode
+        app.handle_view_action(ViewAction::RequestInput {
+            prompt: "Enter:".to_string(),
+            placeholder: None,
+        });
+
+        // Type some text
+        app.handle_key_event(key_event(KeyCode::Char('x')));
+
+        // Cancel with Escape
+        app.handle_key_event(key_event(KeyCode::Esc));
+
+        // Verify input mode is disabled and dialog is cleared
+        assert!(!app.input_mode, "input_mode should be false after Escape");
+        assert!(
+            app.input_dialog.is_none(),
+            "input_dialog should be None after Escape"
+        );
+    }
+
+    // Additional: Test defensive state check syncs input_mode
+    #[test]
+    fn test_defensive_state_check_resets_orphan_input_mode() {
+        let mut app = App::new();
+
+        // Manually create inconsistent state: input_mode=true but no dialog
+        app.input_mode = true;
+        app.input_dialog = None;
+
+        // The defensive check in handle_key_event should fix this
+        app.handle_key_event(key_event(KeyCode::Char('a')));
+
+        // Should have been reset
+        assert!(
+            !app.input_mode,
+            "input_mode should be reset when dialog is None"
+        );
+    }
+
+    // Additional: Test defensive state check enables input_mode when dialog exists
+    #[test]
+    fn test_defensive_state_check_enables_input_mode_for_orphan_dialog() {
+        let mut app = App::new();
+
+        // Manually create inconsistent state: dialog exists but input_mode=false
+        app.input_mode = false;
+        app.input_dialog = Some(InputDialog::new("Test", "Enter:"));
+
+        // Send a key event - defensive check should enable input_mode
+        app.handle_key_event(key_event(KeyCode::Char('a')));
+
+        // Character should have been inserted (proving input_mode was enabled)
+        let dialog = app.input_dialog.as_ref().unwrap();
+        assert_eq!(dialog.value(), "a");
     }
 }
