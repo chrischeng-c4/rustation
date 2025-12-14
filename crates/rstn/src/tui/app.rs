@@ -1366,11 +1366,14 @@ impl App {
         // If it returns, it failed
         #[cfg(unix)]
         {
+            // Convert CStrings to raw pointers for execv
+            // execv expects a NULL-terminated array of char pointers
+            let mut argv: Vec<*const libc::c_char> =
+                exec_args.iter().map(|s| s.as_ptr()).collect();
+            argv.push(std::ptr::null()); // NULL-terminate the array
+
             unsafe {
-                libc::execv(
-                    path_cstr.as_ptr(),
-                    exec_args.as_ptr() as *const *const libc::c_char,
-                );
+                libc::execv(path_cstr.as_ptr(), argv.as_ptr());
             }
 
             // If we get here, exec failed
