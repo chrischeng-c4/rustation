@@ -9,8 +9,8 @@ use crate::tui::views::{
 };
 use crate::tui::widgets::{InputDialog, OptionPicker, TextInput};
 use crossterm::event::{
-    KeyCode, KeyEvent, KeyModifiers, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
-    PushKeyboardEnhancementFlags,
+    KeyCode, KeyEvent, KeyModifiers, KeyboardEnhancementFlags, MouseEvent,
+    PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use crossterm::terminal::{
@@ -18,6 +18,7 @@ use crossterm::terminal::{
     LeaveAlternateScreen,
 };
 use ratatui::backend::CrosstermBackend;
+use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::io::{stdout, Stdout};
 use std::sync::mpsc;
@@ -78,12 +79,22 @@ pub struct App {
     pub current_group_index: usize,
     /// Session ID for this rstn execution (for log correlation)
     pub session_id: Option<String>,
+    /// Layout rect for tab bar (to detect view switching clicks)
+    pub tab_bar_rect: Option<Rect>,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Check if a point (column, row) is within a rectangle
+fn point_in_rect(col: u16, row: u16, rect: &Rect) -> bool {
+    col >= rect.x
+        && col < rect.x + rect.width
+        && row >= rect.y
+        && row < rect.y + rect.height
 }
 
 impl App {
@@ -116,6 +127,7 @@ impl App {
             pending_commit_groups: None,
             current_group_index: 0,
             session_id,
+            tab_bar_rect: None,
         }
     }
 
@@ -287,6 +299,62 @@ impl App {
         };
 
         self.handle_view_action(action);
+    }
+
+    /// Handle mouse events
+    fn handle_mouse_event(&mut self, mouse: MouseEvent) {
+        use crossterm::event::MouseEventKind;
+
+        // Only handle left button press (ignore drag, release, scroll)
+        if mouse.kind != MouseEventKind::Down(crossterm::event::MouseButton::Left) {
+            return;
+        }
+
+        let col = mouse.column;
+        let row = mouse.row;
+
+        // Check if clicked on tab bar (top-level view switching)
+        if let Some(tab_rect) = self.tab_bar_rect {
+            if point_in_rect(col, row, &tab_rect) {
+                // Calculate which tab was clicked (3 tabs: Worktree, Settings, Dashboard)
+                // Tab bar has borders, so effective width is tab_rect.width - 2
+                let inner_width = tab_rect.width.saturating_sub(2);
+                let tab_width = inner_width / 3;
+                let click_offset = col.saturating_sub(tab_rect.x + 1);
+
+                let clicked_tab = click_offset / tab_width;
+
+                match clicked_tab {
+                    0 => {
+                        self.current_view = CurrentView::Worktree;
+                        self.status_message = Some("Switched to Worktree".to_string());
+                    }
+                    1 => {
+                        self.current_view = CurrentView::Settings;
+                        self.status_message = Some("Switched to Settings".to_string());
+                    }
+                    2 => {
+                        self.current_view = CurrentView::Dashboard;
+                        self.status_message = Some("Switched to Dashboard".to_string());
+                    }
+                    _ => {}
+                }
+                return;
+            }
+        }
+
+        // Delegate to current view for pane-specific handling
+        match self.current_view {
+            CurrentView::Worktree => {
+                self.worktree_view.handle_mouse(col, row);
+            }
+            CurrentView::Settings => {
+                // Settings view doesn't have panes yet
+            }
+            CurrentView::Dashboard => {
+                // Dashboard could implement pane switching later
+            }
+        }
     }
 
     /// Handle actions returned from views
@@ -1182,7 +1250,7 @@ impl App {
     fn handle_claude_completed(
         &mut self,
         phase: String,
-        success: bool,
+        _success: bool,
         session_id: Option<String>,
         status: Option<RscliStatus>,
     ) {
@@ -1438,7 +1506,7 @@ impl App {
 
     /// Capture visual view as it appears on screen (with box-drawing characters)
     fn capture_visual_view(
-        &self,
+        &mut self,
         terminal: &Terminal<CrosstermBackend<Stdout>>,
     ) -> AppResult<String> {
         use ratatui::backend::TestBackend;
@@ -1606,9 +1674,13 @@ impl App {
                     debug!("main_loop iteration {}: Event::Key({:?})", iteration, key);
                     self.handle_key_event(key);
                 }
-                Event::Mouse(_) => {
-                    debug!("main_loop iteration {}: Event::Mouse", iteration);
-                } // Could add mouse support later
+                Event::Mouse(mouse) => {
+                    debug!(
+                        "main_loop iteration {}: Event::Mouse({:?})",
+                        iteration, mouse
+                    );
+                    self.handle_mouse_event(mouse);
+                }
                 Event::Resize(_, _) => {} // Terminal handles resize automatically
                 Event::CommandOutput(line) => self.handle_command_output(line),
                 Event::CommandDone { success, lines } => self.handle_command_done(success, lines),
@@ -1857,7 +1929,7 @@ impl App {
     }
 
     /// Render the current view
-    fn render(&self, frame: &mut ratatui::Frame) {
+    fn render(&mut self, frame: &mut ratatui::Frame) {
         use ratatui::layout::{Constraint, Direction, Layout};
         use ratatui::style::{Color, Style};
         use ratatui::widgets::{Block, Borders, Paragraph, Tabs};
@@ -1873,6 +1945,9 @@ impl App {
                 Constraint::Length(2), // Footer (shortcuts + status)
             ])
             .split(size);
+
+        // Store tab bar rect for mouse click detection
+        self.tab_bar_rect = Some(chunks[0]);
 
         // Render tabs
         let tab_titles = vec!["[1] Worktree", "[2] Settings", "[3] Dashboard"];

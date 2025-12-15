@@ -575,7 +575,7 @@ impl Default for SpecView {
 }
 
 impl View for SpecView {
-    fn render(&self, frame: &mut Frame, area: Rect) {
+    fn render(&mut self, frame: &mut Frame, area: Rect) {
         // Layout: left (phases + info), right (output/wizard/auto-flow)
         let main_chunks = Layout::default()
             .direction(Direction::Horizontal)

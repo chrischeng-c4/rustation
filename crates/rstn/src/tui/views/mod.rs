@@ -69,7 +69,7 @@ pub enum ViewType {
 /// Trait for views that can be rendered and handle input
 pub trait View {
     /// Render the view
-    fn render(&self, frame: &mut Frame, area: Rect);
+    fn render(&mut self, frame: &mut Frame, area: Rect);
 
     /// Handle key input, returning an optional action
     fn handle_key(&mut self, key: KeyEvent) -> ViewAction;
