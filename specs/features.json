@@ -345,6 +345,18 @@
       "phase": 8,
       "dependencies": ["003"],
       "priority": "low"
+    },
+    {
+      "id": "051",
+      "name": "interactive-specify-flow",
+      "description": "Interactive TUI workflow for /speckit.specify with input/review/edit modes",
+      "status": "complete",
+      "phase": 9,
+      "dependencies": ["050"],
+      "priority": "high",
+      "pr": 50,
+      "user_stories": 3,
+      "lines_added": 1130
     }
   ],
   "phases": {
@@ -355,6 +367,7 @@
     "5": { "name": "Scripting Foundations", "status": "planned" },
     "6": { "name": "Parameter Power", "status": "planned" },
     "7": { "name": "Shell Control", "status": "planned" },
-    "8": { "name": "Advanced Features", "status": "planned" }
+    "8": { "name": "Advanced Features", "status": "planned" },
+    "9": { "name": "TUI & Developer Experience", "status": "in-progress" }
   }
 }

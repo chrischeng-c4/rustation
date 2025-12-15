@@ -32,6 +32,22 @@ Use spec-kit commands for all feature development:
 /speckit.review   → PR review    # Verify against spec
 ```
 
+### Interactive Specify Workflow (Feature 051)
+
+The `/speckit.specify` command now uses an **interactive TUI workflow**:
+
+1. **Input Mode**: Enter feature description in a dialog
+2. **Review Mode**: Preview generated spec with actions:
+   - `[Enter]` Save spec to file
+   - `[e]` Edit spec inline
+   - `[Esc]` Cancel and discard
+3. **Edit Mode** (optional): Multi-line text editing
+   - `[Ctrl+S]` Save edited spec
+   - `[Enter]` Insert newline
+   - `[Esc]` Cancel edits
+
+This replaces the old shell-out approach with a seamless, no-context-switch experience.
+
 ### Quick Status
 
 ```bash

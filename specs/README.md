@@ -44,6 +44,67 @@ Uses **spec-kit** for specification-driven development:
 
 See [CLAUDE.md](../CLAUDE.md) for full workflow details.
 
+## Interactive Specify Workflow (Feature 051)
+
+The `/speckit.specify` command provides an **interactive TUI workflow** for creating feature specifications without leaving rstn.
+
+### Workflow Steps
+
+1. **Trigger**: Select "Specify" from the Commands pane and press Enter
+2. **Input Mode**: A dialog appears for your feature description
+   - Type a description (minimum 10 characters)
+   - Press `Enter` to submit
+   - Press `Esc` to cancel
+3. **Generating**: AI generates the spec (progress shown)
+4. **Review Mode**: Preview the generated spec
+   - `[Enter]` - Save spec to `specs/{NNN}-{name}/spec.md`
+   - `[e]` - Edit the spec inline before saving
+   - `[Esc]` - Cancel and discard the spec
+5. **Edit Mode** (optional): Multi-line editor for quick tweaks
+   - `[Ctrl+S]` - Save edited spec
+   - `[Enter]` - Insert newline
+   - `[Esc]` - Cancel edits, return to Review
+   - Arrow keys, Home, End - Navigate
+   - Backspace, Delete - Delete characters
+
+### Benefits
+
+- **No context switching**: Stay in the TUI throughout the workflow
+- **Immediate feedback**: See the generated spec before saving
+- **Quick edits**: Fix typos or add details without manual file editing
+- **Safe workflow**: Multiple chances to cancel before committing
+
+### Example Session
+
+```
+1. Navigate to "Specify" in Commands → Press Enter
+2. Dialog: "Describe your feature..."
+   Type: "Add dark mode toggle to settings"
+   Press: Enter
+3. Status: "Generating spec..." (2-3 seconds)
+4. Review: [Generated spec displays]
+   Notice a typo → Press: 'e'
+5. Edit: Fix typo
+   Press: Ctrl+S
+6. Status: "Spec saved to specs/052-dark-mode-toggle/spec.md"
+```
+
+### Troubleshooting
+
+**"Invalid input: description too short"**
+- Ensure your description is at least 10 characters
+- Provide enough context for meaningful spec generation
+
+**"Spec generation failed"**
+- Check network connection (if using remote AI)
+- Check logs at `~/.rustation/logs/rstn.log`
+- Retry by starting the workflow again
+
+**Edit mode not responding**
+- Ensure you're in Review Mode first
+- Press 'e' to enter Edit Mode
+- Check that focus is on Content area (yellow border)
+
 ## Adding Features
 
 1. Create directory: `specs/NNN-feature-name/`

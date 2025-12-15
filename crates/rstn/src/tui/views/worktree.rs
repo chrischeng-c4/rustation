@@ -102,7 +102,49 @@ pub enum WorktreeFocus {
     Output,   // Output/log panel
 }
 
-/// Specify workflow state (Feature 051)
+/// State machine for the interactive specify workflow (Feature 051)
+///
+/// Manages a multi-phase user journey for creating feature specifications:
+///
+/// ## State Machine
+///
+/// ```text
+/// Idle (not active)
+///     ↓ (user triggers /speckit.specify)
+/// Input Phase (collecting feature description)
+///     ↓ (user submits with Enter)
+/// Generating Phase (AI generating spec)
+///     ↓ (spec generation completes)
+/// Review Phase (user previews spec)
+///     ├─→ (user presses Enter) → Save to file
+///     ├─→ (user presses 'e') → Edit Phase
+///     └─→ (user presses Esc) → Cancel, return to Idle
+/// Edit Phase (inline editing)
+///     ├─→ (user presses Ctrl+S) → Save edited spec
+///     └─→ (user presses Esc) → Back to Review Phase
+/// ```
+///
+/// ## Fields
+///
+/// - `input_buffer`: User's feature description during Input Phase
+/// - `input_cursor`: Cursor position in input buffer
+/// - `is_generating`: True during async spec generation
+/// - `generation_error`: Error message if generation fails
+/// - `generated_spec`: AI-generated spec content (markdown)
+/// - `feature_number`: Parsed feature number (e.g., "051")
+/// - `feature_name`: Parsed feature name (e.g., "interactive-specify-flow")
+/// - `edit_mode`: True when in Edit Phase
+/// - `edit_text_input`: TextInput widget instance for multi-line editing
+/// - `validation_error`: Error message for invalid input (e.g., too short)
+///
+/// ## Lifecycle
+///
+/// 1. Created with `Default::default()` in idle state
+/// 2. Activated by `start_specify_input()` → Input Phase
+/// 3. Submitted by `submit_specify_description()` → Generating Phase
+/// 4. Transitions to Review Phase when `Event::SpecifyGenerationCompleted` received
+/// 5. User can edit, save, or cancel from Review Phase
+/// 6. Reset by `cancel_specify()` → returns to idle state
 #[derive(Debug, Clone, Default)]
 pub struct SpecifyState {
     // Input phase
@@ -1288,14 +1330,32 @@ impl WorktreeView {
     // Specify workflow methods (Feature 051)
     // ========================================================================
 
-    /// Start specify input mode (T015)
+    /// Enter specify Input Phase and display input dialog (T015)
+    ///
+    /// Initiates the interactive specify workflow by:
+    /// - Setting content type to `SpecifyInput`
+    /// - Switching focus to content area
+    /// - Clearing any previous specify state
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use rstn::tui::views::worktree::{WorktreeView, ContentType};
+    /// # let mut view = WorktreeView::new();
+    /// view.start_specify_input();
+    /// assert_eq!(view.content_type, ContentType::SpecifyInput);
+    /// assert!(view.specify_state.input_buffer.is_empty());
+    /// ```
     pub fn start_specify_input(&mut self) {
         self.specify_state = SpecifyState::new();
         self.content_type = ContentType::SpecifyInput;
         self.focus = WorktreeFocus::Content; // Auto-focus Content area
     }
 
-    /// Cancel specify workflow (T016)
+    /// Cancel specify workflow and return to normal Spec view (T016)
+    ///
+    /// Resets all specify state to defaults and returns to regular content view.
+    /// Safe to call from any specify phase (Input, Review, Edit).
     pub fn cancel_specify(&mut self) {
         let entry = LogEntry::new(
             LogCategory::System,
@@ -1308,7 +1368,14 @@ impl WorktreeView {
         self.focus = WorktreeFocus::Commands; // Return focus to commands
     }
 
-    /// Handle text input in specify mode (T017)
+    /// Handle keyboard input during Input Phase (T017)
+    ///
+    /// # Parameters
+    /// - `key`: The key event to process
+    ///
+    /// # Returns
+    /// - `ViewAction::None` for navigation keys (handled by parent)
+    /// - `ViewAction::GenerateSpec` when user submits valid input
     pub fn handle_specify_input(&mut self, key: KeyEvent) -> ViewAction {
         use crossterm::event::{KeyCode, KeyModifiers};
 
@@ -1374,7 +1441,15 @@ impl WorktreeView {
         }
     }
 
-    /// Submit feature description for generation (T019)
+    /// Validate input and trigger spec generation (T019)
+    ///
+    /// Validates that the description is at least 10 characters, then:
+    /// - Sets `is_generating = true`
+    /// - Returns `GenerateSpec` action with description
+    ///
+    /// # Returns
+    /// - `ViewAction::GenerateSpec` if valid
+    /// - `ViewAction::None` if invalid (sets `validation_error`)
     pub fn submit_specify_description(&mut self) -> ViewAction {
         // Validate input (T018)
         if let Err(error) = self.specify_state.validate_input() {
@@ -1394,7 +1469,14 @@ impl WorktreeView {
         }
     }
 
-    /// Trigger save action for generated spec (Feature 051, T036)
+    /// Trigger save workflow for generated or edited spec (T036)
+    ///
+    /// Returns a `SaveSpec` action that will be handled by app.rs to write the
+    /// spec to `specs/{number}-{name}/spec.md`.
+    ///
+    /// # Returns
+    /// - `ViewAction::SaveSpec` with content, number, and name
+    /// - `ViewAction::None` if spec/metadata is missing (sets `validation_error`)
     pub fn save_specify_spec(&mut self) -> ViewAction {
         // Defensive checks
         if let (Some(content), Some(number), Some(name)) = (
@@ -1415,7 +1497,16 @@ impl WorktreeView {
         }
     }
 
-    /// Toggle specify edit mode - enter edit mode with TextInput widget (Feature 051, User Story 3, T052)
+    /// Enter Edit Phase from Review Phase (T052, User Story 3)
+    ///
+    /// Creates a multi-line TextInput widget pre-populated with the generated spec.
+    /// The user can then edit the spec before saving.
+    ///
+    /// # Behavior
+    /// - Only activates if `generated_spec` exists
+    /// - Initializes TextInput with spec content split into lines
+    /// - Sets cursor to (0, 0) at start of spec
+    /// - Sets `edit_mode = true`
     pub fn toggle_specify_edit_mode(&mut self) {
         // Only allow entering edit mode if we have a generated spec
         if let Some(spec_content) = &self.specify_state.generated_spec {
@@ -1435,7 +1526,22 @@ impl WorktreeView {
         }
     }
 
-    /// Handle keyboard input during specify edit mode (Feature 051, User Story 3, T054-T067)
+    /// Handle keyboard input during Edit Phase (T054-T067, User Story 3)
+    ///
+    /// Routes all keypresses to the TextInput widget or Edit Phase controls:
+    /// - `Ctrl+S`: Save edited spec
+    /// - `Esc`: Cancel editing, return to Review
+    /// - `Enter`: Insert newline (NOT save)
+    /// - Arrow keys, Home, End: Navigate cursor
+    /// - Backspace, Delete: Delete characters
+    /// - Regular chars: Insert at cursor
+    ///
+    /// # Parameters
+    /// - `key`: The key event to process
+    ///
+    /// # Returns
+    /// - `ViewAction::SaveSpec` if user pressed Ctrl+S
+    /// - `ViewAction::None` otherwise
     pub fn handle_specify_edit_input(&mut self, key: KeyEvent) -> ViewAction {
         // Get mutable reference to the text input
         if let Some(input) = &mut self.specify_state.edit_text_input {
@@ -1501,7 +1607,15 @@ impl WorktreeView {
         ViewAction::None
     }
 
-    /// Save edited spec content and trigger file write (Feature 051, User Story 3, T065)
+    /// Extract edited content and trigger save workflow (T065, User Story 3)
+    ///
+    /// Called when user presses Ctrl+S in Edit Phase. Extracts the multi-line
+    /// content from TextInput, updates `generated_spec`, exits Edit Phase, and
+    /// triggers the save workflow.
+    ///
+    /// # Returns
+    /// - `ViewAction::SaveSpec` with edited content
+    /// - `ViewAction::None` if no TextInput exists (shouldn't happen)
     pub fn save_from_edit(&mut self) -> ViewAction {
         // Extract edited content from TextInput
         if let Some(input) = &self.specify_state.edit_text_input {
@@ -1521,7 +1635,10 @@ impl WorktreeView {
         ViewAction::None
     }
 
-    /// Cancel editing and return to review mode without saving (Feature 051, User Story 3, T066)
+    /// Discard edits and return to Review Phase (T066, User Story 3)
+    ///
+    /// Called when user presses Esc in Edit Phase. Discards any changes made in
+    /// the editor and returns to Review Phase with the original spec unchanged.
     pub fn cancel_edit(&mut self) {
         // Clear edit mode state and return to review
         self.specify_state.edit_mode = false;
@@ -1529,7 +1646,20 @@ impl WorktreeView {
         // Original spec content remains in generated_spec, unchanged
     }
 
-    /// Handle keyboard input during specify review mode (Feature 051, T037)
+    /// Handle keyboard input during Review Phase (T037)
+    ///
+    /// # Keybindings
+    /// - `Enter`: Save spec to file
+    /// - `e`: Enter Edit Phase for inline editing
+    /// - `Esc`: Cancel workflow and discard spec
+    /// - Other keys: No action (scrolling handled by parent)
+    ///
+    /// # Parameters
+    /// - `key`: The key event to process
+    ///
+    /// # Returns
+    /// - `ViewAction::SaveSpec` if user pressed Enter
+    /// - `ViewAction::None` otherwise
     pub fn handle_specify_review_input(&mut self, key: KeyEvent) -> ViewAction {
         match key.code {
             // Enter - Save spec
@@ -1856,7 +1986,7 @@ impl WorktreeView {
         }
     }
 
-    /// Render specify input dialog (T020)
+    /// Render specify Input Phase dialog (T020)
     fn render_specify_input(&self, frame: &mut Frame, area: Rect) {
         let mut lines = vec![];
 
@@ -1921,7 +2051,7 @@ impl WorktreeView {
         frame.render_widget(paragraph, area);
     }
 
-    /// Render specify review UI in Content pane (Feature 051, T034, T038, T039)
+    /// Render specify Review Phase with spec preview (T034, T038, T039)
     fn render_specify_review(&self, frame: &mut Frame, area: Rect) {
         // Build ALL lines with styling
         let mut all_lines: Vec<Line> = vec![];
@@ -1988,7 +2118,7 @@ impl WorktreeView {
         frame.render_widget(paragraph, area);
     }
 
-    /// Render specify edit mode with TextInput widget (Feature 051, User Story 3, T067)
+    /// Render specify Edit Phase with multi-line editor (T067, User Story 3)
     fn render_specify_edit(&self, frame: &mut Frame, area: Rect) {
         // Create 3-section layout: Header | Content | Footer
         let sections = Layout::default()
