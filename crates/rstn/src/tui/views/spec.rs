@@ -250,7 +250,7 @@ impl Default for WizardState {
 }
 
 /// CLI options for Claude Code execution
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ClaudeOptions {
     /// Maximum agentic turns per phase
     pub max_turns: u32,

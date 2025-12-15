@@ -17,7 +17,7 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 /// Actions that views can request
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ViewAction {
     /// No action needed
     None,
@@ -48,10 +48,18 @@ pub enum ViewAction {
     RunIntelligentCommit,
     /// Submit current commit group in review workflow (Feature 050)
     SubmitCommitGroup,
+    /// Generate spec from feature description (Feature 051)
+    GenerateSpec { description: String },
+    /// Save generated spec to file (Feature 051)
+    SaveSpec {
+        content: String,
+        number: String,
+        name: String,
+    },
 }
 
 /// View types for switching
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ViewType {
     Dashboard,
     Commands,

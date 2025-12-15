@@ -83,6 +83,19 @@ pub enum Event {
     CommitCompleted { success: bool, output: String },
     /// Commit workflow error
     CommitError { error: String },
+    /// Specify workflow events (Feature 051)
+    SpecifyGenerationStarted,
+    SpecifyGenerationCompleted {
+        spec: String,
+        number: String,
+        name: String,
+    },
+    SpecifyGenerationFailed {
+        error: String,
+    },
+    SpecifySaved {
+        path: String,
+    },
 }
 
 /// Event handler that runs in a separate thread

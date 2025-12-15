@@ -4,8 +4,8 @@ use crate::tui::claude_stream::{ClaudeStreamMessage, RscliStatus};
 use crate::tui::event::{Event, EventHandler};
 use crate::tui::protocol::{OutputParser, ProtocolMessage};
 use crate::tui::views::{
-    CommandRunner, Dashboard, SettingsView, SpecPhase, SpecView, View, ViewAction, ViewType,
-    WorktreeView,
+    CommandRunner, ContentType, Dashboard, SettingsView, SpecPhase, SpecView, View, ViewAction,
+    ViewType, WorktreeView,
 };
 use crate::tui::widgets::{InputDialog, OptionPicker, TextInput};
 use crossterm::event::{
@@ -587,7 +587,126 @@ impl App {
                     }
                 }
             }
+            ViewAction::GenerateSpec { description } => {
+                // Generate spec from feature description (Feature 051, T026)
+                tracing::info!("Starting spec generation for: {}", description);
+
+                self.status_message = Some("Generating spec...".to_string());
+
+                // Send generation started event (T027)
+                if let Some(sender) = &self.event_sender {
+                    let _ = sender.send(Event::SpecifyGenerationStarted);
+                }
+
+                // Spawn async task for spec generation (T024, T025)
+                let sender = self.event_sender.clone();
+                let desc = description.clone();
+                tokio::spawn(async move {
+                    match App::execute_spec_generation(desc).await {
+                        Ok((spec, number, name)) => {
+                            tracing::info!("Spec generation completed: {}-{}", number, name);
+                            if let Some(sender) = sender {
+                                let _ = sender.send(Event::SpecifyGenerationCompleted {
+                                    spec,
+                                    number,
+                                    name,
+                                });
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Spec generation failed: {}", e);
+                            if let Some(sender) = sender {
+                                let _ = sender.send(Event::SpecifyGenerationFailed {
+                                    error: e.to_string(),
+                                });
+                            }
+                        }
+                    }
+                });
+            }
+            ViewAction::SaveSpec { content, number, name } => {
+                // Save generated spec to file (Feature 051)
+                tracing::info!("Saving spec: {}-{}", number, name);
+
+                let spec_dir = std::path::PathBuf::from(format!("specs/{}-{}", number, name));
+                let spec_file = spec_dir.join("spec.md");
+
+                // Create directory if it doesn't exist
+                if let Err(e) = std::fs::create_dir_all(&spec_dir) {
+                    self.status_message = Some(format!("Failed to create directory: {}", e));
+                    return;
+                }
+
+                // Write spec file
+                match std::fs::write(&spec_file, content) {
+                    Ok(_) => {
+                        self.status_message = Some(format!("Spec saved: {}", spec_file.display()));
+                        if let Some(sender) = &self.event_sender {
+                            let _ = sender.send(Event::SpecifySaved {
+                                path: spec_file.display().to_string(),
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        self.status_message = Some(format!("Failed to save spec: {}", e));
+                    }
+                }
+            }
         }
+    }
+
+    /// Execute spec generation via shell script (Feature 051, T024, T025)
+    async fn execute_spec_generation(description: String) -> Result<(String, String, String), String> {
+        use tokio::process::Command;
+        use tokio::time::{timeout, Duration};
+
+        let script_path = ".specify/scripts/bash/create-new-feature.sh";
+
+        let child = Command::new(script_path)
+            .arg("--json")
+            .arg(&description)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to spawn script: {}", e))?;
+
+        let output = timeout(Duration::from_secs(60), child.wait_with_output())
+            .await
+            .map_err(|_| "Generation timed out after 60 seconds".to_string())?
+            .map_err(|e| format!("Script execution failed: {}", e))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        // Parse JSON output to get paths
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let json: serde_json::Value = serde_json::from_str(&stdout)
+            .map_err(|e| format!("Failed to parse script output: {}", e))?;
+
+        let spec_file = json["SPEC_FILE"]
+            .as_str()
+            .ok_or("Missing SPEC_FILE in output")?;
+        let feature_num = json["FEATURE_NUM"]
+            .as_str()
+            .ok_or("Missing FEATURE_NUM in output")?;
+        let branch_name = json["BRANCH_NAME"]
+            .as_str()
+            .ok_or("Missing BRANCH_NAME in output")?;
+
+        // Extract feature name from branch (e.g., "051-feature-name" -> "feature-name")
+        let feature_name = branch_name
+            .split('-')
+            .skip(1)
+            .collect::<Vec<_>>()
+            .join("-");
+
+        // Read generated spec
+        let spec_content = tokio::fs::read_to_string(spec_file)
+            .await
+            .map_err(|e| format!("Failed to read generated spec: {}", e))?;
+
+        Ok((spec_content, feature_num.to_string(), feature_name))
     }
 
     /// Handle command output events
@@ -1635,6 +1754,57 @@ impl App {
                     self.worktree_view
                         .add_output(format!("❌ Error: {}", error));
                     // Error is already displayed in output area, no need for status_message duplication
+                }
+                Event::SpecifyGenerationStarted => {
+                    // Feature 051: Spec generation started (T027)
+                    tracing::info!("Spec generation started");
+                    self.worktree_view.specify_state.is_generating = true;
+                    self.worktree_view.specify_state.generation_error = None;
+                    self.worktree_view
+                        .add_output("🤖 Generating spec...".to_string());
+                    self.status_message = Some("Generating spec...".to_string());
+                }
+                Event::SpecifyGenerationCompleted {
+                    spec,
+                    number,
+                    name,
+                } => {
+                    // Feature 051: Spec generation completed successfully (T027)
+                    tracing::info!(
+                        "Spec generation completed: feature {} ({})",
+                        number,
+                        name
+                    );
+                    self.worktree_view.specify_state.is_generating = false;
+                    self.worktree_view.specify_state.generated_spec = Some(spec);
+                    self.worktree_view.specify_state.feature_number = Some(number.clone());
+                    self.worktree_view.specify_state.feature_name = Some(name.clone());
+
+                    // Transition to review mode
+                    self.worktree_view.content_type = ContentType::SpecifyReview;
+                    self.worktree_view
+                        .add_output(format!("✓ Spec generated: {} ({})", number, name));
+                    self.status_message =
+                        Some(format!("Review spec for {} - Press 's' to save or 'q' to cancel", number));
+                }
+                Event::SpecifyGenerationFailed { error } => {
+                    // Feature 051: Spec generation failed (T027)
+                    tracing::error!("Spec generation failed: {}", error);
+                    self.worktree_view.specify_state.is_generating = false;
+                    self.worktree_view.specify_state.generation_error = Some(error.clone());
+                    self.worktree_view
+                        .add_output(format!("❌ Spec generation failed: {}", error));
+                    self.status_message = Some("Spec generation failed".to_string());
+                }
+                Event::SpecifySaved { path } => {
+                    // Feature 051: Spec saved successfully (T027)
+                    tracing::info!("Spec saved to: {}", path);
+                    self.worktree_view
+                        .add_output(format!("✓ Spec saved: {}", path));
+                    self.status_message = Some("Spec saved successfully!".to_string());
+
+                    // Exit specify workflow
+                    self.worktree_view.cancel_specify();
                 }
             }
             debug!(
