@@ -185,6 +185,106 @@ pub async fn scan_staged_changes() -> Result<SecurityScanResult> {
     })
 }
 
+/// Scan ALL working directory changes for security issues
+/// Includes: staged, unstaged, and untracked files
+pub async fn scan_all_changes() -> Result<SecurityScanResult> {
+    let mut all_warnings = Vec::new();
+    let mut all_sensitive_files = Vec::new();
+
+    // 1. Scan staged changes (reuse existing logic)
+    let staged_scan = scan_staged_changes().await?;
+    all_warnings.extend(staged_scan.warnings);
+    all_sensitive_files.extend(staged_scan.sensitive_files);
+
+    // 2. Scan unstaged changes (git diff)
+    let unstaged_diff = Command::new("git")
+        .args(&["diff"])
+        .output()
+        .await?;
+
+    if unstaged_diff.status.success() {
+        let unstaged_content = String::from_utf8_lossy(&unstaged_diff.stdout);
+        let unstaged_warnings = scan_diff_for_secrets(&unstaged_content);
+        all_warnings.extend(unstaged_warnings);
+    }
+
+    // 3. Scan untracked files
+    let untracked_output = Command::new("git")
+        .args(&["ls-files", "--others", "--exclude-standard"])
+        .output()
+        .await?;
+
+    if untracked_output.status.success() {
+        let untracked_files = String::from_utf8_lossy(&untracked_output.stdout);
+
+        for file_path in untracked_files.lines() {
+            // Check if filename is sensitive
+            if is_sensitive_filename(file_path) {
+                all_sensitive_files.push(SensitiveFile {
+                    path: file_path.to_string(),
+                    reason: "Sensitive file pattern".to_string(),
+                    suggest_gitignore: true,
+                });
+            }
+
+            // Read and scan file content
+            if let Ok(content) = tokio::fs::read_to_string(file_path).await {
+                let file_warnings = scan_file_content(&content, file_path);
+                all_warnings.extend(file_warnings);
+            }
+        }
+    }
+
+    // Check if any critical warnings block the commit
+    let blocked = all_warnings.iter()
+        .any(|w| matches!(w.severity, Severity::Critical));
+
+    Ok(SecurityScanResult {
+        blocked,
+        warnings: all_warnings,
+        sensitive_files: all_sensitive_files,
+    })
+}
+
+/// Helper: Scan file content for secrets
+fn scan_file_content(content: &str, file_path: &str) -> Vec<SecurityWarning> {
+    let mut warnings = Vec::new();
+
+    for (line_num, line) in content.lines().enumerate() {
+        // Apply each regex pattern
+        for (pattern, message, severity) in SECRET_PATTERNS {
+            if let Ok(re) = get_regex(pattern) {
+                if re.is_match(line) {
+                    // Skip if it's clearly a comment about the pattern itself
+                    if line.contains("example") || line.contains("TODO") || line.contains("FIXME") {
+                        continue;
+                    }
+
+                    warnings.push(SecurityWarning {
+                        file_path: file_path.to_string(),
+                        line_number: line_num + 1,
+                        pattern_matched: pattern.to_string(),
+                        severity: *severity,
+                        message: message.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    warnings
+}
+
+/// Helper: Check if a filename matches sensitive patterns
+fn is_sensitive_filename(filename: &str) -> bool {
+    for (pattern, _) in SENSITIVE_FILES {
+        if file_matches_pattern(filename, pattern) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Scan diff content for secret patterns
 fn scan_diff_for_secrets(diff: &str) -> Vec<SecurityWarning> {
     let mut warnings = Vec::new();

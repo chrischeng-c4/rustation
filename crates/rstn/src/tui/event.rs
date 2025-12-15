@@ -67,6 +67,12 @@ pub enum Event {
         warnings: Vec<rstn_core::SecurityWarning>,
         sensitive_files: Vec<rstn_core::SensitiveFile>,
     },
+    /// Commit groups ready for user review
+    CommitGroupsReady {
+        groups: Vec<rstn_core::CommitGroup>,
+        warnings: Vec<rstn_core::SecurityWarning>,
+        sensitive_files: Vec<rstn_core::SensitiveFile>,
+    },
     /// Commit execution completed
     CommitCompleted { success: bool, output: String },
     /// Commit workflow error

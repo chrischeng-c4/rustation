@@ -53,7 +53,7 @@ impl GitCommand {
     /// Get display name for this git command
     pub fn display_name(&self) -> &'static str {
         match self {
-            GitCommand::Commit => "Commit",
+            GitCommand::Commit => "Intelligent Commit",
             GitCommand::Push => "Push",
             GitCommand::Status => "Status",
             GitCommand::AddAll => "Add All",
@@ -642,7 +642,7 @@ impl WorktreeView {
         match git_cmd {
             GitCommand::Commit => {
                 // NEW: Enhanced commit workflow with security scanning
-                ViewAction::RunEnhancedCommit
+                ViewAction::RunIntelligentCommit
             }
             GitCommand::Push => {
                 // Run git push directly
@@ -1383,20 +1383,20 @@ mod tests {
         let mut view = create_test_view();
         view.focus = WorktreeFocus::Commands;
 
-        // Find and select Git Commit command
+        // Find and select Git Intelligent Commit command
         let num_phases = view.phases.len();
-        let commit_display_idx = num_phases + 3; // First git command (Commit)
+        let commit_display_idx = num_phases + 3; // First git command (Intelligent Commit)
 
         view.command_state.select(Some(commit_display_idx));
 
         let action = view.handle_key(key_event(KeyCode::Enter));
 
-        // Should trigger enhanced commit workflow
+        // Should trigger intelligent commit workflow
         match action {
-            ViewAction::RunEnhancedCommit => {
+            ViewAction::RunIntelligentCommit => {
                 // Expected behavior - triggers security scanning and commit workflow
             }
-            _ => panic!("Expected RunEnhancedCommit action for Git Commit"),
+            _ => panic!("Expected RunIntelligentCommit action for Git Intelligent Commit"),
         }
     }
 

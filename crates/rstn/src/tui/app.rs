@@ -72,6 +72,10 @@ pub struct App {
     pub picker_mode: bool,
     /// Pending auto-continue: (next_phase, delay_ms)
     pub pending_auto_continue: Option<(String, u64)>,
+    /// Pending commit groups awaiting user review
+    pub pending_commit_groups: Option<Vec<rstn_core::CommitGroup>>,
+    /// Current group being edited (index)
+    pub current_group_index: usize,
 }
 
 impl Default for App {
@@ -102,6 +106,8 @@ impl App {
             option_picker: None,
             picker_mode: false,
             pending_auto_continue: None,
+            pending_commit_groups: None,
+            current_group_index: 0,
         }
     }
 
@@ -366,29 +372,35 @@ impl App {
                     }
                 });
             }
-            ViewAction::RunEnhancedCommit => {
-                // Run enhanced commit workflow with security scanning
+            ViewAction::RunIntelligentCommit => {
+                // Run intelligent commit workflow with AI-powered grouping
                 self.status_message =
-                    Some("Scanning staged changes for security issues...".to_string());
+                    Some("Analyzing staged changes...".to_string());
 
                 let sender = self.event_sender.clone();
                 tokio::spawn(async move {
-                    let result = rstn_core::git::interactive_commit().await;
+                    let result = rstn_core::git::intelligent_commit().await;
 
                     if let Some(sender) = sender {
                         match result {
                             Ok(rstn_core::CommitResult::Blocked(scan)) => {
                                 let _ = sender.send(Event::CommitBlocked { scan });
                             }
-                            Ok(rstn_core::CommitResult::ReadyToCommit {
-                                message,
+                            Ok(rstn_core::CommitResult::GroupedCommits {
+                                groups,
                                 warnings,
                                 sensitive_files,
                             }) => {
-                                let _ = sender.send(Event::CommitReady {
-                                    message,
+                                let _ = sender.send(Event::CommitGroupsReady {
+                                    groups,
                                     warnings,
                                     sensitive_files,
+                                });
+                            }
+                            Ok(rstn_core::CommitResult::ReadyToCommit { .. }) => {
+                                // Legacy path - shouldn't happen with intelligent_commit()
+                                let _ = sender.send(Event::CommitError {
+                                    error: "Unexpected legacy commit result".to_string(),
                                 });
                             }
                             Err(e) => {
@@ -636,6 +648,47 @@ impl App {
 
     /// Submit user input back to the running process
     pub fn submit_user_input(&mut self, value: String) {
+        // Check if editing commit groups
+        if let Some(ref mut groups) = self.pending_commit_groups {
+            let current_idx = self.current_group_index;
+
+            // Update current group's message
+            if let Some(group) = groups.get_mut(current_idx) {
+                group.message = value;
+            }
+
+            // Move to next group or execute
+            if current_idx + 1 < groups.len() {
+                // Show next group
+                self.current_group_index += 1;
+                let next_group = &groups[current_idx + 1];
+
+                let mut desc = format!(
+                    "Group {}/{}: {}\n\nFiles:\n",
+                    current_idx + 2,
+                    groups.len(),
+                    next_group.description
+                );
+                for file in &next_group.files {
+                    desc.push_str(&format!("  - {}\n", file));
+                }
+
+                self.input_dialog = Some(
+                    InputDialog::with_description(
+                        format!("Commit {}/{}", current_idx + 2, groups.len()),
+                        desc,
+                        "Message:",
+                    )
+                    .placeholder(next_group.message.clone()),
+                );
+                self.input_mode = true;
+            } else {
+                // All groups reviewed - execute commits
+                self.execute_commit_groups();
+            }
+            return;
+        }
+
         // Check if this is a commit message
         if self.worktree_view.pending_commit_message.is_some() {
             self.worktree_view.pending_commit_message = None;
@@ -1393,6 +1446,40 @@ impl App {
                     );
                     self.input_mode = true;
                 }
+                Event::CommitGroupsReady {
+                    groups,
+                    warnings,
+                    sensitive_files,
+                } => {
+                    // Store groups for sequential processing
+                    self.pending_commit_groups = Some(groups.clone());
+                    self.current_group_index = 0;
+
+                    // Show first group for editing
+                    if let Some(group) = groups.first() {
+                        let mut desc = format!(
+                            "Group 1/{}: {}\n\nFiles:\n",
+                            groups.len(),
+                            group.description
+                        );
+                        for file in &group.files {
+                            desc.push_str(&format!("  - {}\n", file));
+                        }
+                        if !warnings.is_empty() {
+                            desc.push_str(&format!("\n⚠️  {} warnings\n", warnings.len()));
+                        }
+
+                        self.input_dialog = Some(
+                            InputDialog::with_description(
+                                format!("Commit 1/{}", groups.len()),
+                                desc,
+                                "Message:",
+                            )
+                            .placeholder(group.message.clone()),
+                        );
+                        self.input_mode = true;
+                    }
+                }
                 Event::CommitCompleted { success, output } => {
                     self.worktree_view.add_output(output);
                     if success {
@@ -1596,6 +1683,70 @@ impl App {
         }
 
         desc
+    }
+
+    /// Execute all commit groups sequentially
+    fn execute_commit_groups(&mut self) {
+        if let Some(groups) = self.pending_commit_groups.take() {
+            self.status_message = Some(format!("Committing {} groups...", groups.len()));
+
+            let sender = self.event_sender.clone();
+            tokio::spawn(async move {
+                use tokio::process::Command;
+                let mut results = Vec::new();
+
+                for (idx, group) in groups.iter().enumerate() {
+                    // Unstage all
+                    let _ = Command::new("git")
+                        .args(&["reset", "HEAD"])
+                        .output()
+                        .await;
+
+                    // Stage group files
+                    for file in &group.files {
+                        let _ = Command::new("git")
+                            .args(&["add", file])
+                            .output()
+                            .await;
+                    }
+
+                    // Commit
+                    let result = Command::new("git")
+                        .args(&["commit", "-m", &group.message])
+                        .output()
+                        .await;
+
+                    match result {
+                        Ok(output) => {
+                            let success = output.status.success();
+                            let msg = String::from_utf8_lossy(&output.stdout);
+                            results.push((idx + 1, success, msg.to_string()));
+                            if !success {
+                                break;  // Stop on failure
+                            }
+                        }
+                        Err(e) => {
+                            results.push((idx + 1, false, format!("Error: {}", e)));
+                            break;
+                        }
+                    }
+                }
+
+                if let Some(sender) = sender {
+                    let all_success = results.iter().all(|(_, s, _)| *s);
+                    let summary = results.iter()
+                        .map(|(i, s, o)| format!("{} Group {}: {}",
+                            if *s { "✓" } else { "✗" }, i, o))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
+                    let _ = sender.send(Event::CommitCompleted {
+                        success: all_success,
+                        output: summary,
+                    });
+                }
+            });
+        }
     }
 }
 

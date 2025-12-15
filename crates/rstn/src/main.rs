@@ -36,9 +36,9 @@ struct Args {
 async fn main() -> Result<()> {
     // Load settings and initialize logging
     let settings = Settings::load();
-    logging::init(&settings);
+    let session_id = logging::init(&settings);
 
-    info!("rstn starting");
+    info!(session_id = %session_id, "rstn session started");
     let args = Args::parse();
     debug!(cli = args.cli, command = ?args.command, "parsed arguments");
 

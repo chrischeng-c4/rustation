@@ -44,8 +44,8 @@ pub enum ViewAction {
     },
     /// Run a git command
     RunGitCommand(GitCommand),
-    /// Run enhanced commit workflow with security scanning
-    RunEnhancedCommit,
+    /// Run intelligent commit workflow with AI-powered grouping
+    RunIntelligentCommit,
 }
 
 /// View types for switching

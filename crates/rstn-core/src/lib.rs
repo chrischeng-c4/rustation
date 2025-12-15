@@ -30,6 +30,6 @@ pub mod service;
 pub use errors::{CoreError, Result};
 pub use test::TestResults;
 pub use build::CommandOutput;
-pub use git::{CommitResult, FeatureInfo, SecurityScanResult, SecurityWarning, SensitiveFile, Severity, WorktreeInfo};
+pub use git::{CommitGroup, CommitResult, FeatureInfo, SecurityScanResult, SecurityWarning, SensitiveFile, Severity, WorktreeInfo};
 pub use mcp::{McpConfig, McpRegistry, McpServer};
 pub use service::{ServiceInfo, ServiceState};

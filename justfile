@@ -39,4 +39,4 @@ which-build:
     echo "rush: [$rush_type] $rush_ver"
 
 # Build and install (alias for backward compatibility)
-all: install
+all: install-dev

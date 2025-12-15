@@ -10,37 +10,56 @@ use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use uuid::Uuid;
+
+/// Generate a short session ID for log files
+///
+/// Returns an 8-character hexadecimal string derived from a UUID v4.
+/// This ensures unique session identification for each rstn execution.
+pub fn generate_session_id() -> String {
+    let uuid = Uuid::new_v4();
+    let bytes = uuid.as_bytes();
+    format!(
+        "{:02x}{:02x}{:02x}{:02x}",
+        bytes[0], bytes[1], bytes[2], bytes[3]
+    )
+}
 
 /// Initialize logging based on settings
 ///
-/// Logs are written to ~/.rustation/logs/rstn.log
-/// Old logs are rotated and compressed daily.
-pub fn init(settings: &Settings) {
+/// Logs are written to ~/.rustation/logs/rstn.<session_id>.log
+/// Old logs are rotated and compressed after each session.
+///
+/// Returns the session ID for this execution.
+pub fn init(settings: &Settings) -> String {
     if !settings.logging_enabled {
-        return;
+        return String::new();
     }
 
     let log_dir = match rstn_core::paths::rstn_logs_dir() {
         Ok(dir) => dir,
         Err(e) => {
             eprintln!("Warning: Could not determine log directory: {}", e);
-            return;
+            return String::new();
         }
     };
 
     // Create log directory
     if let Err(e) = fs::create_dir_all(&log_dir) {
         eprintln!("Warning: Could not create log directory: {}", e);
-        return;
+        return String::new();
     }
 
-    // Rotate and compress old logs before starting new session
+    // Generate session ID for this execution
+    let session_id = generate_session_id();
+    let log_filename = format!("rstn.{}.log", session_id);
+    let log_file = log_dir.join(&log_filename);
+
+    // Rotate and compress old logs (from previous sessions)
     rotate_logs(&log_dir);
 
-    let log_file = log_dir.join("rstn.log");
-
-    // Create file appender
-    let file_appender = tracing_appender::rolling::never(&log_dir, "rstn.log");
+    // Create file appender with session-specific filename
+    let file_appender = tracing_appender::rolling::never(&log_dir, log_filename.clone());
 
     // Build filter from settings or RSTN_LOG env var
     let filter = EnvFilter::try_from_env("RSTN_LOG").unwrap_or_else(|_| {
@@ -81,57 +100,75 @@ pub fn init(settings: &Settings) {
 
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
+        session_id = %session_id,
         log_level = %settings.log_level,
         log_file = %log_file.display(),
         "rstn logging initialized"
     );
+
+    // Return session_id so it can be used elsewhere
+    session_id
 }
 
-/// Rotate old log file and compress it
+/// Rotate old log files and compress them
+///
+/// Finds all uncompressed rstn.*.log files and compresses them in the background.
+/// This allows each session to have its own log file that gets compressed after the session ends.
 fn rotate_logs(log_dir: &PathBuf) {
-    let log_file = log_dir.join("rstn.log");
-
-    if !log_file.exists() {
-        return;
-    }
-
-    // Check if log file has content
-    let metadata = match fs::metadata(&log_file) {
-        Ok(m) => m,
+    // Find all rstn.*.log files (uncompressed) that are not .gz
+    let entries = match fs::read_dir(log_dir) {
+        Ok(e) => e,
         Err(_) => return,
     };
 
-    if metadata.len() == 0 {
-        return;
-    }
+    for entry in entries.flatten() {
+        let path = entry.path();
 
-    // Generate timestamp for rotated file
-    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    let rotated_name = format!("rstn.{}.log", timestamp);
-    let rotated_path = log_dir.join(&rotated_name);
-    let compressed_path = log_dir.join(format!("{}.gz", rotated_name));
-
-    // Rename current log to timestamped version
-    if let Err(e) = fs::rename(&log_file, &rotated_path) {
-        eprintln!("Warning: Could not rotate log file: {}", e);
-        return;
-    }
-
-    // Clone log_dir for the thread
-    let log_dir_owned = log_dir.clone();
-
-    // Compress the rotated log in background
-    std::thread::spawn(move || {
-        if let Err(e) = compress_file(&rotated_path, &compressed_path) {
-            eprintln!("Warning: Could not compress log file: {}", e);
-        } else {
-            // Remove uncompressed file after successful compression
-            let _ = fs::remove_file(&rotated_path);
+        // Only process uncompressed rstn.*.log files
+        if !path.extension().map(|e| e == "log").unwrap_or(false) {
+            continue;
         }
 
-        // Clean up old logs (keep last 7 days)
-        cleanup_old_logs(&log_dir_owned, 7);
-    });
+        let filename = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+
+        // Match pattern: rstn.<session_id>.log or rstn.<timestamp>.log (for old format)
+        if !filename.starts_with("rstn.") || filename == "rstn.log" {
+            continue;
+        }
+
+        // Check if file has content
+        let metadata = match fs::metadata(&path) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+
+        if metadata.len() == 0 {
+            continue;
+        }
+
+        // Compress this old session log
+        let compressed_path = log_dir.join(format!("{}.gz", filename));
+
+        // Clone for background thread
+        let path_clone = path.clone();
+        let compressed_clone = compressed_path.clone();
+        let log_dir_clone = log_dir.clone();
+
+        std::thread::spawn(move || {
+            if let Err(e) = compress_file(&path_clone, &compressed_clone) {
+                eprintln!("Warning: Could not compress log file: {}", e);
+            } else {
+                // Remove uncompressed file after successful compression
+                let _ = fs::remove_file(&path_clone);
+            }
+
+            // Clean up old logs (keep last 7 days)
+            cleanup_old_logs(&log_dir_clone, 7);
+        });
+    }
 }
 
 /// Compress a file using gzip
@@ -167,11 +204,11 @@ fn cleanup_old_logs(log_dir: &PathBuf, days: u64) {
             continue;
         }
 
-        // Check file name starts with "rstn."
+        // Check file name matches pattern: rstn.*.log.gz or rstn.YYYYMMDD-HHMMSS.log.gz
         if !path
             .file_name()
             .and_then(|n| n.to_str())
-            .map(|n| n.starts_with("rstn."))
+            .map(|n| n.starts_with("rstn.") && n.ends_with(".log.gz"))
             .unwrap_or(false)
         {
             continue;
