@@ -39,15 +39,19 @@ Current specify workflow interrupts the TUI experience:
 - Add "Specify" action to Commands pane in Worktree view
 - When triggered, Content area transforms to Spec Input view
 - Show text input area for feature description
-- Support multi-line input (Ctrl+Enter for newline)
+- Single-line input with horizontal scrolling
 - Enter key submits, Esc key cancels
+- Cursor visible and tracks input position
+- Global hotkeys (1-3, y, q, etc.) blocked during input
 
 **FR-2: Spec Generation**
-- On submit, show "Generating spec..." status in Output area
-- Call existing `create-new-feature.sh` shell script with feature description
-- Capture generated spec content
+- On submit, show "Generating spec..." status in Content area
+- Call Claude Code CLI directly with `/speckit.specify` command
+- Stream output in real-time to Output pane
+- Parse generated spec from Claude Code response
 - On success, transition to Spec Review view
-- On error, show error in Output area and stay in Input view
+- On error, show error in Content area and stay in Input view
+- Minimum description length: 10 characters (validated before generation)
 
 **FR-3: Spec Review Dialog**
 - Display generated spec in Content area (read-only initially)
@@ -75,6 +79,13 @@ Current specify workflow interrupts the TUI experience:
 - Show "Editing spec" in edit mode
 - Show "Spec saved" after successful save
 
+**FR-7: Mouse Support** *(Added post-implementation)*
+- Click on tabs (Worktree/Settings/Dashboard) to switch views
+- Click on panes (Commands/Content/Output) to focus them
+- Mouse support works during SpecifyInput mode without breaking input
+- Only left-click handled (ignore drag, scroll, other buttons)
+- Visual feedback: focused pane shows cyan border
+
 ### Non-Functional Requirements
 
 **NFR-1: Performance**
@@ -101,34 +112,51 @@ Current specify workflow interrupts the TUI experience:
 ## Architecture
 
 ### Content Types
-Add new enum variants to `ContentType`:
+Add new enum variant to `ContentType`:
 ```rust
 pub enum ContentType {
     Spec,
     Plan,
     Tasks,
     CommitReview,
-    SpecifyInput,    // New: Input feature description
-    SpecifyReview,   // New: Review/edit generated spec
+    SpecifyInput,    // New: Input/Review/Edit all use this single type
 }
 ```
+
+**Note**: Unlike the original spec, implementation uses a single `SpecifyInput` content type for all phases (Input, Generating, Review, Edit), with phase differentiation handled by the `SpecifyState` struct.
 
 ### State Management
-Add to `WorktreeView`:
+Add `SpecifyState` struct to `WorktreeView`:
 ```rust
+pub struct SpecifyState {
+    // Input phase
+    pub input_buffer: String,
+    pub input_cursor: usize,
+    pub validation_error: Option<String>,
+
+    // Generation phase
+    pub is_generating: bool,
+    pub generation_error: Option<String>,
+
+    // Review/Edit phase
+    pub generated_spec: Option<String>,
+    pub feature_number: Option<String>,
+    pub feature_name: Option<String>,
+    pub edit_mode: bool,
+    pub edit_text_input: Option<TextInput>,
+}
+
 pub struct WorktreeView {
     // ... existing fields ...
-
-    // Specify state (Feature 051)
-    pub specify_input: String,
-    pub specify_cursor: usize,
-    pub specify_generated_spec: Option<String>,
-    pub specify_feature_number: Option<String>,
-    pub specify_feature_name: Option<String>,
-    pub specify_edit_mode: bool,
-    pub specify_error: Option<String>,
+    pub specify_state: SpecifyState,
 }
 ```
+
+**State Machine**: The workflow progresses through phases using a single ContentType:
+- **Input Phase**: `SpecifyInput` content type, `is_generating = false`, `generated_spec = None`
+- **Generating Phase**: `SpecifyInput` content type, `is_generating = true`
+- **Review Phase**: `SpecifyInput` content type, `is_generating = false`, `generated_spec = Some(...)`, `edit_mode = false`
+- **Edit Phase**: `SpecifyInput` content type, `generated_spec = Some(...)`, `edit_mode = true`
 
 ### Methods
 ```rust
@@ -142,17 +170,29 @@ impl WorktreeView {
     // Submit description for generation
     pub fn submit_specify_description(&mut self) -> ViewAction;
 
-    // Load generated spec for review
-    pub fn load_generated_spec(&mut self, spec: String, number: String, name: String);
+    // Handle review mode input
+    pub fn handle_specify_review_input(&mut self, key: KeyEvent) -> ViewAction;
 
     // Toggle edit mode
     pub fn toggle_specify_edit_mode(&mut self);
+
+    // Handle edit mode input
+    pub fn handle_specify_edit_input(&mut self, key: KeyEvent) -> ViewAction;
+
+    // Save spec from edit mode
+    pub fn save_from_edit(&mut self) -> ViewAction;
+
+    // Cancel edit mode
+    pub fn cancel_edit(&mut self);
 
     // Save spec to file
     pub fn save_specify_spec(&mut self) -> ViewAction;
 
     // Cancel specify workflow
     pub fn cancel_specify(&mut self);
+
+    // Check if in specify input mode (for global hotkey blocking)
+    pub fn is_in_specify_input_mode(&self) -> bool;
 }
 ```
 
@@ -198,12 +238,16 @@ pub enum ViewAction {
 
 ## Integration Points
 
-### Shell Script Integration
-- Call `create-new-feature.sh` via `tokio::process::Command`
-- Pass feature description as argument
-- Capture stdout/stderr
-- Parse output to extract feature number and name
-- Read generated spec.md content
+### Claude Code CLI Integration
+**As Implemented**: Direct Claude Code CLI integration (not shell script)
+- Call Claude Code CLI with `/speckit.specify` command
+- Pass feature description as prompt
+- Stream output to TUI in real-time
+- Parse generated spec from Claude Code response
+- Extract feature number and name from spec file path
+- Load spec content for review
+
+**Note**: Original spec planned to use `create-new-feature.sh`, but implementation uses direct Claude Code integration for better control and streaming output.
 
 ### Commands Pane
 - Add "Specify" to list of available commands
@@ -212,18 +256,20 @@ pub enum ViewAction {
 
 ### Keyboard Shortcuts
 - In Input mode:
-  - Ctrl+Enter: New line
-  - Enter: Submit
+  - Enter: Submit (no Ctrl+Enter, single-line input)
   - Esc: Cancel
-  - Standard text editing (arrows, backspace, delete, Home, End)
+  - Standard text editing (left/right arrows, backspace, delete, Home, End)
+  - Global hotkeys (1-3, y, q, Y, [, ]) are blocked during input
 - In Review mode:
   - Enter: Save
   - e: Edit
   - Esc: Cancel
+  - Arrow keys: Scroll content
 - In Edit mode:
-  - Ctrl+S: Save
+  - Ctrl+S: Save edited spec
+  - Enter: Insert newline (multi-line editor)
   - Esc: Cancel edit (back to review)
-  - Standard text editing
+  - Full text editing (arrows, Home, End, backspace, delete)
 
 ## User Flow
 
@@ -287,13 +333,21 @@ pub enum ViewAction {
 - Cancel at each stage
 
 ### Manual Tests
-- Trigger from Commands pane
-- Multi-line input with Ctrl+Enter
+- Trigger from Commands pane (keyboard and mouse click)
+- Single-line input with horizontal scrolling
 - Long descriptions (>1000 chars)
 - Special characters in description
 - Review and edit generated spec
 - Cancel at various stages
-- Error scenarios (script missing, write permission denied)
+- Error scenarios (Claude Code not available, write permission denied)
+- Mouse interaction:
+  - Click tabs to switch views during specify workflow
+  - Click panes to focus during specify workflow
+  - Verify mouse doesn't break input mode
+- Global hotkey blocking:
+  - Verify 1-3 keys insert digits (don't switch views)
+  - Verify y, q, Y keys insert letters (don't trigger shortcuts)
+  - Verify Esc exits input mode properly
 
 ## Dependencies
 
@@ -307,8 +361,27 @@ pub enum ViewAction {
 - `crates/rstn/src/tui/app.rs` - Handle specify events and actions
 
 **Integrates with:**
-- `.specify/scripts/bash/create-new-feature.sh` - Existing shell script
+- Claude Code CLI - Direct integration for spec generation
 - spec-kit infrastructure - Feature directory structure
+
+### Mouse Support Implementation *(Post-051)*
+
+**Architecture**:
+- Store layout `Rect`s during render for click detection
+- `App` struct stores `tab_bar_rect` for view switching
+- `WorktreeView` stores pane rects for focus switching
+- `point_in_rect()` helper function checks if click coordinates fall within rect bounds
+
+**Files Modified**:
+- `app.rs`: Added `handle_mouse_event()`, `tab_bar_rect` field, mouse event routing
+- `worktree.rs`: Added `handle_mouse()`, pane rect fields, `is_in_specify_input_mode()`
+- `mod.rs`: Changed View trait `render()` from `&self` to `&mut self`
+
+**Behavior**:
+- Click tab bar → switch views (Worktree/Settings/Dashboard)
+- Click pane → focus that pane (Commands/Content/Output)
+- During SpecifyInput → keyboard hotkeys blocked, mouse clicks still work
+- Only left-click button handled (ignore drag, scroll, right-click)
 
 ## Success Metrics
 
@@ -334,8 +407,23 @@ These will be addressed in feature 052:
 
 ## Notes
 
-- This feature focuses on UX transformation, not implementation changes
-- Still relies on `create-new-feature.sh` - no changes to shell script needed
-- Feature 052 will internalize the spec generation logic
-- Pattern is consistent with feature 050 (Commit Review drop dialog)
-- Follows existing keyboard-first interaction model
+**Implementation vs Original Spec**:
+- ✅ Achieved: UX transformation - no context switching, inline workflow
+- ✅ Achieved: Review and edit before saving
+- ✅ Achieved: Consistent keyboard-first interaction
+- ❌ Changed: Uses direct Claude Code CLI instead of `create-new-feature.sh` shell script
+- ❌ Changed: Single-line input instead of multi-line (simpler UX)
+- ❌ Changed: Single `SpecifyInput` ContentType instead of separate Input/Review types
+- ➕ Added: Global hotkey blocking during input (1-3, y, q, Y don't trigger shortcuts)
+- ➕ Added: Mouse click support for tabs and panes (post-implementation enhancement)
+- ➕ Added: Cursor rendering and visibility fixes
+
+**Future Work** (Feature 052):
+- Internalize spec generation (eliminate dependency on external Claude Code process)
+- Multiple spec templates
+- Streaming generation with progress updates
+
+**Pattern Notes**:
+- Inline content transformation (not popup dialog like commit review)
+- State machine pattern with single ContentType
+- Follows existing keyboard-first + mouse interaction model
