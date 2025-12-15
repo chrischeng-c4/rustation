@@ -119,6 +119,23 @@ impl App {
         }
     }
 
+    /// Check if worktree view is in an input mode that should block global hotkeys
+    fn is_in_input_mode(&self) -> bool {
+        // Existing input_dialog input mode
+        if self.input_mode {
+            return true;
+        }
+
+        // SpecifyInput mode in worktree view
+        if self.current_view == CurrentView::Worktree {
+            if self.worktree_view.is_in_specify_input_mode() {
+                return true;
+            }
+        }
+
+        false
+    }
+
     /// Handle key events
     pub fn handle_key_event(&mut self, key: KeyEvent) {
         // Debug logging for input mode investigation
@@ -142,8 +159,14 @@ impl App {
         }
 
         // If in input mode, handle input separately
-        if self.input_mode {
-            self.handle_key_event_in_input_mode(key);
+        if self.is_in_input_mode() {
+            if self.input_mode {
+                self.handle_key_event_in_input_mode(key);
+            } else {
+                // In SpecifyInput mode - delegate to worktree view
+                let action = self.worktree_view.handle_key(key);
+                self.handle_view_action(action);
+            }
             return;
         }
 

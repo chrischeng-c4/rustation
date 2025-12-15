@@ -1340,7 +1340,7 @@ impl WorktreeView {
     /// # Example
     ///
     /// ```rust,no_run
-    /// # use rstn::tui::views::worktree::{WorktreeView, ContentType};
+    /// # use rstn::tui::views::{WorktreeView, ContentType};
     /// # let mut view = WorktreeView::new();
     /// view.start_specify_input();
     /// assert_eq!(view.content_type, ContentType::SpecifyInput);
@@ -1366,6 +1366,13 @@ impl WorktreeView {
         self.specify_state.clear();
         self.content_type = ContentType::Spec; // Return to Spec view
         self.focus = WorktreeFocus::Commands; // Return focus to commands
+    }
+
+    /// Check if currently in SpecifyInput mode that needs input isolation
+    pub fn is_in_specify_input_mode(&self) -> bool {
+        self.content_type == ContentType::SpecifyInput
+            && self.focus == WorktreeFocus::Content
+            && !self.specify_state.is_generating
     }
 
     /// Handle keyboard input during Input Phase (T017)
@@ -2049,6 +2056,26 @@ impl WorktreeView {
             .wrap(Wrap { trim: false });
 
         frame.render_widget(paragraph, area);
+
+        // Calculate cursor position for visible input cursor
+        // Get inner area (excluding borders)
+        let block = Block::default().borders(Borders::ALL);
+        let inner = block.inner(area);
+
+        // Layout inside block:
+        // Line 0: Title "Specify Feature"
+        // Line 1: Empty
+        // Line 2: "Enter feature description:"
+        // Line 3: Empty
+        // Line 4: Input buffer <- cursor should be here
+        let input_line_offset = 4;
+        let cursor_x = inner.x + self.specify_state.input_cursor as u16;
+        let cursor_y = inner.y + input_line_offset;
+
+        // Only set cursor if within bounds
+        if cursor_x < inner.x + inner.width && cursor_y < inner.y + inner.height {
+            frame.set_cursor_position((cursor_x, cursor_y));
+        }
     }
 
     /// Render specify Review Phase with spec preview (T034, T038, T039)
