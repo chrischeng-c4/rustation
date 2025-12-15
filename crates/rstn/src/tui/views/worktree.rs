@@ -1012,7 +1012,11 @@ impl WorktreeView {
             return;
         }
 
-        // TODO: Add SpecifyReview rendering in Phase 4
+        // Render content area - dispatch to specify review if in that mode (Feature 051 - T035)
+        if self.content_type == ContentType::SpecifyReview {
+            self.render_specify_review(frame, sections[1]);
+            return;
+        }
 
         // Standard content rendering for Spec/Plan/Tasks
         let content_block = Block::default()
@@ -1384,6 +1388,50 @@ impl WorktreeView {
         }
     }
 
+    /// Trigger save action for generated spec (Feature 051, T036)
+    pub fn save_specify_spec(&mut self) -> ViewAction {
+        // Defensive checks
+        if let (Some(content), Some(number), Some(name)) = (
+            &self.specify_state.generated_spec,
+            &self.specify_state.feature_number,
+            &self.specify_state.feature_name,
+        ) {
+            ViewAction::SaveSpec {
+                content: content.clone(),
+                number: number.clone(),
+                name: name.clone(),
+            }
+        } else {
+            // Should never happen, but handle gracefully
+            self.specify_state.validation_error =
+                Some("Invalid state: missing spec content or feature info".to_string());
+            ViewAction::None
+        }
+    }
+
+    /// Handle keyboard input during specify review mode (Feature 051, T037)
+    pub fn handle_specify_review_input(&mut self, key: KeyEvent) -> ViewAction {
+        match key.code {
+            // Enter - Save spec
+            KeyCode::Enter => self.save_specify_spec(),
+
+            // 'e' - Edit mode (stub for User Story 3)
+            KeyCode::Char('e') => {
+                // TODO: Implement in User Story 3
+                ViewAction::None
+            }
+
+            // Esc - Cancel review and return to normal view
+            KeyCode::Esc => {
+                self.cancel_specify();
+                ViewAction::None
+            }
+
+            // Other keys - no action (scrolling handled by main handler)
+            _ => ViewAction::None,
+        }
+    }
+
     /// Validate commit message before submission
     pub fn validate_commit_message(&mut self) -> bool {
         let trimmed = self.commit_message_input.trim();
@@ -1752,6 +1800,73 @@ impl WorktreeView {
 
         frame.render_widget(paragraph, area);
     }
+
+    /// Render specify review UI in Content pane (Feature 051, T034, T038, T039)
+    fn render_specify_review(&self, frame: &mut Frame, area: Rect) {
+        // Build ALL lines with styling
+        let mut all_lines: Vec<Line> = vec![];
+
+        // Header: Feature number and name (T038)
+        if let (Some(number), Some(name)) = (
+            &self.specify_state.feature_number,
+            &self.specify_state.feature_name,
+        ) {
+            all_lines.push(Line::from(Span::styled(
+                format!("Feature {} - {}", number, name),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )));
+            all_lines.push(Line::from(""));
+        }
+
+        // Spec content section
+        all_lines.push(Line::from(Span::styled(
+            "Generated Specification:",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )));
+        all_lines.push(Line::from(""));
+
+        // Spec markdown content
+        if let Some(spec) = &self.specify_state.generated_spec {
+            for line in spec.lines() {
+                all_lines.push(Line::from(line.to_string()));
+            }
+        }
+
+        // Action hints (T039)
+        all_lines.push(Line::from(""));
+        all_lines.push(Line::from(vec![
+            Span::styled("[Enter]", Style::default().fg(Color::Green)),
+            Span::raw(" Save  "),
+            Span::styled("[e]", Style::default().fg(Color::Cyan)),
+            Span::raw(" Edit (coming soon)  "),
+            Span::styled("[Esc]", Style::default().fg(Color::Red)),
+            Span::raw(" Cancel"),
+        ]));
+
+        // Apply scrolling based on content_scroll
+        let visible_height = area.height.saturating_sub(2) as usize;
+        let visible_lines: Vec<Line> = all_lines
+            .into_iter()
+            .skip(self.content_scroll)
+            .take(visible_height)
+            .collect();
+
+        // Render paragraph
+        let paragraph = Paragraph::new(visible_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Review Generated Spec")
+                    .border_style(Style::default().fg(Color::Cyan)),
+            )
+            .wrap(Wrap { trim: false });
+
+        frame.render_widget(paragraph, area);
+    }
 }
 
 impl Default for WorktreeView {
@@ -1795,6 +1910,12 @@ impl View for WorktreeView {
         // Route to specify input handler when in SpecifyInput mode (Feature 051 - T022, T023)
         if self.content_type == ContentType::SpecifyInput && self.focus == WorktreeFocus::Content {
             return self.handle_specify_input(key);
+        }
+
+        // Route to specify review input handler when in SpecifyReview mode (Feature 051 - T037)
+        if self.content_type == ContentType::SpecifyReview && self.focus == WorktreeFocus::Content
+        {
+            return self.handle_specify_review_input(key);
         }
 
         match key.code {
@@ -2550,5 +2671,96 @@ mod tests {
             _ => panic!("Expected GenerateSpec action"),
         }
         assert!(view.specify_state.validation_error.is_none());
+    }
+
+    // Feature 051: Tests for specify review mode (T050-T051)
+
+    #[test]
+    fn test_specify_review_state_transition() {
+        let mut view = create_test_view();
+
+        // Simulate generation completed
+        view.specify_state.generated_spec = Some("# Test Spec\n\nContent here".to_string());
+        view.specify_state.feature_number = Some("052".to_string());
+        view.specify_state.feature_name = Some("test-feature".to_string());
+        view.content_type = ContentType::SpecifyReview;
+        view.focus = WorktreeFocus::Content;
+
+        // Verify state
+        assert_eq!(view.content_type, ContentType::SpecifyReview);
+        assert!(view.specify_state.generated_spec.is_some());
+        assert_eq!(
+            view.specify_state.feature_number.as_deref(),
+            Some("052")
+        );
+        assert_eq!(
+            view.specify_state.feature_name.as_deref(),
+            Some("test-feature")
+        );
+    }
+
+    #[test]
+    fn test_save_specify_spec_action() {
+        let mut view = create_test_view();
+
+        // Set up review state
+        view.specify_state.generated_spec = Some("# Test".to_string());
+        view.specify_state.feature_number = Some("052".to_string());
+        view.specify_state.feature_name = Some("test".to_string());
+
+        // Trigger save
+        let action = view.save_specify_spec();
+
+        // Verify action
+        match action {
+            ViewAction::SaveSpec {
+                content,
+                number,
+                name,
+            } => {
+                assert_eq!(content, "# Test");
+                assert_eq!(number, "052");
+                assert_eq!(name, "test");
+            }
+            _ => panic!("Expected SaveSpec action"),
+        }
+    }
+
+    #[test]
+    fn test_specify_review_enter_key_saves() {
+        let mut view = create_test_view();
+
+        // Set up review state
+        view.specify_state.generated_spec = Some("# Spec".to_string());
+        view.specify_state.feature_number = Some("052".to_string());
+        view.specify_state.feature_name = Some("test".to_string());
+        view.content_type = ContentType::SpecifyReview;
+        view.focus = WorktreeFocus::Content;
+
+        // Press Enter
+        let action = view.handle_specify_review_input(key_event(KeyCode::Enter));
+
+        // Should trigger save
+        match action {
+            ViewAction::SaveSpec { .. } => {} // Expected
+            _ => panic!("Expected SaveSpec action on Enter"),
+        }
+    }
+
+    #[test]
+    fn test_specify_review_esc_cancels() {
+        let mut view = create_test_view();
+
+        // Set up review state
+        view.content_type = ContentType::SpecifyReview;
+        view.specify_state.generated_spec = Some("# Test".to_string());
+
+        // Press Esc
+        let action = view.handle_specify_review_input(key_event(KeyCode::Esc));
+
+        // Should cancel and return None
+        assert_eq!(action, ViewAction::None);
+        assert_eq!(view.content_type, ContentType::Spec);
+        assert!(view.specify_state.generated_spec.is_none());
     }
 }

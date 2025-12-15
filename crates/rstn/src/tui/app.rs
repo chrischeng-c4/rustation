@@ -1782,10 +1782,12 @@ impl App {
 
                     // Transition to review mode
                     self.worktree_view.content_type = ContentType::SpecifyReview;
+                    self.worktree_view.content_scroll = 0; // T007: Reset scroll to start at top
                     self.worktree_view
                         .add_output(format!("✓ Spec generated: {} ({})", number, name));
-                    self.status_message =
-                        Some(format!("Review spec for {} - Press 's' to save or 'q' to cancel", number));
+                    self.status_message = Some(
+                        "Review spec - Press Enter to save, Esc to cancel, 'e' to edit".to_string(),
+                    );
                 }
                 Event::SpecifyGenerationFailed { error } => {
                     // Feature 051: Spec generation failed (T027)
@@ -1797,13 +1799,28 @@ impl App {
                     self.status_message = Some("Spec generation failed".to_string());
                 }
                 Event::SpecifySaved { path } => {
-                    // Feature 051: Spec saved successfully (T027)
+                    // Feature 051: Spec saved successfully (T047, T048)
                     tracing::info!("Spec saved to: {}", path);
                     self.worktree_view
                         .add_output(format!("✓ Spec saved: {}", path));
                     self.status_message = Some("Spec saved successfully!".to_string());
 
-                    // Exit specify workflow
+                    // T048: Parse path to extract feature number and name
+                    // Path format: "specs/{number}-{name}/spec.md"
+                    let path_parts: Vec<&str> = path.split('/').collect();
+                    if path_parts.len() >= 2 {
+                        let dir_name = path_parts[1]; // "{number}-{name}"
+                        let parts: Vec<&str> = dir_name.split('-').collect();
+                        if !parts.is_empty() {
+                            let number = parts[0].to_string();
+                            let name = parts[1..].join("-");
+
+                            // Load the newly saved spec into Content area
+                            self.worktree_view.refresh_feature(number, name, None);
+                        }
+                    }
+
+                    // T047: Clean up specify workflow state
                     self.worktree_view.cancel_specify();
                 }
             }
