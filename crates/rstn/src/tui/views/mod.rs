@@ -10,7 +10,7 @@ pub use command_runner::{CommandRunner, OutputLine, OutputLineType};
 pub use dashboard::Dashboard;
 pub use settings::SettingsView;
 pub use spec::{AutoFlowState, ClaudeOptions, PhaseStatus, SpecPhase, SpecView};
-pub use worktree::{GitCommand, WorktreeView};
+pub use worktree::{ContentType, GitCommand, WorktreeFocus, WorktreeView};
 
 use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
