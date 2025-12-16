@@ -137,7 +137,7 @@ impl Default for Dashboard {
 }
 
 impl View for Dashboard {
-    fn render(&self, frame: &mut Frame, area: Rect) {
+    fn render(&mut self, frame: &mut Frame, area: Rect) {
         // Create 2x2 grid layout
         let rows = Layout::default()
             .direction(Direction::Vertical)

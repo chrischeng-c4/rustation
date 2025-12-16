@@ -259,6 +259,11 @@ pub struct WorktreeView {
 
     // Specify workflow state (Feature 051)
     pub specify_state: SpecifyState,
+
+    // Layout rects for mouse click detection
+    pub commands_pane_rect: Option<Rect>,
+    pub content_pane_rect: Option<Rect>,
+    pub output_pane_rect: Option<Rect>,
 }
 
 impl WorktreeView {
@@ -327,6 +332,10 @@ impl WorktreeView {
             commit_validation_error: None,
             // Specify workflow state initialization (Feature 051)
             specify_state: SpecifyState::new(),
+            // Mouse click detection
+            commands_pane_rect: None,
+            content_pane_rect: None,
+            output_pane_rect: None,
         }
     }
 
@@ -2224,7 +2233,7 @@ impl Default for WorktreeView {
 }
 
 impl View for WorktreeView {
-    fn render(&self, frame: &mut Frame, area: Rect) {
+    fn render(&mut self, frame: &mut Frame, area: Rect) {
         // Create two columns: Commands (30%) | Right panel (70%)
         let columns = Layout::default()
             .direction(Direction::Horizontal)
@@ -2242,6 +2251,11 @@ impl View for WorktreeView {
                 Constraint::Percentage(30), // Output
             ])
             .split(columns[1]);
+
+        // Store layout rects for mouse click detection
+        self.commands_pane_rect = Some(columns[0]);
+        self.content_pane_rect = Some(right_sections[0]);
+        self.output_pane_rect = Some(right_sections[1]);
 
         // Render all three panels
         self.render_commands(frame, columns[0]);
@@ -2406,6 +2420,42 @@ impl View for WorktreeView {
         if self.tick_count % Self::REFRESH_INTERVAL == 0 {
             // Refresh will be triggered by GitInfoUpdated event
             // No action needed here
+        }
+    }
+}
+
+// Mouse handling (outside View trait)
+impl WorktreeView {
+    /// Handle mouse click events
+    pub fn handle_mouse(&mut self, col: u16, row: u16) {
+        // Helper function for point-in-rect check
+        fn point_in_rect(col: u16, row: u16, rect: &Rect) -> bool {
+            col >= rect.x
+                && col < rect.x + rect.width
+                && row >= rect.y
+                && row < rect.y + rect.height
+        }
+
+        // Check which pane was clicked and switch focus
+        if let Some(rect) = self.commands_pane_rect {
+            if point_in_rect(col, row, &rect) {
+                self.focus = WorktreeFocus::Commands;
+                return;
+            }
+        }
+
+        if let Some(rect) = self.content_pane_rect {
+            if point_in_rect(col, row, &rect) {
+                self.focus = WorktreeFocus::Content;
+                return;
+            }
+        }
+
+        if let Some(rect) = self.output_pane_rect {
+            if point_in_rect(col, row, &rect) {
+                self.focus = WorktreeFocus::Output;
+                return;
+            }
         }
     }
 }

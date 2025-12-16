@@ -28,7 +28,7 @@ pub struct FeatureInfo {
 /// List all worktrees
 pub async fn list_worktrees() -> Result<Vec<WorktreeInfo>> {
     let output = Command::new("git")
-        .args(&["worktree", "list", "--porcelain"])
+        .args(["worktree", "list", "--porcelain"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -173,7 +173,7 @@ fn parse_feature_number_and_name(s: &str) -> Option<(&str, &str)> {
 /// Get current worktree path
 pub async fn get_current_worktree() -> Result<PathBuf> {
     let output = Command::new("git")
-        .args(&["rev-parse", "--show-toplevel"])
+        .args(["rev-parse", "--show-toplevel"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -191,7 +191,7 @@ pub async fn get_current_worktree() -> Result<PathBuf> {
 /// Get current branch name
 pub async fn get_current_branch() -> Result<Option<String>> {
     let output = Command::new("git")
-        .args(&["rev-parse", "--abbrev-ref", "HEAD"])
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -231,7 +231,7 @@ pub async fn create_worktree(feature: &str, base_path: Option<PathBuf>) -> Resul
 
     // Create worktree
     let output = Command::new("git")
-        .args(&["worktree", "add", "-b", &branch_name])
+        .args(["worktree", "add", "-b", &branch_name])
         .arg(&worktree_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -253,7 +253,7 @@ pub async fn create_worktree(feature: &str, base_path: Option<PathBuf>) -> Resul
 /// Remove a worktree
 pub async fn remove_worktree(path: &str, force: bool) -> Result<()> {
     let mut cmd = Command::new("git");
-    cmd.args(&["worktree", "remove"]);
+    cmd.args(["worktree", "remove"]);
 
     if force {
         cmd.arg("--force");

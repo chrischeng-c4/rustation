@@ -445,7 +445,7 @@ impl Default for CommandRunner {
 }
 
 impl View for CommandRunner {
-    fn render(&self, frame: &mut Frame, area: Rect) {
+    fn render(&mut self, frame: &mut Frame, area: Rect) {
         // Split into menu (left) and output (right)
         let chunks = Layout::default()
             .direction(Direction::Horizontal)

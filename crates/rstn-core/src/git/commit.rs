@@ -38,7 +38,7 @@ pub enum CommitResult {
 pub async fn generate_commit_message() -> Result<String> {
     // Get diff summary
     let diff_stat_output = Command::new("git")
-        .args(&["diff", "--cached", "--stat"])
+        .args(["diff", "--cached", "--stat"])
         .output()
         .await?;
 
@@ -59,7 +59,7 @@ pub async fn generate_commit_message() -> Result<String> {
 
     // Get recent commit messages for style reference
     let log_output = Command::new("git")
-        .args(&["log", "--oneline", "-5", "--format=%s"])
+        .args(["log", "--oneline", "-5", "--format=%s"])
         .output()
         .await?;
 
@@ -203,7 +203,7 @@ pub async fn intelligent_commit() -> Result<CommitResult> {
     // 2. Get staged files and diff stats
     tracing::debug!("Executing: git diff --cached --name-status");
     let files_output = Command::new("git")
-        .args(&["diff", "--cached", "--name-status"])
+        .args(["diff", "--cached", "--name-status"])
         .output()
         .await?;
 
@@ -216,7 +216,7 @@ pub async fn intelligent_commit() -> Result<CommitResult> {
 
     tracing::debug!("Executing: git diff --cached --stat");
     let diff_stat_output = Command::new("git")
-        .args(&["diff", "--cached", "--stat"])
+        .args(["diff", "--cached", "--stat"])
         .output()
         .await?;
 
@@ -236,7 +236,7 @@ pub async fn intelligent_commit() -> Result<CommitResult> {
 
         // Try to stage all changes
         tracing::debug!("Executing: git add --all");
-        let add_output = Command::new("git").args(&["add", "--all"]).output().await?;
+        let add_output = Command::new("git").args(["add", "--all"]).output().await?;
 
         if !add_output.status.success() {
             tracing::error!("git add --all failed");
@@ -248,12 +248,12 @@ pub async fn intelligent_commit() -> Result<CommitResult> {
         // Re-check staged files
         tracing::debug!("Re-checking staged files after auto-staging");
         let files_output = Command::new("git")
-            .args(&["diff", "--cached", "--name-status"])
+            .args(["diff", "--cached", "--name-status"])
             .output()
             .await?;
 
         let diff_stat_output = Command::new("git")
-            .args(&["diff", "--cached", "--stat"])
+            .args(["diff", "--cached", "--stat"])
             .output()
             .await?;
 
@@ -583,7 +583,7 @@ pub async fn commit_group(group: CommitGroup, message: String) -> Result<()> {
 
     // T038: Create the commit with the message
     let commit_output = Command::new("git")
-        .args(&["commit", "-m", &message])
+        .args(["commit", "-m", &message])
         .output()
         .await?;
 

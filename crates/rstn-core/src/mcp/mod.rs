@@ -48,7 +48,7 @@ pub async fn load_registry<P: AsRef<Path>>(path: P) -> Result<McpRegistry> {
         .await
         .map_err(|e| CoreError::Config(format!("Failed to read MCP registry: {}", e)))?;
 
-    serde_json::from_str(&content).map_err(|e| CoreError::Json(e))
+    serde_json::from_str(&content).map_err(CoreError::Json)
 }
 
 /// Generate .mcp.json config from registry
@@ -93,7 +93,7 @@ pub async fn write_mcp_config<P: AsRef<Path>>(config: &McpConfig, path: P) -> Re
     let json = serde_json::to_string_pretty(config)?;
     tokio::fs::write(path.as_ref(), json)
         .await
-        .map_err(|e| CoreError::Io(e))?;
+        .map_err(CoreError::Io)?;
     Ok(())
 }
 
@@ -107,7 +107,7 @@ pub async fn find_registry_path() -> Result<PathBuf> {
 
     // Try in git root
     if let Ok(output) = tokio::process::Command::new("git")
-        .args(&["rev-parse", "--show-toplevel"])
+        .args(["rev-parse", "--show-toplevel"])
         .output()
         .await
     {

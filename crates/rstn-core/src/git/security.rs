@@ -133,7 +133,7 @@ const SENSITIVE_FILES: &[(&str, &str)] = &[
 pub async fn scan_staged_changes() -> Result<SecurityScanResult> {
     // Get diff content
     let diff_output = Command::new("git")
-        .args(&["diff", "--cached"])
+        .args(["diff", "--cached"])
         .output()
         .await?;
 
@@ -147,7 +147,7 @@ pub async fn scan_staged_changes() -> Result<SecurityScanResult> {
 
     // Get staged filenames
     let files_output = Command::new("git")
-        .args(&["diff", "--cached", "--name-only"])
+        .args(["diff", "--cached", "--name-only"])
         .output()
         .await?;
 
@@ -189,7 +189,7 @@ pub async fn scan_all_changes() -> Result<SecurityScanResult> {
     all_sensitive_files.extend(staged_scan.sensitive_files);
 
     // 2. Scan unstaged changes (git diff)
-    let unstaged_diff = Command::new("git").args(&["diff"]).output().await?;
+    let unstaged_diff = Command::new("git").args(["diff"]).output().await?;
 
     if unstaged_diff.status.success() {
         let unstaged_content = String::from_utf8_lossy(&unstaged_diff.stdout);
@@ -199,7 +199,7 @@ pub async fn scan_all_changes() -> Result<SecurityScanResult> {
 
     // 3. Scan untracked files
     let untracked_output = Command::new("git")
-        .args(&["ls-files", "--others", "--exclude-standard"])
+        .args(["ls-files", "--others", "--exclude-standard"])
         .output()
         .await?;
 
@@ -360,13 +360,11 @@ fn check_sensitive_filenames(files: &str) -> Vec<SensitiveFile> {
 
 /// Check if filename matches pattern (supports wildcards)
 fn file_matches_pattern(filename: &str, pattern: &str) -> bool {
-    if pattern.starts_with('*') {
+    if let Some(ext) = pattern.strip_prefix('*') {
         // Wildcard at start (*.ext)
-        let ext = &pattern[1..];
         filename.ends_with(ext)
-    } else if pattern.ends_with('*') {
+    } else if let Some(prefix) = pattern.strip_suffix('*') {
         // Wildcard at end (prefix*)
-        let prefix = &pattern[..pattern.len() - 1];
         filename.starts_with(prefix)
     } else if pattern.contains('*') {
         // Wildcard in middle

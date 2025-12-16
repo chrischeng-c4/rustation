@@ -203,7 +203,7 @@ impl Default for SettingsView {
 }
 
 impl View for SettingsView {
-    fn render(&self, frame: &mut Frame, area: Rect) {
+    fn render(&mut self, frame: &mut Frame, area: Rect) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([

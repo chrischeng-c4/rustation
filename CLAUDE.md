@@ -1,126 +1,421 @@
 # CLAUDE.md
 
-## Language Preference
-
+<language>
 Respond in English (U.S.) by default. Use Traditional Chinese only when user writes in Traditional Chinese.
+</language>
 
-## Repository Overview
+---
 
-Rust monorepo workspace containing **rush** - a shell implementation replacing zsh/bash/fish.
+<chain-of-thought>
+Before starting ANY feature work, work through these steps IN ORDER:
 
-```
+<step number="1" name="WHAT">
+  - Feature number: ___
+  - Feature name: ___
+  - User-facing outcome: ___
+</step>
+
+<step number="2" name="WHERE in SDD">
+  - spec.md exists? YES/NO
+  - plan.md exists? YES/NO
+  - tasks.md exists? YES/NO
+  - Current phase: SPECIFY | PLAN | TASKS | IMPLEMENT | TEST
+</step>
+
+<step number="3" name="NEXT ACTION">
+  - If no spec → /speckit.specify
+  - If no plan → /speckit.plan
+  - If no tasks → /speckit.tasks
+  - If tasks exist → implement next task
+  - If implemented → dispatch to tui-tester
+</step>
+
+<step number="4" name="TESTS NEEDED">
+  - Unit tests: ___
+  - Integration tests: ___
+  - TUI e2e tests: ___ (dispatch to tui-tester)
+</step>
+
+<step number="5" name="COMPLETE?">
+  - All tasks done? YES/NO
+  - All tests pass? YES/NO
+  - cargo clippy clean? YES/NO
+  - Ready for PR? YES/NO
+</step>
+
+You MUST write out these 5 steps before writing any code.
+</chain-of-thought>
+
+---
+
+<decision-trees>
+
+<tree name="SDD Workflow">
+START: New feature request
+│
+├─► Does spec.md exist?
+│   ├─ NO → Run /speckit.specify, then /speckit.clarify if needed
+│   └─ YES → Continue
+│
+├─► Does plan.md exist?
+│   ├─ NO → Run /speckit.plan
+│   └─ YES → Continue
+│
+├─► Does tasks.md exist?
+│   ├─ NO → Run /speckit.tasks
+│   └─ YES → Continue
+│
+├─► Are all tasks complete?
+│   ├─ NO → Implement next task, then dispatch to tui-tester
+│   └─ YES → Continue
+│
+├─► Do all tests pass?
+│   ├─ NO → Fix failing tests
+│   └─ YES → Continue
+│
+└─► END: Create PR with /speckit.review
+</tree>
+
+<tree name="Dispatch to tui-tester">
+START: Need TUI testing?
+│
+├─► Does feature touch TUI code?
+│   ├─ NO → Skip tui-tester, use regular unit tests
+│   └─ YES → Continue
+│
+├─► What TUI component?
+│   ├─ Mouse handling → Dispatch with mouse context
+│   ├─ Keyboard handling → Dispatch with keyboard context
+│   ├─ View/Focus → Dispatch with state context
+│   └─ Widget rendering → Dispatch with render context
+│
+└─► Prepare context, then dispatch:
+    Task(subagent_type="tui-tester", prompt="<context>...</context>")
+</tree>
+
+</decision-trees>
+
+---
+
+<few-shot-examples>
+
+<example name="Complete SDD Workflow">
+User: "Add click support for tabs"
+
+<thinking>
+STEP 1: WHAT
+- Feature: 001-click-function
+- Outcome: Users can click tabs to switch views
+
+STEP 2: WHERE in SDD
+- spec.md: NO
+- Current phase: SPECIFY
+
+STEP 3: NEXT ACTION
+→ Run /speckit.specify
+
+STEP 4: TESTS NEEDED
+- Unit: test_mouse_click_settings_tab
+- TUI e2e: Dispatch to tui-tester
+
+STEP 5: COMPLETE?
+- All tasks done: NO
+- Tests pass: NO
+- clippy clean: NO
+</thinking>
+
+Action: /speckit.specify
+</example>
+
+<example name="Dispatching to tui-tester">
+After implementing mouse click handling:
+
+Task(
+  subagent_type="tui-tester",
+  prompt="""
+<context>
+  <feature>001-click-function</feature>
+  <files>crates/rstn/src/tui/app.rs</files>
+  <functions>handle_mouse_event()</functions>
+  <state-changes>current_view switches between Worktree/Settings/Dashboard</state-changes>
+  <layout>tab_bar_rect stores clickable area (populated after render)</layout>
+</context>
+
+<requirements>
+  <test>Click on each tab switches view</test>
+  <test>Right-click is ignored</test>
+  <test>Click outside tab bar is ignored</test>
+</requirements>
+
+<helpers>
+  <helper>render_app_to_test_backend(app, width, height)</helper>
+  <helper>mouse_click(col, row) -> MouseEvent</helper>
+  <helper>key_event(code) -> KeyEvent</helper>
+</helpers>
+"""
+)
+</example>
+
+<example name="Commit Format">
+feat(001): add mouse click support for tabs
+fix(001): enable mouse capture in terminal setup
+test(001): add e2e tests for tab click handling
+</example>
+
+</few-shot-examples>
+
+---
+
+<grounding>
+
+<repository-structure>
 rustation/
-├── Cargo.toml          # Workspace root
-├── crates/rush/        # Shell implementation
-├── specs/              # Feature specifications
-│   └── features.json   # Master feature catalog (001-044)
-└── target/             # Build output (gitignored)
-```
+├── Cargo.toml              # Workspace root
+├── CLAUDE.md               # This file (main thread instructions)
+├── .claude/agents/
+│   └── tui-tester.md       # TUI testing subagent
+├── crates/
+│   ├── rush/               # Shell implementation
+│   └── rstn/src/tui/
+│       ├── app.rs          # App, handle_mouse_event, handle_key_event
+│       ├── event.rs        # Event types
+│       ├── views/          # WorktreeView, SettingsView, Dashboard
+│       └── widgets/        # InputDialog, TextInput, OptionPicker
+├── specs/{NNN}-{name}/
+│   ├── spec.md
+│   ├── plan.md
+│   └── tasks.md
+└── target/                 # Build output (gitignored)
+</repository-structure>
 
-## Spec-Driven Development Workflow
+<sdd-commands>
+| Command | Output | Purpose |
+|---------|--------|---------|
+| /speckit.specify | spec.md | Define requirements |
+| /speckit.clarify | refine spec | Ask clarifying questions |
+| /speckit.plan | plan.md | Design architecture |
+| /speckit.tasks | tasks.md | Generate task breakdown |
+| /speckit.implement | code+tests | Implement feature |
+| /speckit.review | PR review | Verify against spec |
+| /spec-status | status | Full SDD status |
+| /spec-check | quick check | Quick status |
+</sdd-commands>
 
-Use spec-kit commands for all feature development:
+<build-commands>
+cargo build -p rstn           # Build TUI app
+cargo test -p rstn            # Run all tests
+cargo test -p rstn test_mouse # Run mouse tests
+cargo clippy -p rstn          # Lint check
+</build-commands>
 
-```
-/speckit.specify  → spec.md      # Define requirements
-/speckit.clarify  → refine spec  # Ask clarifying questions
-/speckit.plan     → plan.md      # Design architecture
-/speckit.tasks    → tasks.md     # Generate task breakdown
-/speckit.analyze  → validation   # Check consistency
-/speckit.checklist → checklist   # QA checklist
-/speckit.implement → code+tests  # Implement feature
-/speckit.review   → PR review    # Verify against spec
-```
+<tui-tester-context-template>
+When dispatching to tui-tester, ALWAYS use this structure:
 
-### Interactive Specify Workflow (Feature 051)
+<context>
+  <feature>{NNN}-{name}</feature>
+  <files>{list of changed files}</files>
+  <functions>{entry point functions}</functions>
+  <state-changes>{what fields change}</state-changes>
+  <layout>{which rects are involved}</layout>
+</context>
 
-The `/speckit.specify` command now uses an **interactive TUI workflow**:
+<requirements>
+  <test>{specific test case 1}</test>
+  <test>{specific test case 2}</test>
+  <test>{edge cases}</test>
+</requirements>
 
-1. **Input Mode**: Enter feature description in a dialog
-2. **Review Mode**: Preview generated spec with actions:
-   - `[Enter]` Save spec to file
-   - `[e]` Edit spec inline
-   - `[Esc]` Cancel and discard
-3. **Edit Mode** (optional): Multi-line text editing
-   - `[Ctrl+S]` Save edited spec
-   - `[Enter]` Insert newline
-   - `[Esc]` Cancel edits
+<helpers>
+  <helper>render_app_to_test_backend(app, width, height)</helper>
+  <helper>mouse_click(col, row) -> MouseEvent</helper>
+  <helper>key_event(code) -> KeyEvent</helper>
+  <helper>key_event_with_mod(code, modifiers) -> KeyEvent</helper>
+</helpers>
+</tui-tester-context-template>
 
-This replaces the old shell-out approach with a seamless, no-context-switch experience.
+</grounding>
 
-### Quick Status
+---
 
-```bash
-/spec-status      # Full status
-/spec-check       # Quick check
-```
+<negative-constraints>
 
-## Common Commands
+<rule severity="NEVER">Skip SDD phases → Leads to misaligned code → Follow specify → plan → tasks → implement</rule>
+<rule severity="NEVER">Implement without spec → No traceability → Run /speckit.specify first</rule>
+<rule severity="NEVER">Dispatch to tui-tester without context → Agent lacks info → Use context template</rule>
+<rule severity="NEVER">Hardcode test coordinates → Breaks on resize → Calculate from layout rects</rule>
+<rule severity="NEVER">Forget EnableMouseCapture → Mouse events won't work → Add to terminal setup</rule>
+<rule severity="NEVER">Commit without running tests → Broken code enters repo → Run cargo test first</rule>
+<rule severity="NEVER">Skip clippy → Lints accumulate → Run cargo clippy before commit</rule>
 
-```bash
-# Build & Test
-cargo build && cargo test
-cargo clippy --all-targets --all-features
+<bad-example name="No context dispatch">
+Task(subagent_type="tui-tester", prompt="Write mouse tests")
+</bad-example>
 
-# Development
-just install-dev              # Link debug builds (hot reload)
-cargo build -p rstn          # Rebuild - changes live immediately
-just which-build             # Check symlink/binary status
+<bad-example name="Missing file info">
+Task(subagent_type="tui-tester", prompt="Test click on tabs")
+</bad-example>
 
-# GitHub CLI
-gh issue create --title "Feature: {name}" --body-file spec.md
-gh pr create --title "{description}" --body "Closes #{issue}"
-```
+</negative-constraints>
 
-## Debugging
+---
 
-**Log Location:** `~/.rustation/logs/`
+<delimiters>
+Use these markers in workflow updates:
 
-```bash
-# View recent logs
-tail -f ~/.rustation/logs/rstn.log
+<marker name="SDD STATUS">
+Feature: 001-click-function
+Phase: IMPLEMENT
+Tasks: 3/5 complete
+</marker>
 
-# Search for specific events
-grep -i "keyword" ~/.rustation/logs/rstn.log
-```
+<marker name="IMPLEMENTING">
+Task: Add mouse click handler
+File: crates/rstn/src/tui/app.rs
+</marker>
 
-**Debug Builds:** Use `just install-dev` to create symlinks - changes take effect immediately after `cargo build`.
+<marker name="DISPATCHING TEST">
+Agent: tui-tester
+Focus: Mouse click on tab bar
+</marker>
 
-## Commit Format
+<marker name="BUILD CHECK">
+cargo build: PASS
+cargo test: PASS
+cargo clippy: PASS
+</marker>
 
-```bash
-git commit -m "feat(NNN): description"
-```
+<marker name="READY FOR PR">
+All tasks complete, tests pass
+</marker>
+</delimiters>
 
-## Technologies
+---
 
-- Rust 1.75+ (edition 2021)
-- reedline 0.26+ (line editing)
-- tokio, serde, anyhow/thiserror, tracing
+<output-structure>
+After each work session, report in this format:
 
-## Test Coverage
+<report>
+  <feature>{NNN}-{name}</feature>
 
-- 670+ passing tests
-- All tests complete in <1 second
+  <sdd-phase>
+    <phase name="Specify" status="DONE"/>
+    <phase name="Plan" status="DONE"/>
+    <phase name="Tasks" status="DONE"/>
+    <phase name="Implement" status="IN PROGRESS" progress="3/5"/>
+    <phase name="Test" status="PENDING"/>
+    <phase name="Review" status="PENDING"/>
+  </sdd-phase>
+
+  <tasks-completed>
+    <task status="done">Task 1: Description</task>
+    <task status="done">Task 2: Description</task>
+    <task status="next">Task 3: Next up</task>
+  </tasks-completed>
+
+  <tests>
+    <test name="test_mouse_click_tab" status="PASS" agent="tui-tester"/>
+    <test name="test_right_click_ignored" status="PASS" agent="tui-tester"/>
+  </tests>
+
+  <build-status>
+    <check name="cargo build" status="PASS"/>
+    <check name="cargo test" status="PASS" note="7 new tests"/>
+    <check name="cargo clippy" status="PASS"/>
+  </build-status>
+
+  <next-steps>
+    <step>Implement Task 4</step>
+    <step>Dispatch to tui-tester for pane click tests</step>
+    <step>Run /speckit.review</step>
+  </next-steps>
+</report>
+</output-structure>
+
+---
+
+<self-correction>
+Before committing or creating PR, verify ALL items:
+
+<checklist name="SDD Compliance">
+  <item>spec.md exists and is current?</item>
+  <item>plan.md exists and was followed?</item>
+  <item>tasks.md exists and all tasks complete?</item>
+  <item>Implementation matches spec?</item>
+</checklist>
+
+<checklist name="Code Quality">
+  <item>cargo build passes?</item>
+  <item>cargo test passes?</item>
+  <item>cargo clippy clean?</item>
+  <item>No unwrap() in production code?</item>
+</checklist>
+
+<checklist name="Testing">
+  <item>Unit tests written?</item>
+  <item>TUI e2e tests dispatched to tui-tester?</item>
+  <item>All tests pass?</item>
+  <item>Edge cases covered?</item>
+</checklist>
+
+<checklist name="Commit">
+  <item>Commit message format: feat(NNN): description?</item>
+  <item>Changes are focused (not mixed features)?</item>
+  <item>PR size reasonable (&lt;500 lines ideal)?</item>
+</checklist>
+
+If ANY item is NO, fix it before proceeding.
+</self-correction>
+
+---
+
+<quick-reference>
+SDD WORKFLOW:
+  1. /speckit.specify → spec.md
+  2. /speckit.plan → plan.md
+  3. /speckit.tasks → tasks.md
+  4. Implement each task
+  5. Dispatch TUI tests to tui-tester
+  6. /speckit.review → PR
+
+DISPATCH TO TUI-TESTER:
+  Task(subagent_type="tui-tester", prompt="<context>...</context><requirements>...</requirements><helpers>...</helpers>")
+
+BUILD CYCLE:
+  cargo build -p rstn
+  cargo test -p rstn
+  cargo clippy -p rstn
+
+COMMIT FORMAT:
+  feat(NNN): description
+  fix(NNN): description
+  test(NNN): description
+</quick-reference>
+
+---
+
+<technologies>
+  <tech>Rust 1.75+ (edition 2021)</tech>
+  <tech>ratatui 0.29+ (TUI framework)</tech>
+  <tech>crossterm 0.28 (terminal I/O)</tech>
+  <tech>reedline 0.26+ (line editing)</tech>
+  <tech>tokio (async runtime)</tech>
+  <tech>tracing (logging)</tech>
+</technologies>
+
+<debugging>
+  <logs>~/.rustation/logs/</logs>
+  <command>tail -f ~/.rustation/logs/rstn.log</command>
+  <command>grep -i "keyword" ~/.rustation/logs/rstn.log</command>
+  <tip>Use `just install-dev` for hot reload symlinks</tip>
+</debugging>
 
 ## Active Technologies
-- Rust 1.75+ (edition 2021) + No new dependencies (pure Rust implementation) (029-arithmetic-expansion)
-- N/A (uses existing VariableManager) (029-arithmetic-expansion)
-- Rust 1.75+ (edition 2021) + reedline (already in project), std::io for terminal I/O (030-read-builtin)
-- N/A (variables stored in existing VariableManager) (030-read-builtin)
-- Rust 1.75+ (edition 2021) + None (pure Rust implementation) (034-brace-expansion)
-- Rust 1.75+ (edition 2021) + None (pure Rust std library) (036-set-builtin)
-- In-memory (ShellOptions struct in CommandExecutor) (036-set-builtin)
-- Rust 1.75+ (edition 2021) + nix 0.29 (signal handling), existing in Cargo.toml (037-trap-builtin)
-- In-memory HashMap in CommandExecutor (trap registry persists for shell session lifetime) (037-trap-builtin)
-- Rust 1.75+ (edition 2021) + regex 1.10 (for `=~` operator and pattern matching) (038-test-command)
-- N/A (stateless command execution, uses existing VariableManager for BASH_REMATCH) (038-test-command)
-- Rust 1.75+ (edition 2021) + ratatui 0.29+ (TUI framework), crossterm (terminal I/O), tokio (async runtime) (046-fix-tui-input)
-- N/A (in-memory state only) (046-fix-tui-input)
-- In-memory only (049-enhanced-worktree-view)
-- Rust 1.75+ (edition 2021) + ratatui 0.29+ (TUI framework), crossterm 0.28 (terminal I/O), arboard 3.4 (clipboard), rstn-core (git operations), tokio (async runtime) (050-commit-review-content-area)
-- In-memory state only (commit review session data lives in WorktreeView struct) (050-commit-review-content-area)
-- In-memory state during specify workflow; final spec written to `specs/{NNN}-{name}/spec.md` (051-interactive-specify-flow)
+- Rust 1.75+ (edition 2021) + okio, serde_json, thiserror (all already in workspace) (052-internalize-spec-generation)
+- File system (`specs/` directory, `features.json`) (052-internalize-spec-generation)
+- Rust 1.75+ (edition 2021) + okio, serde, serde_json, thiserror, regex (all in workspace) (053-internalize-clarify)
+- File system (`specs/{NNN}-{name}/spec.md`) (053-internalize-clarify)
+- Rust 1.75+ (edition 2021) + okio (async runtime), serde_json (JSON parsing), thiserror (error handling), which (CLI detection) - all already in workspace (054-internalize-plan)
+- File system - `specs/{NNN}-{name}/` directory structure (054-internalize-plan)
 
 ## Recent Changes
-- 029-arithmetic-expansion: Added Rust 1.75+ (edition 2021) + No new dependencies (pure Rust implementation)
+- 052-internalize-spec-generation: Added Rust 1.75+ (edition 2021) + okio, serde_json, thiserror (all already in workspace)

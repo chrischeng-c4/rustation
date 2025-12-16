@@ -20,6 +20,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 # Crate-specific dependencies
+chrono = "0.4"                  # Date/time handling
 dirs = "5.0"                    # XDG paths
 validator = { version = "0.18", features = ["derive"] }  # Config validation
 which = "8.0"                   # Command detection
