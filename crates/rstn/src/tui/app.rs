@@ -748,6 +748,44 @@ impl App {
                     }
                 }
             }
+            ViewAction::ExecuteTask { task_id, task_description, feature_number, feature_name } => {
+                // Feature 056: Execute task with Claude CLI
+                tracing::info!("Executing task {} for feature {}-{}", task_id, feature_number, feature_name);
+                self.status_message = Some(format!("Executing task {}: {}...", task_id, task_description));
+
+                // Spawn task execution
+                let sender = self.event_sender.clone();
+                let tid = task_id.clone();
+                let desc = task_description.clone();
+                let num = feature_number.clone();
+                let name = feature_name.clone();
+
+                tokio::spawn(async move {
+                    let result = Self::execute_task_implementation(tid.clone(), desc, num, name).await;
+                    if let Some(sender) = sender {
+                        match result {
+                            Ok(output) => {
+                                let _ = sender.send(Event::TaskExecutionCompleted {
+                                    task_id: tid,
+                                    success: true,
+                                    output,
+                                });
+                            }
+                            Err(e) => {
+                                let _ = sender.send(Event::TaskExecutionCompleted {
+                                    task_id: tid,
+                                    success: false,
+                                    output: e,
+                                });
+                            }
+                        }
+                    }
+                });
+            }
+            ViewAction::DisplayMessage(msg) => {
+                // Feature 056: Display message to user
+                self.status_message = Some(msg);
+            }
         }
     }
 
@@ -1114,6 +1152,84 @@ impl App {
                 .await?;
 
         Ok((content, feature_num, feature_name))
+    }
+
+    /// Execute a single task implementation via Claude CLI (Feature 056)
+    ///
+    /// Builds context from spec/plan/tasks and invokes Claude to implement.
+    async fn execute_task_implementation(
+        task_id: String,
+        task_description: String,
+        feature_number: String,
+        feature_name: String,
+    ) -> Result<String, String> {
+        use tokio::process::Command;
+        use tokio::time::{timeout, Duration};
+
+        // Find spec directory
+        let spec_dir = Self::find_spec_dir(&feature_number).await?;
+
+        // Read context files
+        let spec_content = tokio::fs::read_to_string(spec_dir.join("spec.md"))
+            .await
+            .unwrap_or_default();
+        let plan_content = tokio::fs::read_to_string(spec_dir.join("plan.md"))
+            .await
+            .unwrap_or_default();
+        let tasks_content = tokio::fs::read_to_string(spec_dir.join("tasks.md"))
+            .await
+            .unwrap_or_default();
+
+        // Build prompt for Claude
+        let prompt = format!(
+            r#"Implement the following task for feature {}-{}:
+
+## Task
+{}: {}
+
+## Context
+
+### Specification
+{}
+
+### Plan
+{}
+
+### Tasks
+{}
+
+## Instructions
+1. Implement ONLY the specified task
+2. Follow the patterns in the existing codebase
+3. Add tests if appropriate
+4. Report what files were modified"#,
+            feature_number,
+            feature_name,
+            task_id,
+            task_description,
+            spec_content,
+            plan_content,
+            tasks_content
+        );
+
+        // Execute Claude CLI
+        let output = timeout(
+            Duration::from_secs(300), // 5 minute timeout for implementation
+            Command::new("claude")
+                .arg("--print")
+                .arg("--dangerously-skip-permissions")
+                .arg(&prompt)
+                .output(),
+        )
+        .await
+        .map_err(|_| "Task execution timed out after 5 minutes")?
+        .map_err(|e| format!("Failed to execute Claude CLI: {}", e))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
     /// Handle command output events
@@ -2237,6 +2353,20 @@ impl App {
 
                     // T047: Clean up specify workflow state
                     self.worktree_view.cancel_specify();
+                }
+                Event::TaskExecutionCompleted { task_id, success, output } => {
+                    // Feature 056: Task execution completed
+                    if success {
+                        tracing::info!("Task {} completed successfully", task_id);
+                        self.worktree_view.add_output(format!("✓ Task {} completed", task_id));
+                        self.worktree_view.complete_task_execution();
+                        self.status_message = Some(format!("Task {} completed!", task_id));
+                    } else {
+                        tracing::error!("Task {} failed: {}", task_id, output);
+                        self.worktree_view.add_output(format!("❌ Task {} failed: {}", task_id, output));
+                        self.worktree_view.specify_state.executing_task_index = None;
+                        self.status_message = Some(format!("Task {} failed", task_id));
+                    }
                 }
             }
             debug!(

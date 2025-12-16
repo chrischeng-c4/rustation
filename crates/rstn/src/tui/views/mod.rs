@@ -60,6 +60,15 @@ pub enum ViewAction {
         number: String,
         name: String,
     },
+    /// Execute a task with Claude CLI (Feature 056)
+    ExecuteTask {
+        task_id: String,
+        task_description: String,
+        feature_number: String,
+        feature_name: String,
+    },
+    /// Display a message to the user (Feature 056)
+    DisplayMessage(String),
 }
 
 /// View types for switching

@@ -96,6 +96,12 @@ pub enum Event {
     SpecifySaved {
         path: String,
     },
+    /// Task execution completed (Feature 056)
+    TaskExecutionCompleted {
+        task_id: String,
+        success: bool,
+        output: String,
+    },
 }
 
 /// Event handler that runs in a separate thread

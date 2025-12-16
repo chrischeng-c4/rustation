@@ -355,6 +355,14 @@ pub struct SpecifyState {
     /// Structured task list for reordering (Tasks phase only)
     pub task_list_state: Option<TaskListState>,
 
+    // Implement mode (Feature 056)
+    /// Index of task currently being executed
+    pub executing_task_index: Option<usize>,
+    /// Output from task execution
+    pub execution_output: String,
+    /// Auto-advance to next incomplete task after completion
+    pub auto_advance: bool,
+
     // Validation
     pub validation_error: Option<String>,
 }
@@ -373,6 +381,9 @@ impl Default for SpecifyState {
             edit_mode: false,
             edit_text_input: None,
             task_list_state: None,
+            executing_task_index: None,
+            execution_output: String::new(),
+            auto_advance: true,
             validation_error: None,
         }
     }
@@ -470,6 +481,75 @@ impl SpecifyState {
             self.task_list_state.as_ref().map(|t| t.to_markdown())
         } else {
             self.generated_spec.clone()
+        }
+    }
+
+    // ===== Feature 056: Implement Mode Methods =====
+
+    /// Check if in implement mode (executing tasks)
+    pub fn is_implement_mode(&self) -> bool {
+        self.current_phase == SpecPhase::Implement && self.task_list_state.is_some()
+    }
+
+    /// Check if a task is currently executing
+    pub fn is_executing(&self) -> bool {
+        self.executing_task_index.is_some()
+    }
+
+    /// Load tasks from existing tasks.md file
+    pub fn load_tasks_from_file(&mut self, content: &str, number: String, name: String) {
+        self.feature_number = Some(number);
+        self.feature_name = Some(name);
+        self.generated_spec = Some(content.to_string());
+
+        let task_list = TaskListState::from_markdown(content);
+        if !task_list.is_empty() {
+            self.task_list_state = Some(task_list);
+        }
+    }
+
+    /// Toggle completion status of selected task
+    pub fn toggle_task_completion(&mut self) {
+        if let Some(ref mut task_list) = self.task_list_state {
+            if let Some(task) = task_list.tasks.get_mut(task_list.selected) {
+                task.completed = !task.completed;
+            }
+        }
+    }
+
+    /// Get the currently selected task (if any)
+    pub fn get_selected_task(&self) -> Option<&ParsedTask> {
+        self.task_list_state.as_ref().and_then(|tl| tl.tasks.get(tl.selected))
+    }
+
+    /// Get count of completed vs total tasks
+    pub fn get_task_progress(&self) -> (usize, usize) {
+        self.task_list_state
+            .as_ref()
+            .map(|tl| {
+                let completed = tl.tasks.iter().filter(|t| t.completed).count();
+                (completed, tl.len())
+            })
+            .unwrap_or((0, 0))
+    }
+
+    /// Advance selection to next incomplete task
+    pub fn advance_to_next_incomplete(&mut self) {
+        if let Some(ref mut task_list) = self.task_list_state {
+            // Find next incomplete task starting from current + 1
+            for i in (task_list.selected + 1)..task_list.len() {
+                if !task_list.tasks[i].completed {
+                    task_list.selected = i;
+                    return;
+                }
+            }
+            // Wrap around to beginning
+            for i in 0..task_list.selected {
+                if !task_list.tasks[i].completed {
+                    task_list.selected = i;
+                    return;
+                }
+            }
         }
     }
 }
@@ -1653,6 +1733,165 @@ impl WorktreeView {
         self.start_interactive_phase(SpecPhase::Specify);
     }
 
+    /// Start implement mode to execute tasks (Feature 056)
+    ///
+    /// Loads existing tasks.md and enters task execution mode.
+    /// Unlike other phases, this doesn't use the generate workflow.
+    ///
+    /// # Returns
+    /// - `ViewAction::DisplayMessage` with error if tasks.md doesn't exist or is empty
+    /// - `ViewAction::None` on success
+    pub fn start_implement_mode(&mut self) -> ViewAction {
+        // Get feature info
+        let (spec_dir, number, name) = if let Some(ref info) = self.feature_info {
+            (info.spec_dir.clone(), info.number.clone(), info.name.clone())
+        } else {
+            return ViewAction::DisplayMessage("No feature context".to_string());
+        };
+
+        // Check if tasks.md exists
+        let tasks_path = spec_dir.join("tasks.md");
+        if !tasks_path.exists() {
+            return ViewAction::DisplayMessage("No tasks.md found. Run Tasks phase first.".to_string());
+        }
+
+        // Read and parse tasks
+        match std::fs::read_to_string(&tasks_path) {
+            Ok(content) => {
+                self.specify_state = SpecifyState::for_phase(SpecPhase::Implement);
+                self.specify_state.load_tasks_from_file(&content, number, name);
+
+                if self.specify_state.task_list_state.is_none() {
+                    return ViewAction::DisplayMessage("No tasks found in tasks.md".to_string());
+                }
+
+                // Enable list mode for navigation
+                if let Some(ref mut tl) = self.specify_state.task_list_state {
+                    tl.list_mode = true;
+                }
+
+                self.content_type = ContentType::SpecifyReview;
+                self.focus = WorktreeFocus::Content;
+
+                let entry = LogEntry::new(
+                    LogCategory::System,
+                    format!("Implement mode started with {} tasks",
+                        self.specify_state.task_list_state.as_ref().map(|t| t.len()).unwrap_or(0)),
+                );
+                self.log_buffer.push(entry);
+
+                ViewAction::None
+            }
+            Err(e) => ViewAction::DisplayMessage(format!("Failed to read tasks.md: {}", e)),
+        }
+    }
+
+    /// Save tasks to tasks.md file (Feature 056)
+    ///
+    /// Persists the current task list state to the tasks.md file.
+    pub fn save_tasks_to_file(&mut self) -> ViewAction {
+        // Get file path
+        let tasks_path = if let Some(ref info) = self.feature_info {
+            info.spec_dir.join("tasks.md")
+        } else {
+            return ViewAction::DisplayMessage("No feature context".to_string());
+        };
+
+        // Get task content
+        let content = if let Some(ref task_list) = self.specify_state.task_list_state {
+            task_list.to_markdown()
+        } else {
+            return ViewAction::DisplayMessage("No tasks to save".to_string());
+        };
+
+        // Write to file
+        match std::fs::write(&tasks_path, &content) {
+            Ok(()) => {
+                let entry = LogEntry::new(
+                    LogCategory::System,
+                    format!("Tasks saved to {}", tasks_path.display()),
+                );
+                self.log_buffer.push(entry);
+                ViewAction::None
+            }
+            Err(e) => ViewAction::DisplayMessage(format!("Failed to save tasks: {}", e)),
+        }
+    }
+
+    /// Execute the currently selected task (Feature 056)
+    ///
+    /// Returns a ViewAction::ExecuteTask with the task details.
+    pub fn execute_selected_task(&mut self) -> ViewAction {
+        // Get task info
+        let (task_id, task_description) = if let Some(task) = self.specify_state.get_selected_task() {
+            (task.id.clone(), task.description.clone())
+        } else {
+            return ViewAction::DisplayMessage("No task selected".to_string());
+        };
+
+        // Get feature info
+        let (number, name) = if let (Some(num), Some(n)) = (
+            &self.specify_state.feature_number,
+            &self.specify_state.feature_name,
+        ) {
+            (num.clone(), n.clone())
+        } else {
+            return ViewAction::DisplayMessage("No feature context".to_string());
+        };
+
+        // Log execution start
+        let entry = LogEntry::new(
+            LogCategory::System,
+            format!("Executing task {}: {}", task_id, task_description),
+        );
+        self.log_buffer.push(entry);
+
+        // Set executing state
+        if let Some(ref task_list) = self.specify_state.task_list_state {
+            self.specify_state.executing_task_index = Some(task_list.selected);
+        }
+
+        ViewAction::ExecuteTask {
+            task_id,
+            task_description,
+            feature_number: number,
+            feature_name: name,
+        }
+    }
+
+    /// Mark task as complete after execution (Feature 056)
+    ///
+    /// Called when task execution completes successfully.
+    pub fn complete_task_execution(&mut self) {
+        // Mark task complete
+        if let Some(idx) = self.specify_state.executing_task_index {
+            if let Some(ref mut task_list) = self.specify_state.task_list_state {
+                if let Some(task) = task_list.tasks.get_mut(idx) {
+                    task.completed = true;
+                }
+            }
+        }
+
+        // Clear executing state
+        self.specify_state.executing_task_index = None;
+
+        // Auto-advance if enabled
+        if self.specify_state.auto_advance {
+            self.specify_state.advance_to_next_incomplete();
+        }
+
+        // Auto-save
+        let _ = self.save_tasks_to_file();
+
+        // Log completion
+        let (completed, total) = self.specify_state.get_task_progress();
+        let entry = LogEntry::new(
+            LogCategory::System,
+            format!("Task complete. Progress: {}/{}", completed, total),
+        );
+        self.log_buffer.push(entry);
+    }
+
     /// Cancel specify workflow and return to normal Spec view (T016)
     ///
     /// Resets all specify state to defaults and returns to regular content view.
@@ -1962,8 +2201,9 @@ impl WorktreeView {
     /// Handle keyboard input during Review Phase (T037)
     ///
     /// # Keybindings
-    /// - `Enter`: Save spec to file
+    /// - `Enter`: Save spec to file (or execute task in Implement mode)
     /// - `e`: Enter Edit Phase for inline editing
+    /// - `x`: Toggle task completion (Implement mode only)
     /// - `Esc`: Cancel workflow and discard spec
     /// - Other keys: No action (scrolling handled by parent)
     ///
@@ -1971,10 +2211,57 @@ impl WorktreeView {
     /// - `key`: The key event to process
     ///
     /// # Returns
-    /// - `ViewAction::SaveSpec` if user pressed Enter
+    /// - `ViewAction::SaveSpec` if user pressed Enter (non-implement mode)
+    /// - `ViewAction::ExecuteTask` if user pressed Enter in implement mode
     /// - `ViewAction::None` otherwise
     pub fn handle_specify_review_input(&mut self, key: KeyEvent) -> ViewAction {
-        // Feature 055: Task list mode key handling
+        // Feature 056: Implement mode key handling
+        if self.specify_state.is_implement_mode() {
+            match (key.code, key.modifiers) {
+                // j - Select next task
+                (KeyCode::Char('j'), KeyModifiers::NONE) | (KeyCode::Down, _) => {
+                    if let Some(ref mut task_list) = self.specify_state.task_list_state {
+                        task_list.select_next();
+                    }
+                    return ViewAction::None;
+                }
+                // k - Select previous task
+                (KeyCode::Char('k'), KeyModifiers::NONE) | (KeyCode::Up, _) => {
+                    if let Some(ref mut task_list) = self.specify_state.task_list_state {
+                        task_list.select_previous();
+                    }
+                    return ViewAction::None;
+                }
+                // x - Toggle task completion
+                (KeyCode::Char('x'), KeyModifiers::NONE) => {
+                    self.specify_state.toggle_task_completion();
+                    // Auto-save after toggling completion
+                    return self.save_tasks_to_file();
+                }
+                // Enter - Execute selected task
+                (KeyCode::Enter, _) => {
+                    return self.execute_selected_task();
+                }
+                // Esc - Exit implement mode
+                (KeyCode::Esc, _) => {
+                    self.cancel_specify();
+                    return ViewAction::None;
+                }
+                // a - Toggle auto-advance
+                (KeyCode::Char('a'), KeyModifiers::NONE) => {
+                    self.specify_state.auto_advance = !self.specify_state.auto_advance;
+                    let entry = LogEntry::new(
+                        LogCategory::System,
+                        format!("Auto-advance: {}", if self.specify_state.auto_advance { "ON" } else { "OFF" }),
+                    );
+                    self.log_buffer.push(entry);
+                    return ViewAction::None;
+                }
+                _ => return ViewAction::None,
+            }
+        }
+
+        // Feature 055: Task list mode key handling (for Tasks phase generation)
         if self.specify_state.is_task_list_mode() {
             match (key.code, key.modifiers) {
                 // Shift+J - Move task down in list
@@ -2446,15 +2733,36 @@ impl WorktreeView {
             all_lines.push(Line::from(""));
         }
 
-        // Feature 055: Check if in task list mode
-        if self.specify_state.is_task_list_mode() {
-            // Render structured task list
-            all_lines.push(Line::from(Span::styled(
-                "Generated Tasks (List Mode):",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )));
+        // Feature 056: Check if in implement mode
+        let is_implement_mode = self.specify_state.is_implement_mode();
+
+        // Feature 055/056: Check if in task list mode or implement mode
+        if self.specify_state.is_task_list_mode() || is_implement_mode {
+            // Render header based on mode
+            if is_implement_mode {
+                // Implement mode header with progress
+                let (completed, total) = self.specify_state.get_task_progress();
+                all_lines.push(Line::from(vec![
+                    Span::styled(
+                        "Implementation Mode",
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("  [{}/{}]", completed, total),
+                        Style::default().fg(Color::Yellow),
+                    ),
+                ]));
+            } else {
+                // Task generation mode header
+                all_lines.push(Line::from(Span::styled(
+                    "Generated Tasks (List Mode):",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )));
+            }
             all_lines.push(Line::from(""));
 
             if let Some(ref task_list) = self.specify_state.task_list_state {
@@ -2520,20 +2828,37 @@ impl WorktreeView {
                 )));
             }
 
-            // Action hints for task list mode
+            // Action hints (different for implement mode vs task list mode)
             all_lines.push(Line::from(""));
-            all_lines.push(Line::from(vec![
-                Span::styled("[j/k]", Style::default().fg(Color::Cyan)),
-                Span::raw(" Select  "),
-                Span::styled("[J/K]", Style::default().fg(Color::Yellow)),
-                Span::raw(" Reorder  "),
-                Span::styled("[t]", Style::default().fg(Color::Magenta)),
-                Span::raw(" Toggle mode  "),
-                Span::styled("[Enter]", Style::default().fg(Color::Green)),
-                Span::raw(" Save  "),
-                Span::styled("[Esc]", Style::default().fg(Color::Red)),
-                Span::raw(" Cancel"),
-            ]));
+            if is_implement_mode {
+                // Implement mode hints
+                all_lines.push(Line::from(vec![
+                    Span::styled("[j/k]", Style::default().fg(Color::Cyan)),
+                    Span::raw(" Select  "),
+                    Span::styled("[x]", Style::default().fg(Color::Yellow)),
+                    Span::raw(" Toggle done  "),
+                    Span::styled("[Enter]", Style::default().fg(Color::Green)),
+                    Span::raw(" Execute  "),
+                    Span::styled("[a]", Style::default().fg(Color::Magenta)),
+                    Span::raw(if self.specify_state.auto_advance { " Auto:ON  " } else { " Auto:OFF " }),
+                    Span::styled("[Esc]", Style::default().fg(Color::Red)),
+                    Span::raw(" Exit"),
+                ]));
+            } else {
+                // Task generation mode hints
+                all_lines.push(Line::from(vec![
+                    Span::styled("[j/k]", Style::default().fg(Color::Cyan)),
+                    Span::raw(" Select  "),
+                    Span::styled("[J/K]", Style::default().fg(Color::Yellow)),
+                    Span::raw(" Reorder  "),
+                    Span::styled("[t]", Style::default().fg(Color::Magenta)),
+                    Span::raw(" Toggle mode  "),
+                    Span::styled("[Enter]", Style::default().fg(Color::Green)),
+                    Span::raw(" Save  "),
+                    Span::styled("[Esc]", Style::default().fg(Color::Red)),
+                    Span::raw(" Cancel"),
+                ]));
+            }
         } else {
             // Standard spec content section
             all_lines.push(Line::from(Span::styled(
@@ -2821,6 +3146,9 @@ impl View for WorktreeView {
                                         if *phase == SpecPhase::Specify {
                                             self.start_specify_input();
                                             ViewAction::None
+                                        } else if *phase == SpecPhase::Implement {
+                                            // Implement phase uses task execution mode (Feature 056)
+                                            self.start_implement_mode()
                                         } else {
                                             self.run_phase(*phase)
                                         }
