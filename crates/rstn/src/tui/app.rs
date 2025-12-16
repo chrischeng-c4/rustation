@@ -9,8 +9,9 @@ use crate::tui::views::{
 };
 use crate::tui::widgets::{InputDialog, OptionPicker, TextInput};
 use crossterm::event::{
-    KeyCode, KeyEvent, KeyModifiers, KeyboardEnhancementFlags, MouseEvent,
-    PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent, KeyModifiers,
+    KeyboardEnhancementFlags, MouseEvent, PopKeyboardEnhancementFlags,
+    PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use crossterm::terminal::{
@@ -1553,9 +1554,9 @@ impl App {
         debug!("enable_raw_mode() OK");
 
         let mut stdout = stdout();
-        debug!("EnterAlternateScreen...");
-        execute!(stdout, EnterAlternateScreen)?;
-        debug!("EnterAlternateScreen OK");
+        debug!("EnterAlternateScreen + EnableMouseCapture...");
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        debug!("EnterAlternateScreen + EnableMouseCapture OK");
 
         // Check if terminal supports keyboard enhancement (Kitty protocol)
         // This allows terminals like WezTerm to report modifier keys with Enter (e.g., Shift+Enter)
@@ -1602,7 +1603,11 @@ impl App {
             let _ = execute!(terminal.backend_mut(), PopKeyboardEnhancementFlags);
         }
         disable_raw_mode()?;
-        execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+        execute!(
+            terminal.backend_mut(),
+            DisableMouseCapture,
+            LeaveAlternateScreen
+        )?;
         terminal.show_cursor()?;
         debug!("Terminal restored");
 
@@ -2433,5 +2438,226 @@ mod tests {
         // Character should have been inserted (proving input_mode was enabled)
         let dialog = app.input_dialog.as_ref().unwrap();
         assert_eq!(dialog.value(), "a");
+    }
+
+    // ========== Mouse Click E2E Tests (Feature 001) ==========
+
+    /// Helper to render app and populate layout rects for mouse testing
+    fn render_app_to_test_backend(app: &mut App, width: u16, height: u16) {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let backend = TestBackend::new(width, height);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| app.render(f)).unwrap();
+    }
+
+    /// Helper to create a mouse click event
+    fn mouse_click(col: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: col,
+            row,
+            modifiers: KeyModifiers::empty(),
+        }
+    }
+
+    // E2E: Click on Settings tab switches to Settings view
+    #[test]
+    fn test_mouse_click_settings_tab() {
+        let mut app = App::new();
+
+        // Render to populate tab_bar_rect
+        render_app_to_test_backend(&mut app, 80, 24);
+
+        // Verify we start on Worktree view
+        assert!(
+            matches!(app.current_view, CurrentView::Worktree),
+            "Should start on Worktree view"
+        );
+
+        // Verify tab_bar_rect is populated
+        assert!(app.tab_bar_rect.is_some(), "tab_bar_rect should be set after render");
+
+        let tab_rect = app.tab_bar_rect.unwrap();
+        // Tab bar layout: "[1] Worktree", "[2] Settings", "[3] Dashboard"
+        // Each tab takes ~1/3 of the inner width (width - 2 for borders)
+        let inner_width = tab_rect.width.saturating_sub(2);
+        let tab_width = inner_width / 3;
+
+        // Click on Settings tab (second tab, middle third)
+        // x position = tab_rect.x + 1 (border) + tab_width + some offset into second tab
+        let settings_tab_x = tab_rect.x + 1 + tab_width + (tab_width / 2);
+        let tab_y = tab_rect.y + 1; // Inside the tab bar
+
+        app.handle_mouse_event(mouse_click(settings_tab_x, tab_y));
+
+        assert!(
+            matches!(app.current_view, CurrentView::Settings),
+            "Should switch to Settings view after clicking Settings tab"
+        );
+        assert_eq!(
+            app.status_message,
+            Some("Switched to Settings".to_string())
+        );
+    }
+
+    // E2E: Click on Dashboard tab switches to Dashboard view
+    #[test]
+    fn test_mouse_click_dashboard_tab() {
+        let mut app = App::new();
+        render_app_to_test_backend(&mut app, 80, 24);
+
+        let tab_rect = app.tab_bar_rect.unwrap();
+        let inner_width = tab_rect.width.saturating_sub(2);
+        let tab_width = inner_width / 3;
+
+        // Click on Dashboard tab (third tab, last third)
+        let dashboard_tab_x = tab_rect.x + 1 + (tab_width * 2) + (tab_width / 2);
+        let tab_y = tab_rect.y + 1;
+
+        app.handle_mouse_event(mouse_click(dashboard_tab_x, tab_y));
+
+        assert!(
+            matches!(app.current_view, CurrentView::Dashboard),
+            "Should switch to Dashboard view after clicking Dashboard tab"
+        );
+        assert_eq!(
+            app.status_message,
+            Some("Switched to Dashboard".to_string())
+        );
+    }
+
+    // E2E: Click on Worktree tab (from another view) switches back
+    #[test]
+    fn test_mouse_click_worktree_tab_from_settings() {
+        let mut app = App::new();
+        app.current_view = CurrentView::Settings; // Start on Settings
+
+        render_app_to_test_backend(&mut app, 80, 24);
+
+        let tab_rect = app.tab_bar_rect.unwrap();
+        let tab_width = (tab_rect.width.saturating_sub(2)) / 3;
+
+        // Click on Worktree tab (first tab)
+        let worktree_tab_x = tab_rect.x + 1 + (tab_width / 2);
+        let tab_y = tab_rect.y + 1;
+
+        app.handle_mouse_event(mouse_click(worktree_tab_x, tab_y));
+
+        assert!(
+            matches!(app.current_view, CurrentView::Worktree),
+            "Should switch to Worktree view after clicking Worktree tab"
+        );
+    }
+
+    // E2E: Click on pane switches focus in Worktree view
+    #[test]
+    fn test_mouse_click_pane_switches_focus() {
+        use crate::tui::views::WorktreeFocus;
+
+        let mut app = App::new();
+        render_app_to_test_backend(&mut app, 120, 40);
+
+        // Verify initial focus is Commands
+        assert!(
+            matches!(app.worktree_view.focus, WorktreeFocus::Commands),
+            "Should start with Commands focus"
+        );
+
+        // Check that pane rects are populated
+        assert!(
+            app.worktree_view.content_pane_rect.is_some(),
+            "content_pane_rect should be set after render"
+        );
+
+        // Click on Content pane
+        if let Some(content_rect) = app.worktree_view.content_pane_rect {
+            let click_x = content_rect.x + content_rect.width / 2;
+            let click_y = content_rect.y + content_rect.height / 2;
+            app.handle_mouse_event(mouse_click(click_x, click_y));
+
+            assert!(
+                matches!(app.worktree_view.focus, WorktreeFocus::Content),
+                "Should switch to Content focus after clicking Content pane"
+            );
+        }
+    }
+
+    // E2E: Click on Output pane switches focus
+    #[test]
+    fn test_mouse_click_output_pane() {
+        use crate::tui::views::WorktreeFocus;
+
+        let mut app = App::new();
+        render_app_to_test_backend(&mut app, 120, 40);
+
+        // Click on Output pane
+        if let Some(output_rect) = app.worktree_view.output_pane_rect {
+            let click_x = output_rect.x + output_rect.width / 2;
+            let click_y = output_rect.y + output_rect.height / 2;
+            app.handle_mouse_event(mouse_click(click_x, click_y));
+
+            assert!(
+                matches!(app.worktree_view.focus, WorktreeFocus::Output),
+                "Should switch to Output focus after clicking Output pane"
+            );
+        }
+    }
+
+    // E2E: Mouse events other than left-click are ignored
+    #[test]
+    fn test_mouse_non_click_events_ignored() {
+        let mut app = App::new();
+        render_app_to_test_backend(&mut app, 80, 24);
+
+        let tab_rect = app.tab_bar_rect.unwrap();
+        let tab_width = (tab_rect.width.saturating_sub(2)) / 3;
+        let settings_tab_x = tab_rect.x + 1 + tab_width + (tab_width / 2);
+        let tab_y = tab_rect.y + 1;
+
+        // Right-click should be ignored
+        let right_click = MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right),
+            column: settings_tab_x,
+            row: tab_y,
+            modifiers: KeyModifiers::empty(),
+        };
+        app.handle_mouse_event(right_click);
+
+        assert!(
+            matches!(app.current_view, CurrentView::Worktree),
+            "Right-click should not switch views"
+        );
+
+        // Mouse move should be ignored
+        let mouse_move = MouseEvent {
+            kind: crossterm::event::MouseEventKind::Moved,
+            column: settings_tab_x,
+            row: tab_y,
+            modifiers: KeyModifiers::empty(),
+        };
+        app.handle_mouse_event(mouse_move);
+
+        assert!(
+            matches!(app.current_view, CurrentView::Worktree),
+            "Mouse move should not switch views"
+        );
+    }
+
+    // E2E: Click outside tab bar doesn't switch views
+    #[test]
+    fn test_mouse_click_outside_tab_bar() {
+        let mut app = App::new();
+        render_app_to_test_backend(&mut app, 80, 24);
+
+        // Click well below the tab bar (in content area)
+        app.handle_mouse_event(mouse_click(40, 15));
+
+        // Should still be on Worktree (default) unless clicked on a pane
+        assert!(
+            matches!(app.current_view, CurrentView::Worktree),
+            "Click outside tab bar should not switch views"
+        );
     }
 }
