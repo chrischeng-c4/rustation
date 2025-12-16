@@ -357,6 +357,78 @@
       "pr": 50,
       "user_stories": 3,
       "lines_added": 1130
+    },
+    {
+      "id": "052",
+      "name": "internalize-spec-generation",
+      "description": "Move spec generation logic from bash scripts into Rust code",
+      "status": "planned",
+      "phase": 9,
+      "dependencies": ["051"],
+      "priority": "high"
+    },
+    {
+      "id": "053",
+      "name": "interactive-clarify-generation",
+      "description": "Interactive TUI workflow for /speckit.clarify command",
+      "status": "planned",
+      "phase": 9,
+      "dependencies": ["051", "052"],
+      "priority": "medium"
+    },
+    {
+      "id": "054",
+      "name": "interactive-plan-generation",
+      "description": "Interactive TUI workflow for /speckit.plan command",
+      "status": "planned",
+      "phase": 9,
+      "dependencies": ["051", "052"],
+      "priority": "medium"
+    },
+    {
+      "id": "055",
+      "name": "interactive-task-generation",
+      "description": "Interactive TUI workflow for /speckit.tasks command",
+      "status": "planned",
+      "phase": 9,
+      "dependencies": ["051", "052"],
+      "priority": "medium"
+    },
+    {
+      "id": "056",
+      "name": "interactive-implement-generation",
+      "description": "Interactive TUI workflow for /speckit.implement command",
+      "status": "planned",
+      "phase": 9,
+      "dependencies": ["051", "052"],
+      "priority": "medium"
+    },
+    {
+      "id": "057",
+      "name": "interactive-analyze-generation",
+      "description": "Interactive TUI workflow for /speckit.analyze command",
+      "status": "planned",
+      "phase": 9,
+      "dependencies": ["051", "052"],
+      "priority": "medium"
+    },
+    {
+      "id": "058",
+      "name": "interactive-checklist-generation",
+      "description": "Interactive TUI workflow for /speckit.checklist command",
+      "status": "planned",
+      "phase": 9,
+      "dependencies": ["051", "052"],
+      "priority": "medium"
+    },
+    {
+      "id": "059",
+      "name": "prompt-content-manager",
+      "description": "Centralized prompt content management for spec-kit commands via --system-prompt-file/--append-system-prompt",
+      "status": "planned",
+      "phase": 9,
+      "dependencies": ["052"],
+      "priority": "high"
     }
   ],
   "phases": {

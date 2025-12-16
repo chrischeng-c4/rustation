@@ -80,35 +80,72 @@ find_repo_root() {
     return 1
 }
 
-# Function to check existing branches (local and remote) and return next available number
-check_existing_branches() {
-    local short_name="$1"
-    
-    # Fetch all remotes to get latest branch info (suppress errors if no remotes)
-    git fetch --all --prune 2>/dev/null || true
-    
-    # Find all branches matching the pattern using git ls-remote (more reliable)
-    local remote_branches=$(git ls-remote --heads origin 2>/dev/null | grep -E "refs/heads/[0-9]+-${short_name}$" | sed 's/.*\/\([0-9]*\)-.*/\1/' | sort -n)
-    
-    # Also check local branches
-    local local_branches=$(git branch 2>/dev/null | grep -E "^[* ]*[0-9]+-${short_name}$" | sed 's/^[* ]*//' | sed 's/-.*//' | sort -n)
-    
-    # Check specs directory as well
-    local spec_dirs=""
-    if [ -d "$SPECS_DIR" ]; then
-        spec_dirs=$(find "$SPECS_DIR" -maxdepth 1 -type d -name "[0-9]*-${short_name}" 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/-.*//' | sort -n)
-    fi
-    
-    # Combine all sources and get the highest number
+# Function to find the global highest feature number across ALL branches and specs
+find_global_highest_number() {
     local max_num=0
-    for num in $remote_branches $local_branches $spec_dirs; do
+
+    # Check all remote branches with feature number pattern
+    local remote_nums=$(git ls-remote --heads origin 2>/dev/null | grep -oE 'refs/heads/[0-9]+' | grep -oE '[0-9]+' | sort -n)
+
+    # Check all local branches with feature number pattern
+    local local_nums=$(git branch 2>/dev/null | grep -oE '[0-9]+' | sort -n)
+
+    # Check all specs directories
+    local spec_nums=""
+    if [ -d "$SPECS_DIR" ]; then
+        spec_nums=$(find "$SPECS_DIR" -maxdepth 1 -type d 2>/dev/null | xargs -n1 basename 2>/dev/null | grep -oE '^[0-9]+' | sort -n)
+    fi
+
+    # Find the highest number across all sources
+    for num in $remote_nums $local_nums $spec_nums; do
+        # Remove leading zeros for comparison
+        num=$((10#$num))
         if [ "$num" -gt "$max_num" ]; then
             max_num=$num
         fi
     done
-    
-    # Return next number
-    echo $((max_num + 1))
+
+    echo $max_num
+}
+
+# Function to check existing branches (local and remote) and return next available number
+check_existing_branches() {
+    local short_name="$1"
+
+    # Fetch all remotes to get latest branch info (suppress errors if no remotes)
+    git fetch --all --prune 2>/dev/null || true
+
+    # Find all branches matching the SPECIFIC short-name pattern
+    local remote_branches=$(git ls-remote --heads origin 2>/dev/null | grep -E "refs/heads/[0-9]+-${short_name}$" | sed 's/.*\/\([0-9]*\)-.*/\1/' | sort -n)
+
+    # Also check local branches with specific short-name
+    local local_branches=$(git branch 2>/dev/null | grep -E "^[* ]*[0-9]+-${short_name}$" | sed 's/^[* ]*//' | sed 's/-.*//' | sort -n)
+
+    # Check specs directory for specific short-name
+    local spec_dirs=""
+    if [ -d "$SPECS_DIR" ]; then
+        spec_dirs=$(find "$SPECS_DIR" -maxdepth 1 -type d -name "[0-9]*-${short_name}" 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/-.*//' | sort -n)
+    fi
+
+    # Check if any matching branches/dirs exist for this specific short-name
+    local has_existing=false
+    local max_for_shortname=0
+    for num in $remote_branches $local_branches $spec_dirs; do
+        has_existing=true
+        num=$((10#$num))
+        if [ "$num" -gt "$max_for_shortname" ]; then
+            max_for_shortname=$num
+        fi
+    done
+
+    # If branches/dirs exist for this short-name, continue that sequence
+    # Otherwise, use the global highest + 1 to avoid collisions
+    if [ "$has_existing" = true ]; then
+        echo $((max_for_shortname + 1))
+    else
+        local global_max=$(find_global_highest_number)
+        echo $((global_max + 1))
+    fi
 }
 
 # Resolve repository root. Prefer git information when available, but fall back
