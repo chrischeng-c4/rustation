@@ -443,6 +443,7 @@ impl App {
                     continue_session: options.continue_session,
                     session_id: session_id.or(options.session_id.clone()),
                     allowed_tools: options.allowed_tools.clone(),
+                    system_prompt_file: None, // TODO: Use PromptManager for spec-kit phases
                 };
 
                 // Spawn the Claude CLI command

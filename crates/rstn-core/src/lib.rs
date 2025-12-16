@@ -19,6 +19,7 @@ pub mod git;
 pub mod mcp;
 pub mod paths;
 pub mod plan;
+pub mod prompts;
 pub mod service;
 pub mod specify;
 pub mod test;
@@ -38,6 +39,7 @@ pub use git::{
     Severity, WorktreeInfo,
 };
 pub use mcp::{McpConfig, McpRegistry, McpServer};
+pub use prompts::{PromptManager, PromptSource, SpecPhase};
 pub use service::{ServiceInfo, ServiceState};
 pub use test::TestResults;
 

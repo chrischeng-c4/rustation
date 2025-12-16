@@ -338,6 +338,8 @@ pub struct ClaudeCliOptions {
     pub session_id: Option<String>,
     /// Allowed tools (empty = all)
     pub allowed_tools: Vec<String>,
+    /// Custom system prompt file path (for spec-kit prompts)
+    pub system_prompt_file: Option<std::path::PathBuf>,
 }
 
 /// Result from a Claude streaming command
@@ -408,7 +410,16 @@ pub async fn run_claude_command_streaming(
     // Core args: prompt, streaming JSON, and system prompt
     cmd.arg("-p").arg(command);
     cmd.arg("--output-format").arg("stream-json");
-    cmd.arg("--append-system-prompt").arg(RSCLI_SYSTEM_PROMPT);
+
+    // If a custom system prompt file is provided, use it
+    // Otherwise just append the RSCLI protocol instructions
+    if let Some(ref prompt_file) = options.system_prompt_file {
+        cmd.arg("--system-prompt-file").arg(prompt_file);
+        // Still append the RSCLI protocol on top of the custom prompt
+        cmd.arg("--append-system-prompt").arg(RSCLI_SYSTEM_PROMPT);
+    } else {
+        cmd.arg("--append-system-prompt").arg(RSCLI_SYSTEM_PROMPT);
+    }
 
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
