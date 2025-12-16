@@ -12,11 +12,13 @@
 //! Version: 0.1.0
 
 pub mod build;
+pub mod clarify;
 pub mod errors;
 pub mod git;
 pub mod mcp;
 pub mod paths;
 pub mod service;
+pub mod specify;
 pub mod test;
 
 // Modules to be added during migration
@@ -36,3 +38,14 @@ pub use git::{
 pub use mcp::{McpConfig, McpRegistry, McpServer};
 pub use service::{ServiceInfo, ServiceState};
 pub use test::TestResults;
+
+// Specify module re-exports
+pub use specify::{
+    FeatureEntry, FeaturesCatalog, NewFeature, SpecResult, SpecifyConfig, SpecifyError,
+};
+
+// Clarify module re-exports
+pub use clarify::{
+    AnalysisResult, Answer, Category, ClarifyConfig, ClarifyError, ClarifyReport, CoverageMap,
+    CoverageStatus, Question, QuestionFormat, QuestionOption, RecommendedAnswer,
+};
