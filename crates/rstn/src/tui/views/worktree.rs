@@ -29,6 +29,29 @@ pub struct FeatureInfo {
     pub spec_dir: PathBuf,
 }
 
+/// Inline input state for Claude follow-up questions
+/// Displayed directly in the content area instead of a popup dialog
+pub struct InlineInput {
+    /// Claude's prompt/question to the user
+    pub prompt: String,
+    /// Text input widget for user response
+    pub text_input: TextInput,
+}
+
+impl InlineInput {
+    pub fn new(prompt: String) -> Self {
+        Self {
+            prompt,
+            text_input: TextInput::new(String::new()), // Empty prompt for inline input
+        }
+    }
+
+    /// Get the current input value
+    pub fn value(&self) -> &str {
+        &self.text_input.value
+    }
+}
+
 /// Git command types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GitCommand {
@@ -650,6 +673,9 @@ pub struct WorktreeView {
     pub commands_pane_rect: Option<Rect>,
     pub content_pane_rect: Option<Rect>,
     pub output_pane_rect: Option<Rect>,
+
+    // Inline input mode for Claude follow-up questions (replaces dialog)
+    pub inline_input: Option<InlineInput>,
 }
 
 impl WorktreeView {
@@ -722,6 +748,8 @@ impl WorktreeView {
             commands_pane_rect: None,
             content_pane_rect: None,
             output_pane_rect: None,
+            // Inline input (replaces dialog for Claude follow-ups)
+            inline_input: None,
         }
     }
 
@@ -1167,6 +1195,47 @@ impl WorktreeView {
         self.progress_message = None;
     }
 
+    // ─── Inline Input Methods (replaces dialog for Claude follow-ups) ───
+
+    /// Set inline input mode with Claude's prompt
+    pub fn set_inline_input(&mut self, prompt: String) {
+        self.inline_input = Some(InlineInput::new(prompt));
+        // Switch to content tab to show the input
+        self.focus = WorktreeFocus::Content;
+    }
+
+    /// Submit inline input and return the value
+    pub fn submit_inline_input(&mut self) -> Option<String> {
+        self.inline_input.take().map(|input| input.text_input.value)
+    }
+
+    /// Cancel inline input mode
+    pub fn cancel_inline_input(&mut self) {
+        self.inline_input = None;
+    }
+
+    /// Check if inline input is active
+    pub fn has_inline_input(&self) -> bool {
+        self.inline_input.is_some()
+    }
+
+    /// Handle key event for inline input
+    pub fn handle_inline_input_key(&mut self, key: KeyEvent) {
+        if let Some(ref mut input) = self.inline_input {
+            match key.code {
+                KeyCode::Char(c) => input.text_input.insert_char(c),
+                KeyCode::Backspace => input.text_input.delete_char(),
+                KeyCode::Left => input.text_input.move_cursor_left(),
+                KeyCode::Right => input.text_input.move_cursor_right(),
+                KeyCode::Home => input.text_input.move_cursor_home(),
+                KeyCode::End => input.text_input.move_cursor_end(),
+                KeyCode::Up => input.text_input.move_cursor_up(),
+                KeyCode::Down => input.text_input.move_cursor_down(),
+                _ => {}
+            }
+        }
+    }
+
     /// Log a message with timestamp and category
     pub fn log(&mut self, category: LogCategory, content: String) {
         let entry = LogEntry::new(category, content);
@@ -1445,6 +1514,12 @@ impl WorktreeView {
 
         frame.render_widget(tabs, sections[0]);
 
+        // Render inline input if active (Claude follow-up questions)
+        if self.inline_input.is_some() {
+            self.render_inline_input(frame, sections[1]);
+            return;
+        }
+
         // Render content area - dispatch to commit review if in that mode (Feature 050)
         if self.content_type == ContentType::CommitReview {
             self.render_commit_review(frame, sections[1]);
@@ -1535,12 +1610,12 @@ impl WorktreeView {
             let spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
             let spinner_char = spinner[self.spinner_frame % spinner.len()];
             if let Some(ref phase) = self.running_phase {
-                format!(" Output {} Running: {} ", spinner_char, phase)
+                format!(" Log {} Running: {} ", spinner_char, phase)
             } else {
-                format!(" Output {} Running... ", spinner_char)
+                format!(" Log {} Running... ", spinner_char)
             }
         } else {
-            format!(" Output (1000 line history) ")
+            format!(" Log ")
         };
 
         // Change border color when focused
@@ -2689,6 +2764,83 @@ impl WorktreeView {
     }
 
     /// Render specify Input Phase dialog (T020)
+    /// Render inline input for Claude follow-up questions
+    fn render_inline_input(&self, frame: &mut Frame, area: Rect) {
+        let inline = match &self.inline_input {
+            Some(input) => input,
+            None => return,
+        };
+
+        let mut lines = vec![];
+
+        // Title
+        lines.push(Line::from(Span::styled(
+            "Claude Input",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from(""));
+
+        // Claude's prompt/question (split by newlines for markdown-like display)
+        for line in inline.prompt.lines() {
+            lines.push(Line::from(Span::styled(
+                line,
+                Style::default().fg(Color::Yellow),
+            )));
+        }
+        lines.push(Line::from(""));
+
+        // Input area header
+        lines.push(Line::from(Span::styled(
+            "Your Response:",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )));
+
+        // Input buffer with cursor indicator
+        let input_value = &inline.text_input.value;
+        let cursor_pos = inline.text_input.cursor_position;
+        let input_display = if input_value.is_empty() {
+            Line::from(Span::styled(
+                "Type your response here..._",
+                Style::default().fg(Color::DarkGray),
+            ))
+        } else {
+            // Show cursor position
+            let (before, after) = input_value.split_at(cursor_pos.min(input_value.len()));
+            Line::from(vec![
+                Span::raw(before),
+                Span::styled("█", Style::default().fg(Color::White)),
+                Span::raw(after),
+            ])
+        };
+        lines.push(input_display);
+
+        lines.push(Line::from(""));
+
+        // Action hints
+        lines.push(Line::from(vec![
+            Span::styled("[Enter]", Style::default().fg(Color::Green)),
+            Span::raw(" Submit  "),
+            Span::styled("[Esc]", Style::default().fg(Color::Red)),
+            Span::raw(" Cancel"),
+        ]));
+
+        // Render as paragraph
+        let paragraph = Paragraph::new(lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Claude Input ")
+                    .border_style(Style::default().fg(Color::Cyan)),
+            )
+            .wrap(Wrap { trim: false });
+
+        frame.render_widget(paragraph, area);
+    }
+
     fn render_specify_input(&self, frame: &mut Frame, area: Rect) {
         let mut lines = vec![];
 
@@ -3056,33 +3208,25 @@ impl Default for WorktreeView {
 
 impl View for WorktreeView {
     fn render(&mut self, frame: &mut Frame, area: Rect) {
-        // Create two columns: Commands (30%) | Right panel (70%)
+        // Create three columns: Commands (20%) | Content (40%) | Log (40%)
         let columns = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(30), // Commands
-                Constraint::Percentage(70), // Right panel (to be split vertically)
+                Constraint::Percentage(20), // Commands
+                Constraint::Percentage(40), // Content
+                Constraint::Percentage(40), // Log
             ])
             .split(area);
 
-        // Split right column vertically: Content (70%) | Output (30%)
-        let right_sections = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage(70), // Content
-                Constraint::Percentage(30), // Output
-            ])
-            .split(columns[1]);
-
         // Store layout rects for mouse click detection
         self.commands_pane_rect = Some(columns[0]);
-        self.content_pane_rect = Some(right_sections[0]);
-        self.output_pane_rect = Some(right_sections[1]);
+        self.content_pane_rect = Some(columns[1]);
+        self.output_pane_rect = Some(columns[2]);
 
         // Render all three panels
         self.render_commands(frame, columns[0]);
-        self.render_content(frame, right_sections[0]);
-        self.render_output(frame, right_sections[1]);
+        self.render_content(frame, columns[1]);
+        self.render_output(frame, columns[2]);
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> ViewAction {

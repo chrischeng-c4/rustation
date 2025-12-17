@@ -5,28 +5,35 @@
 //! of fragile text parsing.
 //!
 //! Architecture:
-//! - Uses HTTP/SSE transport since TUI owns stdio
-//! - Runs on localhost with configurable port (default: 19560)
-//! - Sends events to TUI via mpsc channel
+//! - Uses HTTP transport (recommended by Claude Code, SSE is deprecated)
+//! - Runs on localhost with dynamic port allocation (port 0)
+//! - Sends events to TUI via shared McpState
 //! - Supports tool registration for status reporting, spec reading, etc.
 
 use crate::tui::event::Event;
 use anyhow::{Context, Result};
-use prism_mcp_rs::prelude::*;
-use prism_mcp_rs::server::HttpMcpServer;
-use prism_mcp_rs::transport::http::HttpServerTransport;
+use axum::{
+    extract::State,
+    response::IntoResponse,
+    routing::{get, post},
+    Json, Router,
+};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot, Mutex};
+use tower_http::cors::{Any, CorsLayer};
 use tracing::{error, info, warn};
 
-/// Default port for MCP server
-pub const DEFAULT_MCP_PORT: u16 = 19560;
+/// Default port for MCP server (0 = auto-assign)
+pub const DEFAULT_MCP_PORT: u16 = 0;
 
 /// MCP server configuration
 #[derive(Debug, Clone)]
 pub struct McpServerConfig {
-    /// Port to listen on
+    /// Port to listen on (0 for auto-assign)
     pub port: u16,
     /// Server name for MCP protocol
     pub name: String,
@@ -56,7 +63,6 @@ pub struct McpEvent {
 }
 
 /// Shared state accessible by tool handlers
-#[derive(Debug)]
 pub struct McpState {
     /// Current feature number (e.g., "060")
     pub feature_number: Option<String>,
@@ -71,11 +77,33 @@ pub struct McpState {
     /// Server start time for uptime calculation
     pub server_start_time: std::time::Instant,
     /// Count of calls per tool
-    pub tool_call_counts: std::collections::HashMap<String, usize>,
+    pub tool_call_counts: HashMap<String, usize>,
     /// Last tool call (tool name, timestamp)
     pub last_tool_call: Option<(String, std::time::Instant)>,
     /// Recent events (max 50)
     pub recent_events: std::collections::VecDeque<McpEvent>,
+    /// Pending events for TUI to process (polled by main loop)
+    pub pending_tui_events: std::collections::VecDeque<Event>,
+    /// Sender for user input response (set when needs_input, cleared when response received)
+    pub input_response_tx: Option<oneshot::Sender<String>>,
+}
+
+impl std::fmt::Debug for McpState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpState")
+            .field("feature_number", &self.feature_number)
+            .field("feature_name", &self.feature_name)
+            .field("branch", &self.branch)
+            .field("phase", &self.phase)
+            .field("spec_dir", &self.spec_dir)
+            .field("server_start_time", &self.server_start_time)
+            .field("tool_call_counts", &self.tool_call_counts)
+            .field("last_tool_call", &self.last_tool_call)
+            .field("recent_events", &self.recent_events)
+            .field("pending_tui_events", &self.pending_tui_events.len())
+            .field("input_response_tx", &self.input_response_tx.is_some())
+            .finish()
+    }
 }
 
 impl Default for McpState {
@@ -87,49 +115,177 @@ impl Default for McpState {
             phase: None,
             spec_dir: None,
             server_start_time: std::time::Instant::now(),
-            tool_call_counts: std::collections::HashMap::new(),
+            tool_call_counts: HashMap::new(),
             last_tool_call: None,
             recent_events: std::collections::VecDeque::new(),
+            pending_tui_events: std::collections::VecDeque::new(),
+            input_response_tx: None,
         }
     }
 }
 
-/// Result from a tool call
+impl McpState {
+    /// Send user input response (called by TUI when user submits)
+    pub fn send_input_response(&mut self, response: String) -> bool {
+        if let Some(tx) = self.input_response_tx.take() {
+            tx.send(response).is_ok()
+        } else {
+            false
+        }
+    }
+
+    /// Push a TUI event for polling by main loop
+    pub fn push_tui_event(&mut self, event: Event) {
+        self.pending_tui_events.push_back(event);
+    }
+
+    /// Drain all pending TUI events
+    pub fn drain_tui_events(&mut self) -> Vec<Event> {
+        self.pending_tui_events.drain(..).collect()
+    }
+
+    /// Record a tool call for metrics
+    fn record_tool_call(&mut self, tool_name: &str, details: &str, event_type: &str) {
+        *self.tool_call_counts.entry(tool_name.to_string()).or_insert(0) += 1;
+        self.last_tool_call = Some((tool_name.to_string(), std::time::Instant::now()));
+        self.recent_events.push_back(McpEvent {
+            timestamp: std::time::Instant::now(),
+            event_type: event_type.to_string(),
+            details: details.to_string(),
+        });
+        if self.recent_events.len() > 50 {
+            self.recent_events.pop_front();
+        }
+    }
+}
+
+// ============================================================================
+// JSON-RPC Types for MCP Protocol
+// ============================================================================
+
+/// JSON-RPC 2.0 Request
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolResponse {
-    /// Whether the tool call succeeded
-    pub success: bool,
-    /// Response message or data
+pub struct JsonRpcRequest {
+    pub jsonrpc: String,
+    pub id: Option<serde_json::Value>,
+    pub method: String,
+    #[serde(default)]
+    pub params: serde_json::Value,
+}
+
+/// JSON-RPC 2.0 Response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonRpcResponse {
+    pub jsonrpc: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<JsonRpcError>,
+}
+
+/// JSON-RPC 2.0 Error
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonRpcError {
+    pub code: i32,
     pub message: String,
-    /// Optional structured data
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<serde_json::Value>,
 }
 
+impl JsonRpcResponse {
+    fn success(id: Option<serde_json::Value>, result: serde_json::Value) -> Self {
+        Self {
+            jsonrpc: "2.0".to_string(),
+            id,
+            result: Some(result),
+            error: None,
+        }
+    }
+
+    fn error(id: Option<serde_json::Value>, code: i32, message: &str) -> Self {
+        Self {
+            jsonrpc: "2.0".to_string(),
+            id,
+            result: None,
+            error: Some(JsonRpcError {
+                code,
+                message: message.to_string(),
+                data: None,
+            }),
+        }
+    }
+}
+
+// ============================================================================
+// MCP Protocol Types
+// ============================================================================
+
+/// MCP Tool definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpTool {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(rename = "inputSchema")]
+    pub input_schema: serde_json::Value,
+}
+
+/// MCP Content block
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ContentBlock {
+    #[serde(rename = "text")]
+    Text { text: String },
+}
+
+/// MCP Tool result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolResult {
+    pub content: Vec<ContentBlock>,
+    #[serde(rename = "isError", skip_serializing_if = "Option::is_none")]
+    pub is_error: Option<bool>,
+}
+
+impl ToolResult {
+    fn text(message: &str) -> Self {
+        Self {
+            content: vec![ContentBlock::Text { text: message.to_string() }],
+            is_error: Some(false),
+        }
+    }
+
+    fn error(message: &str) -> Self {
+        Self {
+            content: vec![ContentBlock::Text { text: message.to_string() }],
+            is_error: Some(true),
+        }
+    }
+}
+
+// ============================================================================
+// Tool Argument Types
+// ============================================================================
+
 /// Arguments for rstn_report_status tool
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReportStatusArgs {
-    /// Status type: "needs_input" | "completed" | "error"
     pub status: String,
-    /// Prompt text for needs_input status
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
-    /// Error message for error status
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }
 
 /// Arguments for rstn_read_spec tool
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)] // Used by MCP handlers
 pub struct ReadSpecArgs {
-    /// Artifact to read: "spec" | "plan" | "tasks" | "checklist" | "analysis"
     pub artifact: String,
 }
 
 /// Feature context response
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)] // Used by MCP handlers
 pub struct FeatureContext {
     pub feature_number: Option<String>,
     pub feature_name: Option<String>,
@@ -140,87 +296,361 @@ pub struct FeatureContext {
 
 /// Arguments for rstn_complete_task tool
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)] // Used by MCP handlers
 pub struct CompleteTaskArgs {
-    /// Task ID to mark complete (e.g., "T001", "T002")
     pub task_id: String,
-    /// Skip validation checks (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skip_validation: Option<bool>,
 }
 
-/// JSON schema for rstn_report_status tool
-fn status_tool_schema() -> serde_json::Value {
-    serde_json::json!({
-        "type": "object",
-        "properties": {
-            "status": {
-                "type": "string",
-                "enum": ["needs_input", "completed", "error"],
-                "description": "Current task status"
-            },
-            "prompt": {
-                "type": "string",
-                "description": "Prompt to show user (for needs_input)"
-            },
-            "message": {
-                "type": "string",
-                "description": "Error message (for error status)"
-            }
+// ============================================================================
+// Tool Schemas
+// ============================================================================
+
+fn get_tools() -> Vec<McpTool> {
+    vec![
+        McpTool {
+            name: "rstn_report_status".to_string(),
+            description: Some("Report current task status to rstn control plane. For needs_input status, this tool blocks until user provides input.".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["needs_input", "completed", "error"],
+                        "description": "Current task status"
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "Prompt to show user (for needs_input)"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Error message (for error status)"
+                    }
+                },
+                "required": ["status"]
+            }),
         },
-        "required": ["status"]
-    })
+        McpTool {
+            name: "rstn_read_spec".to_string(),
+            description: Some("Read a spec artifact for the current feature".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "artifact": {
+                        "type": "string",
+                        "enum": ["spec", "plan", "tasks", "checklist", "analysis"],
+                        "description": "Which artifact to read"
+                    }
+                },
+                "required": ["artifact"]
+            }),
+        },
+        McpTool {
+            name: "rstn_get_context".to_string(),
+            description: Some("Get current feature context and metadata".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        },
+        McpTool {
+            name: "rstn_complete_task".to_string(),
+            description: Some("Mark a task as complete with validation".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "string",
+                        "description": "Task ID to mark complete (e.g., T001, T002)"
+                    },
+                    "skip_validation": {
+                        "type": "boolean",
+                        "description": "Skip validation checks (optional)"
+                    }
+                },
+                "required": ["task_id"]
+            }),
+        },
+    ]
 }
 
-/// JSON schema for rstn_read_spec tool
-fn read_spec_tool_schema() -> serde_json::Value {
-    serde_json::json!({
-        "type": "object",
-        "properties": {
-            "artifact": {
-                "type": "string",
-                "enum": ["spec", "plan", "tasks", "checklist", "analysis"],
-                "description": "Which artifact to read"
-            }
-        },
-        "required": ["artifact"]
-    })
+// ============================================================================
+// Axum Application State
+// ============================================================================
+
+/// Shared application state for Axum handlers
+#[derive(Clone)]
+struct AppState {
+    mcp_state: Arc<Mutex<McpState>>,
+    event_tx: mpsc::Sender<Event>,
+    server_name: String,
+    server_version: String,
 }
 
-/// JSON schema for rstn_get_context tool
-fn get_context_tool_schema() -> serde_json::Value {
-    serde_json::json!({
-        "type": "object",
-        "properties": {},
-        "required": []
-    })
+// ============================================================================
+// HTTP Handlers
+// ============================================================================
+
+/// Health check endpoint
+async fn health_check() -> &'static str {
+    "OK"
 }
 
-/// JSON schema for rstn_complete_task tool
-fn complete_task_tool_schema() -> serde_json::Value {
-    serde_json::json!({
-        "type": "object",
-        "properties": {
-            "task_id": {
-                "type": "string",
-                "description": "Task ID to mark complete (e.g., T001, T002)"
+/// MCP endpoint - handles all JSON-RPC requests
+async fn mcp_handler(
+    State(state): State<AppState>,
+    Json(request): Json<JsonRpcRequest>,
+) -> impl IntoResponse {
+    info!("MCP request: method={}", request.method);
+
+    let response = match request.method.as_str() {
+        "initialize" => handle_initialize(&state, &request).await,
+        "tools/list" => handle_tools_list(&request).await,
+        "tools/call" => handle_tools_call(&state, &request).await,
+        _ => JsonRpcResponse::error(
+            request.id.clone(),
+            -32601,
+            &format!("Method not found: {}", request.method),
+        ),
+    };
+
+    Json(response)
+}
+
+/// Handle initialize method
+async fn handle_initialize(state: &AppState, request: &JsonRpcRequest) -> JsonRpcResponse {
+    JsonRpcResponse::success(
+        request.id.clone(),
+        serde_json::json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": {
+                "tools": {}
             },
-            "skip_validation": {
-                "type": "boolean",
-                "description": "Skip validation checks (optional)"
+            "serverInfo": {
+                "name": state.server_name,
+                "version": state.server_version
             }
-        },
-        "required": ["task_id"]
-    })
+        }),
+    )
 }
+
+/// Handle tools/list method
+async fn handle_tools_list(request: &JsonRpcRequest) -> JsonRpcResponse {
+    JsonRpcResponse::success(
+        request.id.clone(),
+        serde_json::json!({
+            "tools": get_tools()
+        }),
+    )
+}
+
+/// Handle tools/call method
+async fn handle_tools_call(state: &AppState, request: &JsonRpcRequest) -> JsonRpcResponse {
+    let params = &request.params;
+
+    let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    let arguments: HashMap<String, serde_json::Value> = params
+        .get("arguments")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    info!("Tool call: {}", tool_name);
+
+    let result = match tool_name {
+        "rstn_report_status" => handle_report_status(state, arguments).await,
+        "rstn_read_spec" => handle_read_spec(state, arguments).await,
+        "rstn_get_context" => handle_get_context(state).await,
+        "rstn_complete_task" => handle_complete_task(state, arguments).await,
+        _ => ToolResult::error(&format!("Unknown tool: {}", tool_name)),
+    };
+
+    JsonRpcResponse::success(request.id.clone(), serde_json::to_value(result).unwrap())
+}
+
+// ============================================================================
+// Tool Handlers
+// ============================================================================
+
+/// Handle rstn_report_status tool
+async fn handle_report_status(
+    state: &AppState,
+    arguments: HashMap<String, serde_json::Value>,
+) -> ToolResult {
+    let status = match arguments.get("status").and_then(|v| v.as_str()) {
+        Some(s) => s.to_string(),
+        None => return ToolResult::error("Missing 'status' field"),
+    };
+
+    if !["needs_input", "completed", "error"].contains(&status.as_str()) {
+        return ToolResult::error("status must be 'needs_input', 'completed', or 'error'");
+    }
+
+    let prompt = arguments.get("prompt").and_then(|v| v.as_str()).map(String::from);
+    let message = arguments.get("message").and_then(|v| v.as_str()).map(String::from);
+
+    info!("rstn_report_status: status={}", status);
+
+    match status.as_str() {
+        "needs_input" => {
+            // Create oneshot channel for response
+            let (tx, rx) = oneshot::channel();
+
+            // Store sender and push event
+            {
+                let mut mcp_state = state.mcp_state.lock().await;
+                mcp_state.record_tool_call("rstn_report_status", "needs_input", "STATUS");
+                mcp_state.input_response_tx = Some(tx);
+                mcp_state.push_tui_event(Event::McpStatus {
+                    status: status.clone(),
+                    prompt: prompt.clone(),
+                    message: message.clone(),
+                });
+            }
+
+            info!("Waiting for user input response...");
+
+            // Block until user responds
+            match rx.await {
+                Ok(response) => {
+                    info!("Got user input: {}", response);
+                    ToolResult::text(&format!("User response: {}", response))
+                }
+                Err(_) => {
+                    warn!("Input request cancelled");
+                    ToolResult::error("Input request was cancelled")
+                }
+            }
+        }
+        _ => {
+            // For completed/error, push event and return immediately
+            {
+                let mut mcp_state = state.mcp_state.lock().await;
+                mcp_state.record_tool_call("rstn_report_status", &status, "STATUS");
+                mcp_state.push_tui_event(Event::McpStatus {
+                    status: status.clone(),
+                    prompt,
+                    message,
+                });
+            }
+
+            ToolResult::text(&format!("Status '{}' reported successfully", status))
+        }
+    }
+}
+
+/// Handle rstn_read_spec tool
+async fn handle_read_spec(
+    state: &AppState,
+    arguments: HashMap<String, serde_json::Value>,
+) -> ToolResult {
+    let artifact = match arguments.get("artifact").and_then(|v| v.as_str()) {
+        Some(a) => a,
+        None => return ToolResult::error("Missing 'artifact' field"),
+    };
+
+    let filename = match artifact {
+        "spec" => "spec.md",
+        "plan" => "plan.md",
+        "tasks" => "tasks.md",
+        "checklist" => "checklist.md",
+        "analysis" => "analysis.md",
+        _ => return ToolResult::error(&format!("Invalid artifact: {}", artifact)),
+    };
+
+    let spec_dir = {
+        let mut mcp_state = state.mcp_state.lock().await;
+        mcp_state.record_tool_call("rstn_read_spec", &format!("{}.md", artifact), "READ");
+        mcp_state.spec_dir.clone()
+    };
+
+    let spec_dir = match spec_dir {
+        Some(d) => d,
+        None => return ToolResult::error("No active feature. Run a spec phase first."),
+    };
+
+    let file_path = std::path::PathBuf::from(&spec_dir).join(filename);
+
+    match std::fs::read_to_string(&file_path) {
+        Ok(content) => {
+            info!("rstn_read_spec: artifact={}, path={}", artifact, file_path.display());
+            ToolResult::text(&content)
+        }
+        Err(e) => ToolResult::error(&format!(
+            "Could not read {}: {}. File may not exist yet.",
+            artifact, e
+        )),
+    }
+}
+
+/// Handle rstn_get_context tool
+async fn handle_get_context(state: &AppState) -> ToolResult {
+    let context = {
+        let mut mcp_state = state.mcp_state.lock().await;
+        let feature_desc = mcp_state
+            .feature_number
+            .as_ref()
+            .map(|n| format!("Feature {}", n))
+            .unwrap_or_else(|| "No feature".to_string());
+        mcp_state.record_tool_call("rstn_get_context", &feature_desc, "CONTEXT");
+
+        FeatureContext {
+            feature_number: mcp_state.feature_number.clone(),
+            feature_name: mcp_state.feature_name.clone(),
+            branch: mcp_state.branch.clone(),
+            phase: mcp_state.phase.clone(),
+            spec_dir: mcp_state.spec_dir.clone(),
+        }
+    };
+
+    info!("rstn_get_context called");
+
+    match serde_json::to_string_pretty(&context) {
+        Ok(json) => ToolResult::text(&json),
+        Err(e) => ToolResult::error(&format!("Failed to serialize context: {}", e)),
+    }
+}
+
+/// Handle rstn_complete_task tool
+async fn handle_complete_task(
+    state: &AppState,
+    arguments: HashMap<String, serde_json::Value>,
+) -> ToolResult {
+    let task_id = match arguments.get("task_id").and_then(|v| v.as_str()) {
+        Some(id) => id.to_string(),
+        None => return ToolResult::error("Missing 'task_id' field"),
+    };
+
+    // Record metrics
+    {
+        let mut mcp_state = state.mcp_state.lock().await;
+        mcp_state.record_tool_call("rstn_complete_task", &format!("{} completed", task_id), "TASK");
+    }
+
+    // Send event to TUI
+    if let Err(e) = state.event_tx.send(Event::McpTaskCompleted {
+        task_id: task_id.clone(),
+        success: true,
+        message: format!("Task {} completion requested", task_id),
+    }).await {
+        error!("Failed to send task completion event: {}", e);
+        return ToolResult::error(&format!("Failed to send event: {}", e));
+    }
+
+    info!("rstn_complete_task: task_id={}", task_id);
+
+    ToolResult::text(&format!("Task {} marked for completion. Processing...", task_id))
+}
+
+// ============================================================================
+// Server Handle
+// ============================================================================
 
 /// Handle for controlling the MCP server
 pub struct McpServerHandle {
-    /// Shutdown signal sender
     shutdown_tx: Option<oneshot::Sender<()>>,
-    /// Server port
     port: u16,
-    /// Server state
     state: Arc<Mutex<McpState>>,
 }
 
@@ -261,447 +691,65 @@ impl McpServerHandle {
     }
 }
 
-/// Handler for rstn_report_status tool
-struct ReportStatusHandler {
-    event_tx: mpsc::Sender<Event>,
-    state: Arc<Mutex<McpState>>,
-}
-
-#[async_trait::async_trait]
-impl prism_mcp_rs::prelude::ToolHandler for ReportStatusHandler {
-    async fn call(
-        &self,
-        arguments: std::collections::HashMap<String, serde_json::Value>,
-    ) -> prism_mcp_rs::prelude::McpResult<prism_mcp_rs::prelude::ToolResult> {
-        use prism_mcp_rs::prelude::*;
-
-        // Extract status (required)
-        let status = arguments
-            .get("status")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| McpError::validation("Missing 'status' field"))?
-            .to_string();
-
-        // Validate status enum
-        if !["needs_input", "completed", "error"].contains(&status.as_str()) {
-            return Err(McpError::validation(
-                "status must be 'needs_input', 'completed', or 'error'",
-            ));
-        }
-
-        // Extract optional fields
-        let prompt = arguments
-            .get("prompt")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
-        let message = arguments
-            .get("message")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
-        // Track metrics
-        {
-            let mut state = self.state.lock().await;
-            *state
-                .tool_call_counts
-                .entry("rstn_report_status".to_string())
-                .or_insert(0) += 1;
-            state.last_tool_call =
-                Some(("rstn_report_status".to_string(), std::time::Instant::now()));
-            state.recent_events.push_back(McpEvent {
-                timestamp: std::time::Instant::now(),
-                event_type: "STATUS".to_string(),
-                details: status.clone(),
-            });
-            if state.recent_events.len() > 50 {
-                state.recent_events.pop_front();
-            }
-        }
-
-        // Send event to TUI main loop
-        self.event_tx
-            .send(Event::McpStatus {
-                status: status.clone(),
-                prompt: prompt.clone(),
-                message: message.clone(),
-            })
-            .await
-            .map_err(|e| McpError::internal(format!("Failed to send event: {}", e)))?;
-
-        info!("MCP tool rstn_report_status called: status={}", status);
-
-        // Return success
-        Ok(ToolResult {
-            content: vec![ContentBlock::text(format!(
-                "Status '{}' reported successfully",
-                status
-            ))],
-            is_error: Some(false),
-            meta: None,
-            structured_content: None,
-        })
-    }
-}
-
-/// Handler for rstn_read_spec tool
-struct ReadSpecHandler {
-    state: Arc<Mutex<McpState>>,
-}
-
-impl ReadSpecHandler {
-    /// Map artifact name to filename
-    fn artifact_to_filename(artifact: &str) -> Option<&'static str> {
-        match artifact {
-            "spec" => Some("spec.md"),
-            "plan" => Some("plan.md"),
-            "tasks" => Some("tasks.md"),
-            "checklist" => Some("checklist.md"),
-            "analysis" => Some("analysis.md"),
-            _ => None,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl prism_mcp_rs::prelude::ToolHandler for ReadSpecHandler {
-    async fn call(
-        &self,
-        arguments: std::collections::HashMap<String, serde_json::Value>,
-    ) -> prism_mcp_rs::prelude::McpResult<prism_mcp_rs::prelude::ToolResult> {
-        use prism_mcp_rs::prelude::*;
-
-        // Extract artifact (required)
-        let artifact = arguments
-            .get("artifact")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| McpError::validation("Missing 'artifact' field"))?;
-
-        // Get filename
-        let filename = Self::artifact_to_filename(artifact)
-            .ok_or_else(|| McpError::validation(format!("Invalid artifact: {}", artifact)))?;
-
-        // Track metrics and get spec directory from state
-        let spec_dir = {
-            let mut state = self.state.lock().await;
-            *state
-                .tool_call_counts
-                .entry("rstn_read_spec".to_string())
-                .or_insert(0) += 1;
-            state.last_tool_call =
-                Some(("rstn_read_spec".to_string(), std::time::Instant::now()));
-            state.recent_events.push_back(McpEvent {
-                timestamp: std::time::Instant::now(),
-                event_type: "READ".to_string(),
-                details: format!("{}.md", artifact),
-            });
-            if state.recent_events.len() > 50 {
-                state.recent_events.pop_front();
-            }
-            state.spec_dir.clone()
-        };
-
-        let spec_dir = spec_dir.ok_or_else(|| {
-            McpError::validation("No active feature. Run a spec phase first (e.g., specify, plan)")
-        })?;
-
-        // Build file path
-        let file_path = std::path::PathBuf::from(&spec_dir).join(filename);
-
-        // Read file
-        let content = std::fs::read_to_string(&file_path).map_err(|e| {
-            McpError::validation(format!(
-                "Could not read {}: {}. File may not exist yet - try running the corresponding phase first.",
-                artifact, e
-            ))
-        })?;
-
-        info!(
-            "MCP tool rstn_read_spec called: artifact={}, path={}",
-            artifact,
-            file_path.display()
-        );
-
-        // Return content
-        Ok(ToolResult {
-            content: vec![ContentBlock::text(content)],
-            is_error: Some(false),
-            meta: None,
-            structured_content: None,
-        })
-    }
-}
-
-/// Handler for rstn_get_context tool
-struct GetContextHandler {
-    state: Arc<Mutex<McpState>>,
-}
-
-#[async_trait::async_trait]
-impl prism_mcp_rs::prelude::ToolHandler for GetContextHandler {
-    async fn call(
-        &self,
-        _arguments: std::collections::HashMap<String, serde_json::Value>,
-    ) -> prism_mcp_rs::prelude::McpResult<prism_mcp_rs::prelude::ToolResult> {
-        use prism_mcp_rs::prelude::*;
-
-        // Track metrics and get current context from state
-        let context = {
-            let mut state = self.state.lock().await;
-            *state
-                .tool_call_counts
-                .entry("rstn_get_context".to_string())
-                .or_insert(0) += 1;
-            state.last_tool_call =
-                Some(("rstn_get_context".to_string(), std::time::Instant::now()));
-            let feature_desc = state
-                .feature_number
-                .as_ref()
-                .map(|n| format!("Feature {}", n))
-                .unwrap_or_else(|| "No feature".to_string());
-            state.recent_events.push_back(McpEvent {
-                timestamp: std::time::Instant::now(),
-                event_type: "CONTEXT".to_string(),
-                details: feature_desc,
-            });
-            if state.recent_events.len() > 50 {
-                state.recent_events.pop_front();
-            }
-            FeatureContext {
-                feature_number: state.feature_number.clone(),
-                feature_name: state.feature_name.clone(),
-                branch: state.branch.clone(),
-                phase: state.phase.clone(),
-                spec_dir: state.spec_dir.clone(),
-            }
-        };
-
-        info!("MCP tool rstn_get_context called");
-
-        // Serialize context to JSON string
-        let context_json = serde_json::to_string_pretty(&context)
-            .map_err(|e| McpError::internal(format!("Failed to serialize context: {}", e)))?;
-
-        // Return as text content
-        Ok(ToolResult {
-            content: vec![ContentBlock::text(context_json)],
-            is_error: Some(false),
-            meta: None,
-            structured_content: None,
-        })
-    }
-}
-
-/// Handler for rstn_complete_task tool
-struct CompleteTaskHandler {
-    event_tx: mpsc::Sender<Event>,
-    state: Arc<Mutex<McpState>>,
-}
-
-#[async_trait::async_trait]
-impl prism_mcp_rs::prelude::ToolHandler for CompleteTaskHandler {
-    async fn call(
-        &self,
-        arguments: std::collections::HashMap<String, serde_json::Value>,
-    ) -> prism_mcp_rs::prelude::McpResult<prism_mcp_rs::prelude::ToolResult> {
-        use prism_mcp_rs::prelude::*;
-
-        // Extract task_id (required)
-        let task_id = arguments
-            .get("task_id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| McpError::validation("Missing 'task_id' field"))?
-            .to_string();
-
-        // Extract skip_validation (optional)
-        let _skip_validation = arguments
-            .get("skip_validation")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
-        // Track metrics
-        {
-            let mut state = self.state.lock().await;
-            *state
-                .tool_call_counts
-                .entry("rstn_complete_task".to_string())
-                .or_insert(0) += 1;
-            state.last_tool_call =
-                Some(("rstn_complete_task".to_string(), std::time::Instant::now()));
-            state.recent_events.push_back(McpEvent {
-                timestamp: std::time::Instant::now(),
-                event_type: "TASK".to_string(),
-                details: format!("{} completed", task_id),
-            });
-            if state.recent_events.len() > 50 {
-                state.recent_events.pop_front();
-            }
-        }
-
-        // Send event to TUI main loop for task completion
-        // The app.rs event handler will handle the actual file modification
-        self.event_tx
-            .send(Event::McpTaskCompleted {
-                task_id: task_id.clone(),
-                success: true,
-                message: format!("Task {} completion requested", task_id),
-            })
-            .await
-            .map_err(|e| McpError::internal(format!("Failed to send event: {}", e)))?;
-
-        info!("MCP tool rstn_complete_task called: task_id={}", task_id);
-
-        // Return success - actual completion happens in event handler
-        Ok(ToolResult {
-            content: vec![ContentBlock::text(format!(
-                "Task {} marked for completion. Processing...",
-                task_id
-            ))],
-            is_error: Some(false),
-            meta: None,
-            structured_content: None,
-        })
-    }
-}
+// ============================================================================
+// Server Startup
+// ============================================================================
 
 /// Start the MCP server
-///
-/// # Arguments
-/// * `config` - Server configuration
-/// * `event_tx` - Channel to send events to the TUI
-/// * `state` - Shared MCP state for metrics tracking
-///
-/// # Returns
-/// A handle to control the server
 pub async fn start_server(
     config: McpServerConfig,
     event_tx: mpsc::Sender<Event>,
     state: Arc<Mutex<McpState>>,
 ) -> Result<McpServerHandle> {
-    let (shutdown_tx, shutdown_rx) = oneshot::channel();
-    let state_clone = state.clone();
+    let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
 
-    let port = config.port;
-    let bind_addr = format!("127.0.0.1:{}", port);
+    // Bind to port (0 = auto-assign)
+    let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
+    let listener = TcpListener::bind(addr).await.context("Failed to bind MCP server")?;
+    let actual_port = listener.local_addr()?.port();
 
-    info!("Starting MCP server on {}", bind_addr);
+    info!("MCP server binding to port {}", actual_port);
 
-    // Create HTTP MCP server
-    let mut http_server = HttpMcpServer::new(config.name.clone(), config.version.clone());
+    // Create app state
+    let app_state = AppState {
+        mcp_state: state.clone(),
+        event_tx,
+        server_name: config.name,
+        server_version: config.version,
+    };
 
-    // Get the underlying McpServer to register tools
-    let server_ref = http_server.server().await;
-    {
-        let server = server_ref.lock().await;
-
-        // Initialize the server
-        server.initialize().await.map_err(|e| anyhow::anyhow!("Failed to initialize MCP server: {}", e))?;
-
-        // Register tools
-        register_tools(&server, state_clone.clone(), event_tx.clone()).await?;
-    }
-
-    // Create HTTP transport
-    let transport = HttpServerTransport::new(&bind_addr);
+    // Build router
+    let app = Router::new()
+        .route("/health", get(health_check))
+        .route("/mcp", post(mcp_handler))
+        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
+        .with_state(app_state);
 
     // Spawn server task
     tokio::spawn(async move {
-        // Start the HTTP server with transport
-        if let Err(e) = http_server.start(transport).await {
-            error!("MCP server failed to start: {}", e);
-            return;
-        }
+        info!("MCP server started on http://127.0.0.1:{}", actual_port);
 
-        info!("MCP server started on {}", bind_addr);
-
-        // Wait for shutdown signal
-        let _ = shutdown_rx.await;
-
-        // Stop the server
-        if let Err(e) = http_server.stop().await {
-            warn!("Error stopping MCP server: {}", e);
-        }
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async move {
+                let _ = (&mut shutdown_rx).await;
+                info!("MCP server shutting down");
+            })
+            .await
+            .unwrap_or_else(|e| error!("MCP server error: {}", e));
 
         info!("MCP server stopped");
     });
 
     Ok(McpServerHandle {
         shutdown_tx: Some(shutdown_tx),
-        port,
+        port: actual_port,
         state,
     })
 }
 
-/// Register all MCP tools
-async fn register_tools(
-    server: &McpServer,
-    state: Arc<Mutex<McpState>>,
-    event_tx: mpsc::Sender<Event>,
-) -> Result<()> {
-    // Register rstn_report_status tool (Feature 061)
-    server
-        .add_tool(
-            "rstn_report_status",
-            Some("Report current task status to rstn control plane"),
-            status_tool_schema(),
-            ReportStatusHandler {
-                event_tx: event_tx.clone(),
-                state: state.clone(),
-            },
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to register rstn_report_status: {}", e))?;
-
-    info!("Registered MCP tool: rstn_report_status");
-
-    // Register rstn_read_spec tool (Feature 062)
-    server
-        .add_tool(
-            "rstn_read_spec",
-            Some("Read a spec artifact for the current feature"),
-            read_spec_tool_schema(),
-            ReadSpecHandler {
-                state: state.clone(),
-            },
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to register rstn_read_spec: {}", e))?;
-
-    info!("Registered MCP tool: rstn_read_spec");
-
-    // Register rstn_get_context tool (Feature 062)
-    server
-        .add_tool(
-            "rstn_get_context",
-            Some("Get current feature context and metadata"),
-            get_context_tool_schema(),
-            GetContextHandler {
-                state: state.clone(),
-            },
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to register rstn_get_context: {}", e))?;
-
-    info!("Registered MCP tool: rstn_get_context");
-
-    // Register rstn_complete_task tool (Feature 063)
-    server
-        .add_tool(
-            "rstn_complete_task",
-            Some("Mark a task as complete with validation"),
-            complete_task_tool_schema(),
-            CompleteTaskHandler {
-                event_tx: event_tx.clone(),
-                state: state.clone(),
-            },
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to register rstn_complete_task: {}", e))?;
-
-    info!("Registered MCP tool: rstn_complete_task");
-
-    Ok(())
-}
+// ============================================================================
+// Config File Management
+// ============================================================================
 
 /// Write MCP configuration file for Claude Code to discover
 pub fn write_mcp_config(port: u16) -> Result<std::path::PathBuf> {
@@ -715,8 +763,8 @@ pub fn write_mcp_config(port: u16) -> Result<std::path::PathBuf> {
     let config = serde_json::json!({
         "mcpServers": {
             "rstn": {
-                "transport": "sse",
-                "url": format!("http://127.0.0.1:{}/sse", port)
+                "type": "http",
+                "url": format!("http://127.0.0.1:{}/mcp", port)
             }
         }
     });
@@ -741,6 +789,10 @@ pub fn cleanup_mcp_config() -> Result<()> {
 
     Ok(())
 }
+
+// ============================================================================
+// Tests
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -784,5 +836,48 @@ mod tests {
         let state = handle.state.lock().await;
         assert_eq!(state.feature_number, Some("060".to_string()));
         assert_eq!(state.feature_name, Some("mcp-server".to_string()));
+    }
+
+    #[test]
+    fn test_json_rpc_response_success() {
+        let response = JsonRpcResponse::success(
+            Some(serde_json::json!(1)),
+            serde_json::json!({"result": "ok"}),
+        );
+        assert_eq!(response.jsonrpc, "2.0");
+        assert!(response.result.is_some());
+        assert!(response.error.is_none());
+    }
+
+    #[test]
+    fn test_json_rpc_response_error() {
+        let response = JsonRpcResponse::error(Some(serde_json::json!(1)), -32600, "Invalid Request");
+        assert_eq!(response.jsonrpc, "2.0");
+        assert!(response.result.is_none());
+        assert!(response.error.is_some());
+        assert_eq!(response.error.unwrap().code, -32600);
+    }
+
+    #[test]
+    fn test_tool_result_text() {
+        let result = ToolResult::text("Hello");
+        assert_eq!(result.is_error, Some(false));
+        assert_eq!(result.content.len(), 1);
+    }
+
+    #[test]
+    fn test_tool_result_error() {
+        let result = ToolResult::error("Oops");
+        assert_eq!(result.is_error, Some(true));
+    }
+
+    #[test]
+    fn test_get_tools() {
+        let tools = get_tools();
+        assert_eq!(tools.len(), 4);
+        assert_eq!(tools[0].name, "rstn_report_status");
+        assert_eq!(tools[1].name, "rstn_read_spec");
+        assert_eq!(tools[2].name, "rstn_get_context");
+        assert_eq!(tools[3].name, "rstn_complete_task");
     }
 }

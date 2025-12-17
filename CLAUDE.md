@@ -93,6 +93,35 @@ START: Need TUI testing?
     Task(subagent_type="tui-tester", prompt="<context>...</context>")
 </tree>
 
+<tree name="Claude CLI Integration">
+START: rstn needs to call Claude CLI?
+│
+├─► What mode?
+│   ├─ Headless/programmatic → Use `-p` (print mode)
+│   └─ Interactive → Use default (no -p)
+│
+├─► Need streaming output?
+│   ├─ YES → `--output-format stream-json`
+│   │        └─► MUST add `--verbose` flag (required with -p + stream-json)
+│   └─ NO → `--output-format json` or `text`
+│
+├─► Need partial messages?
+│   ├─ YES → `--include-partial-messages` (requires stream-json)
+│   └─ NO → Skip flag
+│
+├─► Using MCP?
+│   ├─ YES → `--mcp-config ~/.rstn/mcp-session.json`
+│   │        Config format: `{"mcpServers":{"rstn":{"type":"http","url":"..."}}}`
+│   └─ NO → Skip flag
+│
+├─► Custom system prompt?
+│   ├─ Replace all → `--system-prompt-file /path/to/file`
+│   └─ Append → `--append-system-prompt "extra instructions"`
+│
+└─► END: Build command with all required flags
+    See: .claude/docs/claude-cli-reference.md
+</tree>
+
 </decision-trees>
 
 ---
@@ -233,6 +262,15 @@ When dispatching to tui-tester, ALWAYS use this structure:
 </helpers>
 </tui-tester-context-template>
 
+<claude-cli-docs>
+Reference documentation for Claude CLI integration:
+- `.claude/docs/claude-cli-reference.md` - All CLI flags and options
+- `.claude/docs/claude-headless-mode.md` - Headless mode patterns
+
+Key implementation file:
+- `crates/rstn/src/runners/cargo.rs` - `run_claude_command_streaming()`
+</claude-cli-docs>
+
 </grounding>
 
 ---
@@ -246,6 +284,8 @@ When dispatching to tui-tester, ALWAYS use this structure:
 <rule severity="NEVER">Forget EnableMouseCapture → Mouse events won't work → Add to terminal setup</rule>
 <rule severity="NEVER">Commit without running tests → Broken code enters repo → Run cargo test first</rule>
 <rule severity="NEVER">Skip clippy → Lints accumulate → Run cargo clippy before commit</rule>
+<rule severity="NEVER">Use -p + stream-json without --verbose → CLI error → Always add --verbose flag</rule>
+<rule severity="NEVER">Use "transport" in MCP config → Invalid schema → Use "type" field instead</rule>
 
 <bad-example name="No context dispatch">
 Task(subagent_type="tui-tester", prompt="Write mouse tests")
@@ -413,42 +453,63 @@ COMMIT FORMAT:
 
 ## MCP Architecture (Features 060-065)
 
-rstn uses a **dual-channel architecture** for Claude Code communication, replacing fragile text-based status parsing with robust MCP tools.
+rstn uses an **embedded HTTP server** for Claude Code communication, replacing fragile text-based status parsing with robust MCP tools.
 
 ### Architecture Overview
 
 ```
-Claude Code (claude CLI)
-    ↓ (display channel)
-    ├── stream-json: Real-time text output
-    │   ├── Cost tracking (total_cost_usd)
-    │   ├── Session management (session_id)
-    │   └── Display rendering
-    │
-    ↓ (control channel)
-    └── MCP/SSE: Structured tool calls
-        ├── rstn_report_status
-        ├── rstn_read_spec
-        ├── rstn_get_context
-        └── rstn_complete_task
+┌─────────────────────────────────────────────────────────────────┐
+│                    rstn (Main Process)                          │
+│  ┌──────────────────┐    ┌──────────────────┐                   │
+│  │   TUI Loop       │◄───│   Axum Server    │◄─── HTTP POST     │
+│  │                  │    │   (dynamic port) │     /mcp          │
+│  │  ┌────────────┐  │    └──────────────────┘                   │
+│  │  │InputDialog │  │           ▲                               │
+│  │  └────────────┘  │           │                               │
+│  └──────────────────┘           │                               │
+│           │                     │                               │
+│           ▼                     │                               │
+│    mpsc::channel          oneshot::channel                      │
+│    (tool requests)        (user responses)                      │
+└─────────────────────────────────────────────────────────────────┘
+                                  │
+                                  │ HTTP
+                                  ▼
+                    ┌─────────────────────────────┐
+                    │  Claude Code (Subprocess)   │
+                    │  spawned with --mcp-config  │
+                    └─────────────────────────────┘
 ```
 
-### Display Channel (stream-json)
+### Sequence Diagram
 
-Purpose: Real-time text rendering and metadata tracking
+```
+sequenceDiagram
+    participant CC as Claude Code (Subprocess)
+    participant Server as Axum Server (inside rstn)
+    participant UI as TUI Loop (inside rstn)
+    participant User
 
-- **Format**: JSONL (one JSON object per line)
-- **Transport**: stdout from `claude --output-format stream-json`
-- **Content**: Assistant responses, cost data, session IDs
+    Note over UI: 1. Start Axum Server (port 0)
+    Note over UI: 2. Generate ~/.rstn/mcp-session.json
+    UI->>CC: 3. Spawn `claude` with --mcp-config
 
-### Control Channel (MCP over SSE)
+    CC->>Server: HTTP POST /mcp (tools/call: rstn_report_status)
+    Server->>UI: mpsc::send(McpStatus{needs_input})
+    UI->>User: Show InputDialog
+    User->>UI: Input "Blue feature"
+    UI->>Server: oneshot::send(response)
+    Server->>CC: HTTP Response (Tool Result)
+```
+
+### Control Channel (MCP over HTTP)
 
 Purpose: State transitions and structured communication
 
 - **Protocol**: JSON-RPC 2.0 (Model Context Protocol)
-- **Transport**: Server-Sent Events (SSE) over HTTP
-- **Port**: 19560 (default, auto-increments if busy)
-- **URL**: `http://127.0.0.1:19560`
+- **Transport**: HTTP POST (recommended by Claude Code, SSE is deprecated)
+- **Port**: Dynamic (port 0, auto-assigned)
+- **Endpoint**: `http://127.0.0.1:{port}/mcp`
 
 ### Available MCP Tools
 
@@ -482,85 +543,111 @@ rstn_report_status({
 
 **Server Startup** (`main.rs`):
 ```rust
+let mcp_state = Arc::new(Mutex::new(McpState::default()));
 let (mcp_event_tx, _mcp_event_rx) = mpsc::channel(100);
-let mcp_config = McpServerConfig::default();
-let mcp_handle = mcp_server::start_server(mcp_config, mcp_event_tx).await?;
+let mcp_config = McpServerConfig::default(); // port: 0 = auto-assign
+let mcp_handle = mcp_server::start_server(mcp_config, mcp_event_tx, mcp_state.clone()).await?;
 
 // Write config for Claude Code to discover
 mcp_server::write_mcp_config(mcp_handle.port())?;
 ```
 
-**Tool Handler Pattern** (`mcp_server.rs`):
+**HTTP Handler Pattern** (`mcp_server.rs`):
 ```rust
-struct MyToolHandler {
-    event_tx: mpsc::Sender<Event>,
+/// MCP endpoint - handles all JSON-RPC requests
+async fn mcp_handler(
+    State(state): State<AppState>,
+    Json(request): Json<JsonRpcRequest>,
+) -> impl IntoResponse {
+    let response = match request.method.as_str() {
+        "initialize" => handle_initialize(&state, &request).await,
+        "tools/list" => handle_tools_list(&request).await,
+        "tools/call" => handle_tools_call(&state, &request).await,
+        _ => JsonRpcResponse::error(request.id, -32601, "Method not found"),
+    };
+    Json(response)
 }
+```
 
-#[async_trait::async_trait]
-impl ToolHandler for MyToolHandler {
-    async fn call(&self, arguments: HashMap<String, Value>) -> McpResult<ToolResult> {
-        // 1. Extract and validate arguments
-        let arg = arguments.get("field")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| McpError::validation("Missing 'field'"))?;
+**Tool Handler for needs_input** (`mcp_server.rs`):
+```rust
+async fn handle_report_status(state: &AppState, args: HashMap<String, Value>) -> ToolResult {
+    match status.as_str() {
+        "needs_input" => {
+            // Create oneshot channel for response
+            let (tx, rx) = oneshot::channel();
 
-        // 2. Send event to TUI
-        self.event_tx.send(Event::MyEvent { arg }).await?;
+            // Store sender and push event to TUI
+            {
+                let mut mcp_state = state.mcp_state.lock().await;
+                mcp_state.input_response_tx = Some(tx);
+                mcp_state.push_tui_event(Event::McpStatus { status, prompt, message });
+            }
 
-        // 3. Return success
-        Ok(ToolResult {
-            content: vec![ContentBlock::text("Success")],
-            is_error: Some(false),
-            ..Default::default()
-        })
+            // Block until user responds via TUI
+            match rx.await {
+                Ok(response) => ToolResult::text(&format!("User response: {}", response)),
+                Err(_) => ToolResult::error("Input request was cancelled"),
+            }
+        }
+        _ => { /* handle completed/error */ }
     }
 }
 ```
 
 **Event Handling** (`app.rs`):
 ```rust
-Event::McpStatus { status, prompt, message } => {
-    match status.as_str() {
-        "needs_input" => {
-            self.input_dialog = Some(InputDialog::new("Input", prompt));
-            self.input_mode = true;
+// In main_loop, poll MCP events from shared state
+fn poll_mcp_events(&mut self) {
+    if let Ok(mut state) = self.mcp_state.try_lock() {
+        for event in state.drain_tui_events() {
+            match event {
+                Event::McpStatus { status, prompt, .. } if status == "needs_input" => {
+                    self.input_dialog = Some(InputDialog::new("Claude Input", prompt));
+                    self.input_mode = true;
+                }
+                // ...
+            }
         }
-        "completed" => {
-            self.worktree_view.command_done();
-            self.status_message = Some("Completed".to_string());
+    }
+}
+
+// When user submits input, send response back to MCP tool
+fn submit_user_input(&mut self, value: String) {
+    if self.worktree_view.pending_follow_up {
+        if let Ok(mut state) = self.mcp_state.try_lock() {
+            state.send_input_response(value); // Unblocks the HTTP handler
         }
-        "error" => {
-            self.status_message = Some(format!("Error: {}", message));
-        }
-        _ => {}
     }
 }
 ```
 
 ### Configuration
 
-rstn automatically writes `~/.config/claude-code/mcp_servers.json` with:
+rstn automatically writes `~/.rstn/mcp-session.json` with:
 
 ```json
 {
-  "rstn": {
-    "transport": "sse",
-    "url": "http://127.0.0.1:19560"
+  "mcpServers": {
+    "rstn": {
+      "transport": "http",
+      "url": "http://127.0.0.1:{port}/mcp"
+    }
   }
 }
 ```
 
-Claude Code auto-discovers this and connects to the MCP server.
+Claude Code auto-discovers this via `--mcp-config` flag.
 
 ### Troubleshooting
 
 | Issue | Cause | Solution |
 |-------|-------|----------|
-| MCP server not starting | Port 19560 busy | Server auto-increments port. Check logs for actual port. |
+| MCP server not starting | Port binding failed | Uses port 0 (auto-assign). Check logs for actual port. |
 | Tool not found | Outdated rstn version | Ensure rstn >= 0.2.0 with Features 060-065 |
 | Connection refused | Server not running | Verify `rstn` TUI is active. MCP server starts with TUI. |
-| Tools not discovered | Config file missing | Check `~/.config/claude-code/mcp_servers.json` exists |
-| Event not received | Channel closed | Check for panics in tool handlers or event loop |
+| Tools not discovered | Config file missing | Check `~/.rstn/mcp-session.json` exists |
+| Input dialog not showing | Event not polled | Ensure `poll_mcp_events()` is called in main_loop |
 
 ### Testing
 
@@ -598,7 +685,7 @@ Use these MCP tools to communicate status and task progress:
 
 - **Tool Schemas**: See `docs/mcp-tools.md` for detailed tool reference
 - **MCP Spec**: [Model Context Protocol](https://modelcontextprotocol.io/)
-- **SSE Spec**: [Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html)
+- **Claude Code MCP Docs**: [claude.com/docs/claude-code/mcp](https://code.claude.com/docs/en/mcp)
 
 ---
 

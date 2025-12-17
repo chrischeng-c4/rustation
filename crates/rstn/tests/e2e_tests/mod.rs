@@ -6,8 +6,11 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use rstn::tui::mcp_server::McpState;
 use rstn::tui::views::ViewAction;
 use rstn::tui::App;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Test harness for E2E TUI testing
 pub struct TuiTestHarness {
@@ -22,7 +25,8 @@ impl TuiTestHarness {
     pub fn new(width: u16, height: u16) -> Self {
         let backend = TestBackend::new(width, height);
         let terminal = Terminal::new(backend).expect("Failed to create terminal");
-        let app = App::new();
+        let mcp_state = Arc::new(Mutex::new(McpState::default()));
+        let app = App::new(mcp_state);
 
         Self { app, terminal }
     }

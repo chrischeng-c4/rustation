@@ -1,8 +1,14 @@
 //! Integration tests for MCP server SSE connection
 
-use rstn::tui::mcp_server::{self, McpServerConfig};
-use tokio::sync::mpsc;
+use rstn::tui::mcp_server::{self, McpServerConfig, McpState};
+use std::sync::Arc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::time::{timeout, Duration};
+
+/// Create a default McpState for testing
+fn create_test_mcp_state() -> Arc<Mutex<McpState>> {
+    Arc::new(Mutex::new(McpState::default()))
+}
 
 #[tokio::test]
 async fn test_mcp_server_starts_and_stops() {
@@ -16,7 +22,7 @@ async fn test_mcp_server_starts_and_stops() {
     let (event_tx, _event_rx) = mpsc::channel(10);
 
     // Start the server
-    let handle = mcp_server::start_server(config, event_tx)
+    let handle = mcp_server::start_server(config, event_tx, create_test_mcp_state())
         .await
         .expect("Failed to start MCP server");
 
@@ -42,7 +48,7 @@ async fn test_mcp_server_http_reachability() {
 
     let (event_tx, _event_rx) = mpsc::channel(10);
 
-    let handle = mcp_server::start_server(config, event_tx)
+    let handle = mcp_server::start_server(config, event_tx, create_test_mcp_state())
         .await
         .expect("Failed to start MCP server");
 
@@ -97,7 +103,7 @@ async fn test_mcp_state_update() {
     let config = McpServerConfig::default();
     let (event_tx, _event_rx) = mpsc::channel(10);
 
-    let handle = mcp_server::start_server(config, event_tx)
+    let handle = mcp_server::start_server(config, event_tx, create_test_mcp_state())
         .await
         .expect("Failed to start MCP server");
 
@@ -131,7 +137,7 @@ async fn test_mcp_config_lifecycle() {
         .expect("Failed to read config file");
 
     assert!(content.contains("rstn"), "Config missing rstn server entry");
-    assert!(content.contains("sse"), "Config missing SSE transport");
+    assert!(content.contains("http"), "Config missing HTTP transport");
     assert!(content.contains("19560"), "Config missing port");
 
     // Cleanup config
@@ -151,7 +157,7 @@ async fn test_rstn_report_status_tool_registration() {
     };
 
     let (event_tx, _event_rx) = mpsc::channel(10);
-    let handle = mcp_server::start_server(config, event_tx)
+    let handle = mcp_server::start_server(config, event_tx, create_test_mcp_state())
         .await
         .expect("Failed to start MCP server");
 
@@ -267,7 +273,7 @@ async fn test_rstn_read_spec_and_get_context_registration() {
     };
 
     let (event_tx, _event_rx) = mpsc::channel(10);
-    let handle = mcp_server::start_server(config, event_tx)
+    let handle = mcp_server::start_server(config, event_tx, create_test_mcp_state())
         .await
         .expect("Failed to start MCP server");
 
@@ -345,7 +351,7 @@ async fn test_rstn_complete_task_tool_registration() {
     };
 
     let (event_tx, _event_rx) = mpsc::channel(10);
-    let handle = mcp_server::start_server(config, event_tx)
+    let handle = mcp_server::start_server(config, event_tx, create_test_mcp_state())
         .await
         .expect("Failed to start MCP server");
 

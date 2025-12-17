@@ -4,8 +4,17 @@
 //! including input dialog creation, character handling, and submission.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use rstn::tui::mcp_server::McpState;
 use rstn::tui::views::ViewAction;
 use rstn::tui::widgets::InputDialog;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+/// Create a test App with default MCP state
+fn create_test_app() -> rstn::tui::App {
+    let mcp_state = Arc::new(Mutex::new(McpState::default()));
+    rstn::tui::App::new(mcp_state)
+}
 
 // Helper to create key events
 fn key_event(code: KeyCode) -> KeyEvent {
@@ -19,11 +28,9 @@ fn key_event_with_mod(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
 // T032: Test that Specify phase returns RequestInput action (via App)
 #[test]
 fn test_specify_returns_request_input_action() {
-    use rstn::tui::App;
-
     // Test via App since WorktreeView.handle_key is private
     // We verify that when a RequestInput action is handled, it sets up input mode
-    let mut app = App::new();
+    let mut app = create_test_app();
 
     // Simulate the Specify workflow requesting input
     let action = ViewAction::RequestInput {
@@ -95,9 +102,7 @@ fn test_input_dialog_handles_backspace() {
 // T036: Test that multiline input dialog submits on Enter
 #[test]
 fn test_input_dialog_submits_on_enter() {
-    use rstn::tui::App;
-
-    let mut app = App::new();
+    let mut app = create_test_app();
 
     // Setup multiline input mode (feature description)
     app.handle_view_action(ViewAction::RequestInput {
@@ -127,9 +132,7 @@ fn test_input_dialog_submits_on_enter() {
 // T037: Test that input dialog cancels on Escape
 #[test]
 fn test_input_dialog_cancels_on_escape() {
-    use rstn::tui::App;
-
-    let mut app = App::new();
+    let mut app = create_test_app();
 
     // Setup input mode
     app.handle_view_action(ViewAction::RequestInput {

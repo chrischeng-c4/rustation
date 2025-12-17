@@ -351,6 +351,8 @@ pub struct ClaudeResult {
     pub session_id: Option<String>,
     /// Whether the command exited successfully
     pub success: bool,
+    /// Accumulated text content from assistant messages
+    pub content: String,
 }
 
 /// Run a Claude Code CLI command in headless mode
@@ -407,9 +409,19 @@ pub async fn run_claude_command_streaming(
             .arg(options.allowed_tools.join(","));
     }
 
-    // Core args: prompt, streaming JSON, and system prompt
+    // Core args: prompt, streaming JSON with partial messages
     cmd.arg("-p").arg(command);
     cmd.arg("--output-format").arg("stream-json");
+    cmd.arg("--verbose"); // Required when using -p with stream-json
+    cmd.arg("--include-partial-messages"); // Show incremental output as Claude types
+
+    // Point Claude to rstn's MCP server config
+    if let Some(home) = std::env::var("HOME").ok() {
+        let mcp_config_path = format!("{}/.rstn/mcp-session.json", home);
+        if std::path::Path::new(&mcp_config_path).exists() {
+            cmd.arg("--mcp-config").arg(&mcp_config_path);
+        }
+    }
 
     // If a custom system prompt file is provided, use it
     // Otherwise just append the RSCLI protocol instructions
@@ -419,6 +431,31 @@ pub async fn run_claude_command_streaming(
         cmd.arg("--append-system-prompt").arg(RSCLI_SYSTEM_PROMPT);
     } else {
         cmd.arg("--append-system-prompt").arg(RSCLI_SYSTEM_PROMPT);
+    }
+
+    // Log the CLI command being executed
+    if let Some(ref s) = sender {
+        let args: Vec<String> = cmd
+            .as_std()
+            .get_args()
+            .map(|a| {
+                let s = a.to_string_lossy();
+                // Quote args containing spaces or special chars
+                if s.contains(' ') || s.contains('"') || s.len() > 100 {
+                    // Truncate very long args (like system prompts)
+                    let truncated = if s.len() > 100 {
+                        format!("{}...", &s[..100])
+                    } else {
+                        s.to_string()
+                    };
+                    format!("\"{}\"", truncated.replace('"', "\\\""))
+                } else {
+                    s.to_string()
+                }
+            })
+            .collect();
+        let cmd_string = format!("$ claude {}", args.join(" "));
+        let _ = s.send(Event::CommandOutput(cmd_string));
     }
 
     cmd.stdout(Stdio::piped());
@@ -443,6 +480,16 @@ pub async fn run_claude_command_streaming(
                     result.session_id = msg.session_id.clone();
                 }
 
+                // Accumulate assistant text content for return value
+                if msg.msg_type == "assistant" {
+                    if let Some(text) = msg.get_text() {
+                        if !result.content.is_empty() {
+                            result.content.push('\n');
+                        }
+                        result.content.push_str(&text);
+                    }
+                }
+
                 // Send to TUI for real-time display (status comes via MCP tools)
                 if let Some(ref s) = sender {
                     let _ = s.send(Event::ClaudeStream(msg));
@@ -451,12 +498,15 @@ pub async fn run_claude_command_streaming(
         }
     }
 
-    // Also capture stderr (for error messages)
+    // Capture and log stderr (for error messages)
     if let Some(stderr) = child.stderr.take() {
         let reader = BufReader::new(stderr);
         let mut lines = reader.lines();
-        while let Ok(Some(_line)) = lines.next_line().await {
-            // Stderr is typically not JSON, could log or ignore
+        while let Ok(Some(line)) = lines.next_line().await {
+            tracing::warn!(target: "claude_cli", "stderr: {}", line);
+            if let Some(ref s) = sender {
+                let _ = s.send(Event::CommandOutput(format!("[stderr] {}", line)));
+            }
         }
     }
 

@@ -88,6 +88,10 @@ pub struct App {
     pub session_id: Option<String>,
     /// Layout rect for tab bar (to detect view switching clicks)
     pub tab_bar_rect: Option<Rect>,
+    /// Layout rect for shortcuts bar (to detect copy/quit clicks)
+    pub shortcuts_bar_rect: Option<Rect>,
+    /// MCP state reference for polling events
+    pub mcp_state: Arc<Mutex<McpState>>,
 }
 
 /// Check if a point (column, row) is within a rectangle
@@ -110,7 +114,7 @@ impl App {
             running: true,
             current_view: CurrentView::Worktree,
             worktree_view: WorktreeView::new(),
-            mcp_server_view: McpServerView::new(mcp_state),
+            mcp_server_view: McpServerView::new(mcp_state.clone()),
             dashboard: Dashboard::new(),
             settings_view: SettingsView::new(),
             command_runner: CommandRunner::new(),
@@ -130,6 +134,8 @@ impl App {
             current_group_index: 0,
             session_id,
             tab_bar_rect: None,
+            shortcuts_bar_rect: None,
+            mcp_state,
         }
     }
 
@@ -305,6 +311,11 @@ impl App {
                 self.copy_visual_view = true;
                 return;
             }
+            // Copy session ID with s
+            KeyCode::Char('s') => {
+                self.copy_session_id();
+                return;
+            }
             _ => {}
         }
 
@@ -362,6 +373,34 @@ impl App {
                     _ => {}
                 }
                 return;
+            }
+        }
+
+        // Check if clicked on shortcuts bar (bottom bar with copy/quit)
+        if let Some(shortcuts_rect) = self.shortcuts_bar_rect {
+            if point_in_rect(col, row, &shortcuts_rect) {
+                // Shortcuts bar layout (approximate character positions):
+                // "[/] Switch Tab  Tab Switch Pane  y Copy Y Copy+Style  s Session  q Quit"
+                // Clickable regions: Copy (31-38), Copy+Style (39-51), Session (52-62), Quit (63+)
+                let click_offset = col.saturating_sub(shortcuts_rect.x);
+                if click_offset >= 31 && click_offset < 39 {
+                    // "y Copy" clicked
+                    self.copy_current_pane();
+                    return;
+                } else if click_offset >= 39 && click_offset < 52 {
+                    // "Y Copy+Style" clicked
+                    self.copy_visual_view = true;
+                    return;
+                } else if click_offset >= 52 && click_offset < 63 {
+                    // "s Session" clicked
+                    self.copy_session_id();
+                    return;
+                } else if click_offset >= 63 {
+                    // "q Quit" clicked
+                    self.running = false;
+                    return;
+                }
+                // Clicks on Switch Tab/Pane areas are ignored (use keyboard)
             }
         }
 
@@ -712,7 +751,7 @@ impl App {
                 let desc = description.clone();
                 let phase_name = phase.name().to_string();
                 tokio::spawn(async move {
-                    match App::execute_phase_generation(phase_name.as_str(), desc).await {
+                    match App::execute_phase_generation(phase_name.as_str(), desc, sender.clone()).await {
                         Ok((content, number, name)) => {
                             tracing::info!("Generation completed: {}-{}", number, name);
                             if let Some(sender) = sender {
@@ -821,11 +860,15 @@ impl App {
     /// Execute content generation for any SDD phase (Features 051, 053-058)
     ///
     /// Routes to appropriate generation logic based on phase:
-    /// - Specify: Creates new feature via shell script
+    /// - Specify: Creates new feature via shell script, then calls Claude with streaming
     /// - Clarify/Plan/Tasks/Analyze: Reads existing spec and generates next artifact
-    async fn execute_phase_generation(phase: &str, description: String) -> Result<(String, String, String), String> {
+    async fn execute_phase_generation(
+        phase: &str,
+        description: String,
+        sender: Option<mpsc::Sender<Event>>,
+    ) -> Result<(String, String, String), String> {
         match phase {
-            "specify" => Self::execute_specify_generation(description).await,
+            "specify" => Self::execute_specify_generation(description, sender).await,
             "clarify" => Self::execute_clarify_generation(description).await,
             "plan" => Self::execute_plan_generation(description).await,
             "tasks" => Self::execute_tasks_generation(description).await,
@@ -836,11 +879,19 @@ impl App {
         }
     }
 
-    /// Execute specify generation via shell script (Feature 051)
-    async fn execute_specify_generation(description: String) -> Result<(String, String, String), String> {
+    /// Execute specify generation with Claude streaming (Feature 051)
+    ///
+    /// 1. Runs bash script to create feature structure (branch, spec dir)
+    /// 2. Calls Claude with streaming to generate actual spec content
+    /// 3. Writes generated content to spec.md
+    async fn execute_specify_generation(
+        description: String,
+        sender: Option<mpsc::Sender<Event>>,
+    ) -> Result<(String, String, String), String> {
         use tokio::process::Command;
         use tokio::time::{timeout, Duration};
 
+        // Step 1: Run bash script to create feature structure
         let script_path = ".specify/scripts/bash/create-new-feature.sh";
 
         let child = Command::new(script_path)
@@ -853,7 +904,7 @@ impl App {
 
         let output = timeout(Duration::from_secs(60), child.wait_with_output())
             .await
-            .map_err(|_| "Generation timed out after 60 seconds".to_string())?
+            .map_err(|_| "Script timed out after 60 seconds".to_string())?
             .map_err(|e| format!("Script execution failed: {}", e))?;
 
         if !output.status.success() {
@@ -867,10 +918,12 @@ impl App {
 
         let spec_file = json["SPEC_FILE"]
             .as_str()
-            .ok_or("Missing SPEC_FILE in output")?;
+            .ok_or("Missing SPEC_FILE in output")?
+            .to_string();
         let feature_num = json["FEATURE_NUM"]
             .as_str()
-            .ok_or("Missing FEATURE_NUM in output")?;
+            .ok_or("Missing FEATURE_NUM in output")?
+            .to_string();
         let branch_name = json["BRANCH_NAME"]
             .as_str()
             .ok_or("Missing BRANCH_NAME in output")?;
@@ -882,12 +935,57 @@ impl App {
             .collect::<Vec<_>>()
             .join("-");
 
-        // Read generated spec
-        let spec_content = tokio::fs::read_to_string(spec_file)
-            .await
-            .map_err(|e| format!("Failed to read generated spec: {}", e))?;
+        // Step 2: Call Claude with streaming to generate spec content
+        let workspace = std::env::current_dir().map_err(|e| e.to_string())?;
+        let manager = PromptManager::new(Some(workspace.clone()));
 
-        Ok((spec_content, feature_num.to_string(), feature_name))
+        let prompt_file = manager
+            .prepare_prompt_file(crate::domain::prompts::SpecPhase::Specify)
+            .map_err(|e| format!("Failed to prepare prompt: {}", e))?;
+
+        // Build user message
+        let user_msg = format!(
+            "Feature: {}-{}\n\n## Feature Description:\n{}",
+            feature_num, feature_name, description
+        );
+
+        // Configure Claude CLI options
+        let cli_options = crate::runners::cargo::ClaudeCliOptions {
+            max_turns: Some(10),
+            skip_permissions: true,
+            continue_session: false,
+            session_id: None,
+            allowed_tools: vec![],
+            system_prompt_file: Some(prompt_file),
+        };
+
+        // Call Claude with streaming
+        let result = crate::runners::cargo::run_claude_command_streaming(
+            &user_msg,
+            &cli_options,
+            sender,
+        )
+        .await
+        .map_err(|e| format!("Claude CLI error: {}", e))?;
+
+        if !result.success {
+            return Err("Claude CLI failed to generate spec".to_string());
+        }
+
+        let spec_content = if result.content.is_empty() {
+            // Fallback: read the template if Claude didn't produce content
+            tokio::fs::read_to_string(&spec_file)
+                .await
+                .map_err(|e| format!("Failed to read spec file: {}", e))?
+        } else {
+            // Write Claude's generated content to spec file
+            tokio::fs::write(&spec_file, &result.content)
+                .await
+                .map_err(|e| format!("Failed to write spec: {}", e))?;
+            result.content
+        };
+
+        Ok((spec_content, feature_num, feature_name))
     }
 
     /// Detect current feature from git branch
@@ -1285,13 +1383,41 @@ impl App {
     /// Handle key events when in input mode
     pub fn handle_key_event_in_input_mode(&mut self, key: KeyEvent) {
         debug!(
-            "handle_key_event_in_input_mode: key={:?}, input_dialog_exists={}, text_input_exists={}",
+            "handle_key_event_in_input_mode: key={:?}, inline_input_exists={}, input_dialog_exists={}, text_input_exists={}",
             key.code,
+            self.worktree_view.has_inline_input(),
             self.input_dialog.is_some(),
             self.text_input.is_some()
         );
 
-        // Prioritize input_dialog (modal) over text_input (footer)
+        // Priority: inline_input > input_dialog > text_input
+
+        // Handle inline input in content area (Claude follow-ups)
+        if self.worktree_view.has_inline_input() {
+            match key.code {
+                KeyCode::Enter => {
+                    // Submit inline input
+                    if let Some(value) = self.worktree_view.submit_inline_input() {
+                        self.submit_user_input(value);
+                    }
+                    self.input_mode = false;
+                }
+                KeyCode::Esc => {
+                    // Cancel inline input
+                    self.worktree_view.cancel_inline_input();
+                    self.worktree_view.pending_follow_up = false;
+                    self.input_mode = false;
+                    self.status_message = Some("Input cancelled".to_string());
+                }
+                _ => {
+                    // Forward other keys to inline input handler
+                    self.worktree_view.handle_inline_input_key(key);
+                }
+            }
+            return;
+        }
+
+        // Handle input_dialog (modal) - legacy, kept for other uses
         if let Some(ref mut dialog) = self.input_dialog {
             match key.code {
                 KeyCode::Char(c) => {
@@ -1466,22 +1592,22 @@ impl App {
             return;
         }
 
-        // Check if this is a follow-up response to Claude's question
+        // Check if this is a follow-up response to Claude's question (via MCP)
         if self.worktree_view.pending_follow_up {
-            // Resume conversation with user response
             self.worktree_view.pending_follow_up = false;
-            let session_id = self.worktree_view.active_session_id.clone();
 
-            // Build options with session ID for resume
-            let mut options = self.worktree_view.get_claude_options();
-            options.session_id = session_id;
-
-            // User's response becomes the prompt, resumed via --resume
-            self.handle_view_action(ViewAction::RunSpecPhase {
-                phase: "follow-up".to_string(),
-                command: value,
-                options,
-            });
+            // Send response back to the waiting MCP tool
+            if let Ok(mut state) = self.mcp_state.try_lock() {
+                if state.send_input_response(value.clone()) {
+                    self.status_message = Some("Response sent to Claude".to_string());
+                } else {
+                    // No pending input request, fall back to showing status
+                    self.status_message = Some(format!("No pending request, input: {}", value));
+                }
+            } else {
+                // Couldn't acquire lock, show error
+                self.status_message = Some("Failed to send response (lock busy)".to_string());
+            }
         } else if let Some(phase) = self.worktree_view.pending_input_phase.take() {
             // Initial phase input - construct command with user input
             let command = format!("{} {}", phase.command(), value);
@@ -1694,6 +1820,64 @@ impl App {
         }
     }
 
+    /// Poll MCP events from shared state (non-blocking)
+    ///
+    /// This is called each main_loop iteration to process events pushed by MCP tool handlers.
+    fn poll_mcp_events(&mut self) {
+        // Try to lock state without blocking - skip if locked
+        if let Ok(mut state) = self.mcp_state.try_lock() {
+            // Drain all pending events
+            let events = state.drain_tui_events();
+            drop(state); // Release lock before processing events
+
+            // Process each event
+            for event in events {
+                match event {
+                    Event::McpStatus { status, prompt, message } => {
+                        tracing::info!("Polling MCP status: {}", status);
+                        match status.as_str() {
+                            "needs_input" => {
+                                let prompt_text = prompt.unwrap_or_else(|| "Enter your response:".to_string());
+                                self.worktree_view.pending_follow_up = true;
+                                // Use inline input in content area instead of popup dialog
+                                self.worktree_view.set_inline_input(prompt_text);
+                                self.input_mode = true;
+                                self.status_message = Some("Waiting for your response...".to_string());
+                            }
+                            "error" => {
+                                let error_msg = message.unwrap_or_else(|| "Unknown error".to_string());
+                                self.worktree_view.command_done();
+                                self.status_message = Some(format!("Error: {}", error_msg));
+                                self.worktree_view.add_output(format!("❌ Error: {}", error_msg));
+                            }
+                            "completed" => {
+                                self.worktree_view.command_done();
+                                self.status_message = Some("Task completed successfully".to_string());
+                                self.worktree_view.add_output("✓ Task completed".to_string());
+                            }
+                            _ => {
+                                tracing::warn!("Unknown MCP status: {}", status);
+                            }
+                        }
+                    }
+                    Event::McpTaskCompleted { task_id, success, message } => {
+                        tracing::info!("Polling MCP task completion: {}", task_id);
+                        if success {
+                            if let Ok((completed, total)) = self.worktree_view.complete_task_by_id(&task_id) {
+                                self.status_message = Some(format!("Task {} completed. Progress: {}/{}", task_id, completed, total));
+                            }
+                        } else {
+                            self.status_message = Some(format!("Task {} failed: {}", task_id, message));
+                        }
+                    }
+                    _ => {
+                        // Other events not handled via MCP polling
+                    }
+                }
+            }
+        }
+    }
+
     /// Handle Claude command completed with parsed status
     fn handle_claude_completed(
         &mut self,
@@ -1869,6 +2053,28 @@ impl App {
         }
     }
 
+    /// Copy session ID to clipboard
+    pub fn copy_session_id(&mut self) {
+        match &self.session_id {
+            Some(id) => match arboard::Clipboard::new() {
+                Ok(mut clipboard) => match clipboard.set_text(id) {
+                    Ok(_) => {
+                        self.status_message = Some(format!("Copied session ID: {}", id));
+                    }
+                    Err(e) => {
+                        self.status_message = Some(format!("Failed to copy: {}", e));
+                    }
+                },
+                Err(e) => {
+                    self.status_message = Some(format!("Clipboard error: {}", e));
+                }
+            },
+            None => {
+                self.status_message = Some("No session ID available".to_string());
+            }
+        }
+    }
+
     /// Copy current tab with ANSI styling preserved
     pub fn copy_current_tab_styled(&mut self) {
         let (content, tab_name) = match self.current_view {
@@ -2027,6 +2233,9 @@ impl App {
             })?;
             debug!("main_loop iteration {}: UI drawn", iteration);
 
+            // Poll MCP events from shared state (non-blocking)
+            self.poll_mcp_events();
+
             // Check if visual copy was requested
             if self.copy_visual_view {
                 debug!("main_loop iteration {}: processing visual copy", iteration);
@@ -2131,15 +2340,15 @@ impl App {
 
                     match status.as_str() {
                         "needs_input" => {
-                            // Same logic as handle_claude_completed Line 1701-1710
+                            // Use inline input in content area instead of popup dialog
                             let prompt_text =
                                 prompt.unwrap_or_else(|| "Enter your response:".to_string());
                             self.worktree_view.pending_follow_up = true;
-                            self.input_dialog = Some(InputDialog::new("Claude Input", prompt_text));
+                            self.worktree_view.set_inline_input(prompt_text);
                             self.input_mode = true;
                             self.status_message =
                                 Some("Waiting for your response...".to_string());
-                            tracing::info!("Showing input dialog with prompt");
+                            tracing::info!("Showing inline input in content area");
                         }
                         "error" => {
                             // Same logic as handle_claude_completed Line 1712-1718
@@ -2376,6 +2585,10 @@ impl App {
                     self.worktree_view
                         .add_output(format!("❌ Spec generation failed: {}", error));
                     self.status_message = Some("Spec generation failed".to_string());
+
+                    // Dismiss input dialog on failure
+                    self.input_dialog = None;
+                    self.input_mode = false;
                 }
                 Event::SpecifySaved { path } => {
                     // Feature 051: Spec saved successfully (T047, T048)
@@ -2535,6 +2748,14 @@ impl App {
             Span::styled(" Copy+Style", Style::default().fg(Color::DarkGray)),
             Span::raw("  "),
             Span::styled(
+                "s",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" Session", Style::default().fg(Color::DarkGray)),
+            Span::raw("  "),
+            Span::styled(
                 "q",
                 Style::default()
                     .fg(Color::Yellow)
@@ -2544,6 +2765,9 @@ impl App {
         ]);
         let shortcuts_bar = Paragraph::new(shortcuts);
         frame.render_widget(shortcuts_bar, footer_chunks[0]);
+
+        // Store shortcuts bar rect for mouse click detection
+        self.shortcuts_bar_rect = Some(footer_chunks[0]);
 
         // Status message bar OR input field (footer input, not dialog)
         if self.input_mode && self.text_input.is_some() && self.input_dialog.is_none() {

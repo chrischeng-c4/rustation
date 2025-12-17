@@ -80,12 +80,23 @@ find_repo_root() {
     return 1
 }
 
+# Global cache for git ls-remote output (populated once, reused)
+CACHED_REMOTE_BRANCHES=""
+
+# Function to get cached remote branches (only calls git ls-remote once)
+get_remote_branches() {
+    if [ -z "$CACHED_REMOTE_BRANCHES" ]; then
+        CACHED_REMOTE_BRANCHES=$(git ls-remote --heads origin 2>/dev/null)
+    fi
+    echo "$CACHED_REMOTE_BRANCHES"
+}
+
 # Function to find the global highest feature number across ALL branches and specs
 find_global_highest_number() {
     local max_num=0
 
-    # Check all remote branches with feature number pattern
-    local remote_nums=$(git ls-remote --heads origin 2>/dev/null | grep -oE 'refs/heads/[0-9]+' | grep -oE '[0-9]+' | sort -n)
+    # Check all remote branches with feature number pattern (using cache)
+    local remote_nums=$(get_remote_branches | grep -oE 'refs/heads/[0-9]+' | grep -oE '[0-9]+' | sort -n)
 
     # Check all local branches with feature number pattern
     local local_nums=$(git branch 2>/dev/null | grep -oE '[0-9]+' | sort -n)
@@ -112,11 +123,9 @@ find_global_highest_number() {
 check_existing_branches() {
     local short_name="$1"
 
-    # Fetch all remotes to get latest branch info (suppress errors if no remotes)
-    git fetch --all --prune 2>/dev/null || true
-
     # Find all branches matching the SPECIFIC short-name pattern
-    local remote_branches=$(git ls-remote --heads origin 2>/dev/null | grep -E "refs/heads/[0-9]+-${short_name}$" | sed 's/.*\/\([0-9]*\)-.*/\1/' | sort -n)
+    # Uses cached git ls-remote output for performance
+    local remote_branches=$(get_remote_branches | grep -E "refs/heads/[0-9]+-${short_name}$" | sed 's/.*\/\([0-9]*\)-.*/\1/' | sort -n)
 
     # Also check local branches with specific short-name
     local local_branches=$(git branch 2>/dev/null | grep -E "^[* ]*[0-9]+-${short_name}$" | sed 's/^[* ]*//' | sed 's/-.*//' | sort -n)
