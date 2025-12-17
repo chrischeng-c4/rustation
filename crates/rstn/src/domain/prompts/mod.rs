@@ -8,7 +8,7 @@ mod builtin;
 use std::path::PathBuf;
 use std::{fs, io};
 
-use crate::paths;
+use crate::domain::paths;
 
 /// Phase identifiers for spec-kit commands
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

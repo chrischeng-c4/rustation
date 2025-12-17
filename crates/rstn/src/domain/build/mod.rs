@@ -1,6 +1,6 @@
 //! Build operations (cargo build, check, clippy, fmt)
 
-use crate::errors::{CoreError, Result};
+use crate::domain::errors::{CoreError, Result};
 use std::process::Output;
 use tokio::process::Command;
 

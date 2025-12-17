@@ -1,6 +1,6 @@
 //! XDG-compliant path management for rustation
 
-use crate::errors::{CoreError, Result};
+use crate::domain::errors::{CoreError, Result};
 use std::path::PathBuf;
 
 const APP_NAME: &str = "rustation";

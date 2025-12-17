@@ -1,6 +1,6 @@
 //! Git worktree management
 
-use crate::errors::{CoreError, Result};
+use crate::domain::errors::{CoreError, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Stdio;

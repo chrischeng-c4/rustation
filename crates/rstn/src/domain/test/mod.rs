@@ -1,6 +1,6 @@
 //! Test execution and result parsing
 
-use crate::errors::{CoreError, Result};
+use crate::domain::errors::{CoreError, Result};
 use std::process::Stdio;
 use tokio::process::Command;
 

@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 use super::SpecifyError;
-use crate::specify::catalog_updater::FeaturesCatalog;
+use crate::domain::specify::catalog_updater::FeaturesCatalog;
 
 /// Allocate the next available feature number
 ///

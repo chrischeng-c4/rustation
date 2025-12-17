@@ -1,6 +1,6 @@
 //! MCP (Model Context Protocol) configuration management
 
-use crate::errors::{CoreError, Result};
+use crate::domain::errors::{CoreError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

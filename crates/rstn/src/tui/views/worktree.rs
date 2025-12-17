@@ -633,10 +633,10 @@ pub struct WorktreeView {
 
     // Commit workflow state
     pub pending_commit_message: Option<String>,
-    pub commit_warnings: Vec<rstn_core::SecurityWarning>,
+    pub commit_warnings: Vec<crate::SecurityWarning>,
 
     // Commit review state (Feature 050)
-    pub commit_groups: Option<Vec<rstn_core::CommitGroup>>,
+    pub commit_groups: Option<Vec<crate::CommitGroup>>,
     pub current_commit_index: usize,
     pub commit_message_input: String,
     pub commit_message_cursor: usize,
@@ -1635,7 +1635,7 @@ impl WorktreeView {
     /// Start commit review workflow with analyzed commit groups
     pub fn start_commit_review(
         &mut self,
-        groups: Vec<rstn_core::CommitGroup>,
+        groups: Vec<crate::CommitGroup>,
         warnings: Vec<String>,
         sensitive_files: Vec<String>,
     ) {

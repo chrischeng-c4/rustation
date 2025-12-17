@@ -3,7 +3,7 @@
 use crate::ui::table;
 use crate::{Result, RscliError};
 use colored::Colorize;
-use rstn_core::test;
+use crate::domain::test;
 
 pub async fn run(
     filter: Option<&str>,

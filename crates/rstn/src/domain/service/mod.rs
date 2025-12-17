@@ -1,6 +1,6 @@
 //! Service management module (simplified version)
 
-use crate::errors::{CoreError, Result};
+use crate::domain::errors::{CoreError, Result};
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 use tokio::process::Command;

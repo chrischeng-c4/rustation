@@ -71,18 +71,18 @@ pub enum Event {
     /// Commit workflow started
     CommitStarted,
     /// Security scan blocked commit
-    CommitBlocked { scan: rstn_core::SecurityScanResult },
+    CommitBlocked { scan: crate::SecurityScanResult },
     /// Ready to commit with generated message
     CommitReady {
         message: String,
-        warnings: Vec<rstn_core::SecurityWarning>,
-        sensitive_files: Vec<rstn_core::SensitiveFile>,
+        warnings: Vec<crate::SecurityWarning>,
+        sensitive_files: Vec<crate::SensitiveFile>,
     },
     /// Commit groups ready for user review
     CommitGroupsReady {
-        groups: Vec<rstn_core::CommitGroup>,
-        warnings: Vec<rstn_core::SecurityWarning>,
-        sensitive_files: Vec<rstn_core::SensitiveFile>,
+        groups: Vec<crate::CommitGroup>,
+        warnings: Vec<crate::SecurityWarning>,
+        sensitive_files: Vec<crate::SensitiveFile>,
     },
     /// Single commit group completed successfully (Feature 050)
     CommitGroupCompleted,

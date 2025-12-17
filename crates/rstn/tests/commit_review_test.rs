@@ -7,7 +7,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use rstn::tui::views::{ContentType, WorktreeFocus, WorktreeView};
 use rstn::tui::views::ViewAction;
-use rstn_core::CommitGroup;
+use rstn::CommitGroup;
 
 /// Helper function to create a test WorktreeView instance
 fn create_test_view() -> WorktreeView {
@@ -552,11 +552,11 @@ fn test_warning_for_many_files() {
     let warnings = vec!["Warning: This group contains 60 files. Consider splitting it.".to_string()];
 
     // Also create a security warning to test that warnings are stored
-    let security_warnings = vec![rstn_core::SecurityWarning {
+    let security_warnings = vec![rstn::SecurityWarning {
         file_path: "large_commit".to_string(),
         line_number: 0,
         pattern_matched: "file_count".to_string(),
-        severity: rstn_core::Severity::High,
+        severity: rstn::Severity::High,
         message: "Large number of files in single commit".to_string(),
     }];
 

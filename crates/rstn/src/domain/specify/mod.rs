@@ -158,7 +158,7 @@ pub enum SpecifyError {
 /// # Example
 ///
 /// ```ignore
-/// use rstn_core::specify::generate_spec;
+/// use crate::generate_spec;
 /// use std::path::PathBuf;
 ///
 /// let result = generate_spec(

@@ -18,10 +18,6 @@ name = "rstn"
 path = "src/lib.rs"
 
 [dependencies]
-# Inter-crate dependencies
-rstn-core = { workspace = true }
-rstn-tui = { workspace = true }
-
 # CLI argument parsing
 clap = { version = "4.5", features = ["derive", "cargo"] }
 
@@ -35,6 +31,7 @@ thiserror = { workspace = true }
 # Serialization
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 
 # Configuration parsing
 toml = "0.8"
@@ -52,6 +49,7 @@ comfy-table = "7.1"
 which = "8.0"
 glob = "0.3"
 dirs = "5.0"
+regex = "1.10"
 
 # Async trait support
 async-trait = "0.1"

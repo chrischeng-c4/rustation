@@ -36,7 +36,7 @@ pub fn init(settings: &Settings) -> String {
         return String::new();
     }
 
-    let log_dir = match rstn_core::paths::rstn_logs_dir() {
+    let log_dir = match crate::domain::paths::rstn_logs_dir() {
         Ok(dir) => dir,
         Err(e) => {
             eprintln!("Warning: Could not determine log directory: {}", e);
@@ -227,7 +227,7 @@ fn cleanup_old_logs(log_dir: &PathBuf, days: u64) {
 
 /// Get the log file path for display
 pub fn log_file_path() -> PathBuf {
-    rstn_core::paths::rstn_log_file().unwrap_or_else(|_| PathBuf::from("/tmp/rstn.log"))
+    crate::domain::paths::rstn_log_file().unwrap_or_else(|_| PathBuf::from("/tmp/rstn.log"))
 }
 
 #[cfg(test)]

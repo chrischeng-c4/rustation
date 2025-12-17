@@ -3,7 +3,7 @@
 use super::security::{
     scan_all_changes, scan_staged_changes, SecurityScanResult, SecurityWarning, SensitiveFile,
 };
-use crate::errors::Result;
+use crate::domain::errors::Result;
 use tokio::process::Command;
 
 /// A logical group of related file changes
@@ -43,7 +43,7 @@ pub async fn generate_commit_message() -> Result<String> {
         .await?;
 
     if !diff_stat_output.status.success() {
-        return Err(crate::errors::CoreError::Git(
+        return Err(crate::domain::errors::CoreError::Git(
             "Failed to get diff stats".to_string(),
         ));
     }
@@ -52,7 +52,7 @@ pub async fn generate_commit_message() -> Result<String> {
 
     // Check if there are any changes
     if diff_stat.trim().is_empty() {
-        return Err(crate::errors::CoreError::Git(
+        return Err(crate::domain::errors::CoreError::Git(
             "No staged changes to commit".to_string(),
         ));
     }
@@ -110,12 +110,12 @@ async fn call_claude_for_message(prompt: &str) -> Result<String> {
         .output()
         .await
         .map_err(|e| {
-            crate::errors::CoreError::CommandFailed(format!("Failed to run Claude CLI: {}", e))
+            crate::domain::errors::CoreError::CommandFailed(format!("Failed to run Claude CLI: {}", e))
         })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(crate::errors::CoreError::CommandFailed(format!(
+        return Err(crate::domain::errors::CoreError::CommandFailed(format!(
             "Claude CLI failed: {}",
             stderr
         )));
@@ -209,7 +209,7 @@ pub async fn intelligent_commit() -> Result<CommitResult> {
 
     if !files_output.status.success() {
         tracing::error!("git diff --cached --name-status failed");
-        return Err(crate::errors::CoreError::Git(
+        return Err(crate::domain::errors::CoreError::Git(
             "Failed to get staged files".to_string(),
         ));
     }
@@ -222,7 +222,7 @@ pub async fn intelligent_commit() -> Result<CommitResult> {
 
     if !diff_stat_output.status.success() {
         tracing::error!("git diff --cached --stat failed");
-        return Err(crate::errors::CoreError::Git(
+        return Err(crate::domain::errors::CoreError::Git(
             "Failed to get diff stats".to_string(),
         ));
     }
@@ -240,7 +240,7 @@ pub async fn intelligent_commit() -> Result<CommitResult> {
 
         if !add_output.status.success() {
             tracing::error!("git add --all failed");
-            return Err(crate::errors::CoreError::Git(
+            return Err(crate::domain::errors::CoreError::Git(
                 "No changes to commit and failed to auto-stage".to_string(),
             ));
         }
@@ -263,7 +263,7 @@ pub async fn intelligent_commit() -> Result<CommitResult> {
         // If still empty, nothing to commit
         if files.trim().is_empty() {
             tracing::warn!("No changes to commit after auto-staging");
-            return Err(crate::errors::CoreError::Git(
+            return Err(crate::domain::errors::CoreError::Git(
                 "No changes to commit".to_string(),
             ));
         }
@@ -349,7 +349,7 @@ Expected format:
         .await
         .map_err(|e| {
             tracing::error!("Failed to execute Claude CLI at {}: {}", claude_path, e);
-            crate::errors::CoreError::CommandFailed(
+            crate::domain::errors::CoreError::CommandFailed(
                 format!("Failed to execute 'claude' command: {}\n\nPlease install Claude Code CLI: https://docs.claude.com/claude-code", e)
             )
         })?;
@@ -363,7 +363,7 @@ Expected format:
         );
         tracing::error!("stderr: {}", stderr);
         tracing::debug!("stdout: {}", stdout);
-        return Err(crate::errors::CoreError::CommandFailed(format!(
+        return Err(crate::domain::errors::CoreError::CommandFailed(format!(
             "Claude command failed to analyze changes:\n{}",
             stderr.trim()
         )));
@@ -396,12 +396,12 @@ Expected format:
     let groups: Vec<CommitGroup> = serde_json::from_str(&json_str).map_err(|e| {
         tracing::error!("Failed to parse commit groups JSON: {}", e);
         tracing::debug!("Invalid JSON: {}", json_str);
-        crate::errors::CoreError::Git(format!("Failed to parse commit groups: {}", e))
+        crate::domain::errors::CoreError::Git(format!("Failed to parse commit groups: {}", e))
     })?;
 
     if groups.is_empty() {
         tracing::warn!("Claude returned empty commit groups");
-        return Err(crate::errors::CoreError::Git(
+        return Err(crate::domain::errors::CoreError::Git(
             "No commit groups generated".to_string(),
         ));
     }
@@ -435,7 +435,7 @@ async fn find_claude_executable() -> Result<String> {
 
     // 2. Check common installation locations
     let home = std::env::var("HOME").map_err(|_| {
-        crate::errors::CoreError::CommandFailed("Could not determine HOME directory".to_string())
+        crate::domain::errors::CoreError::CommandFailed("Could not determine HOME directory".to_string())
     })?;
 
     let common_locations = vec![
@@ -455,7 +455,7 @@ async fn find_claude_executable() -> Result<String> {
 
     // 3. Not found - provide helpful error
     tracing::error!("Claude CLI not found in PATH or common locations");
-    Err(crate::errors::CoreError::CommandFailed(format!(
+    Err(crate::domain::errors::CoreError::CommandFailed(format!(
         "Claude CLI not found. Checked:\n\
              - PATH\n\
              - {}\n\
@@ -519,7 +519,7 @@ fn extract_json_from_response(response: &str) -> Result<String> {
         "No JSON array found in Claude response. Response preview: {}",
         preview
     );
-    Err(crate::errors::CoreError::Git(format!(
+    Err(crate::domain::errors::CoreError::Git(format!(
         "No JSON array in response. Claude returned: {}",
         preview
     )))
@@ -545,14 +545,14 @@ fn extract_json_from_response(response: &str) -> Result<String> {
 pub async fn commit_group(group: CommitGroup, message: String) -> Result<()> {
     // T037: Validate group has files
     if group.files.is_empty() {
-        return Err(crate::errors::CoreError::Git(
+        return Err(crate::domain::errors::CoreError::Git(
             "Commit group has no files".to_string(),
         ));
     }
 
     // Validate message is not empty
     if message.trim().is_empty() {
-        return Err(crate::errors::CoreError::Git(
+        return Err(crate::domain::errors::CoreError::Git(
             "Commit message cannot be empty".to_string(),
         ));
     }
@@ -575,7 +575,7 @@ pub async fn commit_group(group: CommitGroup, message: String) -> Result<()> {
     if !add_output.status.success() {
         let stderr = String::from_utf8_lossy(&add_output.stderr);
         tracing::error!("Git add failed: {}", stderr);
-        return Err(crate::errors::CoreError::Git(format!(
+        return Err(crate::domain::errors::CoreError::Git(format!(
             "Failed to stage files: {}",
             stderr
         )));
@@ -591,7 +591,7 @@ pub async fn commit_group(group: CommitGroup, message: String) -> Result<()> {
     if !commit_output.status.success() {
         let stderr = String::from_utf8_lossy(&commit_output.stderr);
         tracing::error!("Git commit failed: {}", stderr);
-        return Err(crate::errors::CoreError::Git(format!(
+        return Err(crate::domain::errors::CoreError::Git(format!(
             "Commit failed: {}",
             stderr
         )));
@@ -622,7 +622,7 @@ mod tests {
 
     #[test]
     fn test_commit_result_variants() {
-        use crate::git::security::{SecurityScanResult, SecurityWarning, Severity};
+        use crate::domain::git::security::{SecurityScanResult, SecurityWarning, Severity};
 
         let blocked = CommitResult::Blocked(SecurityScanResult {
             blocked: true,

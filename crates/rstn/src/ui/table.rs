@@ -2,7 +2,7 @@
 
 use colored::Colorize;
 use comfy_table::{presets::UTF8_FULL, Cell, Color, ContentArrangement, Table};
-use rstn_core::TestResults;
+use crate::TestResults;
 
 /// Display test summary as a table
 pub fn display_test_summary(results: &TestResults) {

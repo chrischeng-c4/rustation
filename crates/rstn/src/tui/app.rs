@@ -8,7 +8,7 @@ use crate::tui::views::{
     ViewType, WorktreeView,
 };
 use crate::tui::widgets::{InputDialog, OptionPicker, TextInput};
-use rstn_core::prompts::PromptManager;
+use crate::domain::prompts::PromptManager;
 use crossterm::event::{
     DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent, KeyModifiers,
     KeyboardEnhancementFlags, MouseEvent, PopKeyboardEnhancementFlags,
@@ -76,7 +76,7 @@ pub struct App {
     /// Pending auto-continue: (next_phase, delay_ms)
     pub pending_auto_continue: Option<(String, u64)>,
     /// Pending commit groups awaiting user review
-    pub pending_commit_groups: Option<Vec<rstn_core::CommitGroup>>,
+    pub pending_commit_groups: Option<Vec<crate::CommitGroup>>,
     /// Current group being edited (index)
     pub current_group_index: usize,
     /// Session ID for this rstn execution (for log correlation)
@@ -499,16 +499,16 @@ impl App {
                 let sender = self.event_sender.clone();
                 tokio::spawn(async move {
                     tracing::debug!("Calling intelligent_commit()");
-                    let result = rstn_core::git::intelligent_commit().await;
+                    let result = crate::domain::git::intelligent_commit().await;
 
                     if let Some(sender) = sender {
                         match result {
-                            Ok(rstn_core::CommitResult::Blocked(scan)) => {
+                            Ok(crate::CommitResult::Blocked(scan)) => {
                                 tracing::warn!("Commit blocked by security scan: {} warnings, {} sensitive files",
                                     scan.warnings.len(), scan.sensitive_files.len());
                                 let _ = sender.send(Event::CommitBlocked { scan });
                             }
-                            Ok(rstn_core::CommitResult::GroupedCommits {
+                            Ok(crate::CommitResult::GroupedCommits {
                                 groups,
                                 warnings,
                                 sensitive_files,
@@ -521,7 +521,7 @@ impl App {
                                     sensitive_files,
                                 });
                             }
-                            Ok(rstn_core::CommitResult::ReadyToCommit { .. }) => {
+                            Ok(crate::CommitResult::ReadyToCommit { .. }) => {
                                 // Legacy path - shouldn't happen with intelligent_commit()
                                 tracing::error!(
                                     "Unexpected legacy commit result from intelligent_commit()"
@@ -652,7 +652,7 @@ impl App {
 
                         let sender = self.event_sender.clone();
                         tokio::spawn(async move {
-                            match rstn_core::git::commit_group(group, message).await {
+                            match crate::domain::git::commit_group(group, message).await {
                                 Ok(_) => {
                                     tracing::info!("Commit group {} succeeded", current_index + 1);
                                     if let Some(sender) = sender {
@@ -941,7 +941,7 @@ impl App {
     ///
     /// Common implementation for all phase generation methods.
     async fn execute_claude_with_prompt(
-        phase: rstn_core::prompts::SpecPhase,
+        phase: crate::domain::prompts::SpecPhase,
         user_message: &str,
     ) -> Result<String, String> {
         use tokio::process::Command;
@@ -997,7 +997,7 @@ impl App {
         );
 
         let content =
-            Self::execute_claude_with_prompt(rstn_core::prompts::SpecPhase::Clarify, &user_msg)
+            Self::execute_claude_with_prompt(crate::domain::prompts::SpecPhase::Clarify, &user_msg)
                 .await?;
 
         Ok((content, feature_num, feature_name))
@@ -1023,7 +1023,7 @@ impl App {
         );
 
         let content =
-            Self::execute_claude_with_prompt(rstn_core::prompts::SpecPhase::Plan, &user_msg)
+            Self::execute_claude_with_prompt(crate::domain::prompts::SpecPhase::Plan, &user_msg)
                 .await?;
 
         Ok((content, feature_num, feature_name))
@@ -1051,7 +1051,7 @@ impl App {
         );
 
         let content =
-            Self::execute_claude_with_prompt(rstn_core::prompts::SpecPhase::Tasks, &user_msg)
+            Self::execute_claude_with_prompt(crate::domain::prompts::SpecPhase::Tasks, &user_msg)
                 .await?;
 
         Ok((content, feature_num, feature_name))
@@ -1082,7 +1082,7 @@ impl App {
         );
 
         let content =
-            Self::execute_claude_with_prompt(rstn_core::prompts::SpecPhase::Analyze, &user_msg)
+            Self::execute_claude_with_prompt(crate::domain::prompts::SpecPhase::Analyze, &user_msg)
                 .await?;
 
         Ok((content, feature_num, feature_name))
@@ -1113,7 +1113,7 @@ impl App {
         );
 
         let content =
-            Self::execute_claude_with_prompt(rstn_core::prompts::SpecPhase::Implement, &user_msg)
+            Self::execute_claude_with_prompt(crate::domain::prompts::SpecPhase::Implement, &user_msg)
                 .await?;
 
         Ok((content, feature_num, feature_name))
@@ -1144,7 +1144,7 @@ impl App {
         );
 
         let content =
-            Self::execute_claude_with_prompt(rstn_core::prompts::SpecPhase::Review, &user_msg)
+            Self::execute_claude_with_prompt(crate::domain::prompts::SpecPhase::Review, &user_msg)
                 .await?;
 
         Ok((content, feature_num, feature_name))
@@ -1702,7 +1702,7 @@ impl App {
     /// Refresh git worktree information
     fn refresh_git_info(&mut self) {
         use crate::tui::event::{Event, WorktreeType};
-        use rstn_core::git::worktree;
+        use crate::domain::git::worktree;
         use tokio::time::{timeout, Duration};
 
         let sender = self.event_sender.clone();
@@ -1711,7 +1711,7 @@ impl App {
             // Helper to run git command with timeout
             async fn with_timeout<F, T>(f: F) -> Option<T>
             where
-                F: std::future::Future<Output = rstn_core::Result<T>>,
+                F: std::future::Future<Output = crate::Result<T>>,
             {
                 match timeout(Duration::from_secs(5), f).await {
                     Ok(Ok(result)) => Some(result),
@@ -1720,7 +1720,7 @@ impl App {
             }
 
             // Try to get current worktree path
-            let path = with_timeout(worktree::get_current_worktree()).await;
+            let path = with_timeout(async { worktree::get_current_worktree().await.map_err(Into::into) }).await;
 
             // If we got a path, we're in a git repo
             let is_git_repo = path.is_some();
@@ -1741,10 +1741,10 @@ impl App {
             }
 
             // Get branch name
-            let branch = with_timeout(worktree::get_current_branch()).await.flatten();
+            let branch = with_timeout(async { worktree::get_current_branch().await.map_err(Into::into) }).await.flatten();
 
             // List all worktrees
-            let worktrees = with_timeout(worktree::list_worktrees()).await;
+            let worktrees = with_timeout(async { worktree::list_worktrees().await.map_err(Into::into) }).await;
             let count = worktrees.as_ref().map(|w| w.len()).unwrap_or(1);
 
             // Determine worktree type
@@ -2534,8 +2534,8 @@ impl App {
     }
 
     /// Show commit blocked dialog with security details
-    fn show_commit_blocked_dialog(&mut self, scan: rstn_core::SecurityScanResult) {
-        use rstn_core::Severity;
+    fn show_commit_blocked_dialog(&mut self, scan: crate::SecurityScanResult) {
+        use crate::Severity;
 
         let details = scan
             .warnings
@@ -2558,8 +2558,8 @@ impl App {
 
     /// Format warnings and sensitive files for display
     fn format_warnings(
-        warnings: &[rstn_core::SecurityWarning],
-        sensitive_files: &[rstn_core::SensitiveFile],
+        warnings: &[crate::SecurityWarning],
+        sensitive_files: &[crate::SensitiveFile],
     ) -> String {
         let mut desc = String::new();
 

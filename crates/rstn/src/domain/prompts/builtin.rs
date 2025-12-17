@@ -6,28 +6,28 @@
 use super::SpecPhase;
 
 /// Built-in specify prompt
-pub const SPECIFY_PROMPT: &str = include_str!("../../prompts/specify.md");
+pub const SPECIFY_PROMPT: &str = include_str!("templates/specify.md");
 
 /// Built-in clarify prompt
-pub const CLARIFY_PROMPT: &str = include_str!("../../prompts/clarify.md");
+pub const CLARIFY_PROMPT: &str = include_str!("templates/clarify.md");
 
 /// Built-in plan prompt
-pub const PLAN_PROMPT: &str = include_str!("../../prompts/plan.md");
+pub const PLAN_PROMPT: &str = include_str!("templates/plan.md");
 
 /// Built-in tasks prompt
-pub const TASKS_PROMPT: &str = include_str!("../../prompts/tasks.md");
+pub const TASKS_PROMPT: &str = include_str!("templates/tasks.md");
 
 /// Built-in implement prompt
-pub const IMPLEMENT_PROMPT: &str = include_str!("../../prompts/implement.md");
+pub const IMPLEMENT_PROMPT: &str = include_str!("templates/implement.md");
 
 /// Built-in analyze prompt
-pub const ANALYZE_PROMPT: &str = include_str!("../../prompts/analyze.md");
+pub const ANALYZE_PROMPT: &str = include_str!("templates/analyze.md");
 
 /// Built-in checklist prompt
-pub const CHECKLIST_PROMPT: &str = include_str!("../../prompts/checklist.md");
+pub const CHECKLIST_PROMPT: &str = include_str!("templates/checklist.md");
 
 /// Built-in review prompt
-pub const REVIEW_PROMPT: &str = include_str!("../../prompts/review.md");
+pub const REVIEW_PROMPT: &str = include_str!("templates/review.md");
 
 /// Get the built-in prompt for a given phase
 pub fn get_builtin_prompt(phase: SpecPhase) -> &'static str {

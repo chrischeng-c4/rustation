@@ -7,7 +7,7 @@ use regex::Regex;
 use std::sync::OnceLock;
 use tokio::process::Command;
 
-use crate::errors::Result;
+use crate::domain::errors::Result;
 
 /// Security scan result for staged changes
 #[derive(Debug, Clone)]
@@ -138,7 +138,7 @@ pub async fn scan_staged_changes() -> Result<SecurityScanResult> {
         .await?;
 
     if !diff_output.status.success() {
-        return Err(crate::errors::CoreError::Git(
+        return Err(crate::domain::errors::CoreError::Git(
             "Failed to get staged diff".to_string(),
         ));
     }
@@ -152,7 +152,7 @@ pub async fn scan_staged_changes() -> Result<SecurityScanResult> {
         .await?;
 
     if !files_output.status.success() {
-        return Err(crate::errors::CoreError::Git(
+        return Err(crate::domain::errors::CoreError::Git(
             "Failed to get staged files".to_string(),
         ));
     }
