@@ -84,6 +84,25 @@ pub struct ReportStatusArgs {
     pub message: Option<String>,
 }
 
+/// Arguments for rstn_read_spec tool
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Used by MCP handlers
+pub struct ReadSpecArgs {
+    /// Artifact to read: "spec" | "plan" | "tasks" | "checklist" | "analysis"
+    pub artifact: String,
+}
+
+/// Feature context response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Used by MCP handlers
+pub struct FeatureContext {
+    pub feature_number: Option<String>,
+    pub feature_name: Option<String>,
+    pub branch: Option<String>,
+    pub phase: Option<String>,
+    pub spec_dir: Option<String>,
+}
+
 /// JSON schema for rstn_report_status tool
 fn status_tool_schema() -> serde_json::Value {
     serde_json::json!({
@@ -104,6 +123,30 @@ fn status_tool_schema() -> serde_json::Value {
             }
         },
         "required": ["status"]
+    })
+}
+
+/// JSON schema for rstn_read_spec tool
+fn read_spec_tool_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {
+            "artifact": {
+                "type": "string",
+                "enum": ["spec", "plan", "tasks", "checklist", "analysis"],
+                "description": "Which artifact to read"
+            }
+        },
+        "required": ["artifact"]
+    })
+}
+
+/// JSON schema for rstn_get_context tool
+fn get_context_tool_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {},
+        "required": []
     })
 }
 
@@ -217,6 +260,119 @@ impl prism_mcp_rs::prelude::ToolHandler for ReportStatusHandler {
     }
 }
 
+/// Handler for rstn_read_spec tool
+struct ReadSpecHandler {
+    state: Arc<Mutex<McpState>>,
+}
+
+impl ReadSpecHandler {
+    /// Map artifact name to filename
+    fn artifact_to_filename(artifact: &str) -> Option<&'static str> {
+        match artifact {
+            "spec" => Some("spec.md"),
+            "plan" => Some("plan.md"),
+            "tasks" => Some("tasks.md"),
+            "checklist" => Some("checklist.md"),
+            "analysis" => Some("analysis.md"),
+            _ => None,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl prism_mcp_rs::prelude::ToolHandler for ReadSpecHandler {
+    async fn call(
+        &self,
+        arguments: std::collections::HashMap<String, serde_json::Value>,
+    ) -> prism_mcp_rs::prelude::McpResult<prism_mcp_rs::prelude::ToolResult> {
+        use prism_mcp_rs::prelude::*;
+
+        // Extract artifact (required)
+        let artifact = arguments
+            .get("artifact")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| McpError::validation("Missing 'artifact' field"))?;
+
+        // Get filename
+        let filename = Self::artifact_to_filename(artifact)
+            .ok_or_else(|| McpError::validation(format!("Invalid artifact: {}", artifact)))?;
+
+        // Get spec directory from state
+        let state = self.state.lock().await;
+        let spec_dir = state.spec_dir.clone();
+        drop(state);
+
+        let spec_dir = spec_dir.ok_or_else(|| {
+            McpError::validation("No active feature. Run a spec phase first (e.g., specify, plan)")
+        })?;
+
+        // Build file path
+        let file_path = std::path::PathBuf::from(&spec_dir).join(filename);
+
+        // Read file
+        let content = std::fs::read_to_string(&file_path).map_err(|e| {
+            McpError::validation(format!(
+                "Could not read {}: {}. File may not exist yet - try running the corresponding phase first.",
+                artifact, e
+            ))
+        })?;
+
+        info!(
+            "MCP tool rstn_read_spec called: artifact={}, path={}",
+            artifact,
+            file_path.display()
+        );
+
+        // Return content
+        Ok(ToolResult {
+            content: vec![ContentBlock::text(content)],
+            is_error: Some(false),
+            meta: None,
+            structured_content: None,
+        })
+    }
+}
+
+/// Handler for rstn_get_context tool
+struct GetContextHandler {
+    state: Arc<Mutex<McpState>>,
+}
+
+#[async_trait::async_trait]
+impl prism_mcp_rs::prelude::ToolHandler for GetContextHandler {
+    async fn call(
+        &self,
+        _arguments: std::collections::HashMap<String, serde_json::Value>,
+    ) -> prism_mcp_rs::prelude::McpResult<prism_mcp_rs::prelude::ToolResult> {
+        use prism_mcp_rs::prelude::*;
+
+        // Get current context from state
+        let state = self.state.lock().await;
+        let context = FeatureContext {
+            feature_number: state.feature_number.clone(),
+            feature_name: state.feature_name.clone(),
+            branch: state.branch.clone(),
+            phase: state.phase.clone(),
+            spec_dir: state.spec_dir.clone(),
+        };
+        drop(state);
+
+        info!("MCP tool rstn_get_context called");
+
+        // Serialize context to JSON string
+        let context_json = serde_json::to_string_pretty(&context)
+            .map_err(|e| McpError::internal(format!("Failed to serialize context: {}", e)))?;
+
+        // Return as text content
+        Ok(ToolResult {
+            content: vec![ContentBlock::text(context_json)],
+            is_error: Some(false),
+            meta: None,
+            structured_content: None,
+        })
+    }
+}
+
 /// Start the MCP server
 ///
 /// # Arguments
@@ -287,7 +443,7 @@ pub async fn start_server(
 /// Register all MCP tools
 async fn register_tools(
     server: &McpServer,
-    _state: Arc<Mutex<McpState>>,
+    state: Arc<Mutex<McpState>>,
     event_tx: mpsc::Sender<Event>,
 ) -> Result<()> {
     // Register rstn_report_status tool (Feature 061)
@@ -303,9 +459,35 @@ async fn register_tools(
 
     info!("Registered MCP tool: rstn_report_status");
 
-    // Future tools (features 062-063):
-    // - rstn_read_spec (062): Read spec artifacts
-    // - rstn_get_context (062): Get feature context
+    // Register rstn_read_spec tool (Feature 062)
+    server
+        .add_tool(
+            "rstn_read_spec",
+            Some("Read a spec artifact for the current feature"),
+            read_spec_tool_schema(),
+            ReadSpecHandler {
+                state: state.clone(),
+            },
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to register rstn_read_spec: {}", e))?;
+
+    info!("Registered MCP tool: rstn_read_spec");
+
+    // Register rstn_get_context tool (Feature 062)
+    server
+        .add_tool(
+            "rstn_get_context",
+            Some("Get current feature context and metadata"),
+            get_context_tool_schema(),
+            GetContextHandler { state },
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to register rstn_get_context: {}", e))?;
+
+    info!("Registered MCP tool: rstn_get_context");
+
+    // Future tools (feature 063):
     // - rstn_complete_task (063): Mark tasks complete
 
     Ok(())

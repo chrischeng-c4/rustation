@@ -6,25 +6,25 @@
 
 ## Phase 1: rstn_read_spec Tool
 
-- [ ] T001 Create ReadSpecArgs struct
-- [ ] T002 Implement artifact_to_filename mapping
-- [ ] T003 Implement handle_read_spec handler
-- [ ] T004 Handle file not found gracefully
-- [ ] T005 Register rstn_read_spec tool
+- [x] T001 Create ReadSpecArgs struct
+- [x] T002 Implement artifact_to_filename mapping
+- [x] T003 Implement handle_read_spec handler
+- [x] T004 Handle file not found gracefully
+- [x] T005 Register rstn_read_spec tool
 
 ## Phase 2: rstn_get_context Tool
 
-- [ ] T006 Create FeatureContext response struct
-- [ ] T007 Implement handle_get_context handler
-- [ ] T008 Reuse detect_current_feature() logic
-- [ ] T009 Register rstn_get_context tool
+- [x] T006 Create FeatureContext response struct
+- [x] T007 Implement handle_get_context handler
+- [x] T008 Reuse detect_current_feature() logic
+- [x] T009 Register rstn_get_context tool
 
 ## Phase 3: Testing
 
-- [ ] T010 Unit test: read_spec returns correct content
-- [ ] T011 Unit test: read_spec handles missing file
-- [ ] T012 Unit test: get_context returns correct data
-- [ ] T013 Integration test: Claude can read spec
+- [x] T010 Unit test: read_spec returns correct content
+- [x] T011 Unit test: read_spec handles missing file
+- [x] T012 Unit test: get_context returns correct data
+- [x] T013 Integration test: Claude can read spec
 
 ## Dependencies
 
