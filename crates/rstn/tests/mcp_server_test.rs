@@ -335,3 +335,107 @@ fn test_feature_context_serialization() {
     let deserialized: FeatureContext = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.feature_number, Some("062".to_string()));
 }
+
+#[tokio::test]
+async fn test_rstn_complete_task_tool_registration() {
+    // Start server with rstn_complete_task tool
+    let config = McpServerConfig {
+        port: 19566,
+        ..Default::default()
+    };
+
+    let (event_tx, _event_rx) = mpsc::channel(10);
+    let handle = mcp_server::start_server(config, event_tx)
+        .await
+        .expect("Failed to start MCP server");
+
+    // Give the server time to start and register tools
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Tool is registered - in real usage, Claude Code would call
+    // rstn_complete_task via MCP protocol to mark tasks complete
+
+    // Cleanup
+    handle.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_task_completed_event_handling() {
+    use rstn::tui::event::Event;
+
+    let (tx, mut rx) = mpsc::channel(10);
+
+    // Simulate rstn_complete_task tool call sending an event
+    tx.send(Event::McpTaskCompleted {
+        task_id: "T001".to_string(),
+        success: true,
+        message: "Task T001 completion requested".to_string(),
+    })
+    .await
+    .unwrap();
+
+    // Verify event received
+    let event = rx.recv().await.unwrap();
+    match event {
+        Event::McpTaskCompleted {
+            task_id,
+            success,
+            message,
+        } => {
+            assert_eq!(task_id, "T001");
+            assert!(success);
+            assert!(message.contains("T001"));
+        }
+        _ => panic!("Wrong event type"),
+    }
+}
+
+#[tokio::test]
+async fn test_task_completed_event_failure() {
+    use rstn::tui::event::Event;
+
+    let (tx, mut rx) = mpsc::channel(10);
+
+    // Simulate task completion failure
+    tx.send(Event::McpTaskCompleted {
+        task_id: "T999".to_string(),
+        success: false,
+        message: "Task T999 not found".to_string(),
+    })
+    .await
+    .unwrap();
+
+    // Verify event received
+    let event = rx.recv().await.unwrap();
+    match event {
+        Event::McpTaskCompleted {
+            task_id,
+            success,
+            message,
+        } => {
+            assert_eq!(task_id, "T999");
+            assert!(!success);
+            assert!(message.contains("not found"));
+        }
+        _ => panic!("Wrong event type"),
+    }
+}
+
+#[test]
+fn test_complete_task_args_serialization() {
+    use rstn::tui::mcp_server::CompleteTaskArgs;
+
+    let args = CompleteTaskArgs {
+        task_id: "T001".to_string(),
+        skip_validation: Some(false),
+    };
+
+    // Verify serialization works
+    let json = serde_json::to_string(&args).unwrap();
+    assert!(json.contains("T001"));
+
+    // Verify deserialization works
+    let deserialized: CompleteTaskArgs = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized.task_id, "T001");
+    assert_eq!(deserialized.skip_validation, Some(false));
+}

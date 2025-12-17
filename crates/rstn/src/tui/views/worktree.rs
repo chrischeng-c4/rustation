@@ -259,6 +259,19 @@ impl TaskListState {
     pub fn len(&self) -> usize {
         self.tasks.len()
     }
+
+    /// Mark a task as complete by its ID (e.g., "T001")
+    pub fn complete_by_id(&mut self, task_id: &str) -> Result<(), String> {
+        // Find task by ID
+        let task_index = self.tasks
+            .iter()
+            .position(|t| t.id == task_id)
+            .ok_or_else(|| format!("Task {} not found", task_id))?;
+
+        // Mark as complete
+        self.tasks[task_index].completed = true;
+        Ok(())
+    }
 }
 
 impl ContentType {
@@ -552,6 +565,16 @@ impl SpecifyState {
                     return;
                 }
             }
+        }
+    }
+
+    /// Mark a task as complete by its ID (Feature 063)
+    pub fn complete_task_by_id(&mut self, task_id: &str) -> Result<(), String> {
+        if let Some(ref mut task_list) = self.task_list_state {
+            task_list.complete_by_id(task_id)?;
+            Ok(())
+        } else {
+            Err("No task list loaded".to_string())
         }
     }
 }
@@ -1900,6 +1923,33 @@ impl WorktreeView {
             format!("Task complete. Progress: {}/{}", completed, total),
         );
         self.log_buffer.push(entry);
+    }
+
+    /// Mark a task complete by its ID via MCP tool (Feature 063)
+    ///
+    /// Called when Claude Code calls rstn_complete_task tool.
+    pub fn complete_task_by_id(&mut self, task_id: &str) -> Result<(usize, usize), String> {
+        // Mark task complete
+        self.specify_state.complete_task_by_id(task_id)?;
+
+        // Save to file
+        match self.save_tasks_to_file() {
+            ViewAction::None => {
+                // Success - get progress and return
+                let (completed, total) = self.specify_state.get_task_progress();
+
+                // Log completion
+                let entry = LogEntry::new(
+                    LogCategory::System,
+                    format!("Task {} complete via MCP. Progress: {}/{}", task_id, completed, total),
+                );
+                self.log_buffer.push(entry);
+
+                Ok((completed, total))
+            }
+            ViewAction::DisplayMessage(msg) => Err(msg),
+            _ => Err("Unexpected result from save_tasks_to_file".to_string()),
+        }
     }
 
     /// Cancel specify workflow and return to normal Spec view (T016)

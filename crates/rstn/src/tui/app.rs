@@ -2199,6 +2199,46 @@ impl App {
                         }
                     }
                 }
+                Event::McpTaskCompleted {
+                    task_id,
+                    success,
+                    message,
+                } => {
+                    tracing::info!("Handling MCP task completion: task_id={}, success={}", task_id, success);
+
+                    if success {
+                        // Mark task complete in worktree view
+                        match self.worktree_view.complete_task_by_id(&task_id) {
+                            Ok((completed, total)) => {
+                                self.status_message = Some(format!(
+                                    "Task {} completed. Progress: {}/{}",
+                                    task_id, completed, total
+                                ));
+                                self.worktree_view.add_output(format!(
+                                    "✓ Task {} completed. Progress: {}/{}",
+                                    task_id, completed, total
+                                ));
+                                tracing::info!("Task {} marked complete successfully", task_id);
+                            }
+                            Err(e) => {
+                                self.status_message = Some(format!("Failed to complete task {}: {}", task_id, e));
+                                self.worktree_view.add_output(format!(
+                                    "❌ Failed to complete task {}: {}",
+                                    task_id, e
+                                ));
+                                tracing::error!("Failed to complete task {}: {}", task_id, e);
+                            }
+                        }
+                    } else {
+                        // Task completion failed
+                        self.status_message = Some(format!("Task {} completion failed: {}", task_id, message));
+                        self.worktree_view.add_output(format!(
+                            "❌ Task {} completion failed: {}",
+                            task_id, message
+                        ));
+                        tracing::error!("Task {} completion failed: {}", task_id, message);
+                    }
+                }
                 Event::CommitStarted => {
                     self.status_message = Some("Commit workflow started...".to_string());
                 }

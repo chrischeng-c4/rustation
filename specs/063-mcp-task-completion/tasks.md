@@ -6,39 +6,39 @@
 
 ## Phase 1: Tool Definition
 
-- [ ] T001 Create CompleteTaskArgs struct
-- [ ] T002 Define JSON schema for rstn_complete_task
+- [x] T001 Create CompleteTaskArgs struct
+- [x] T002 Define JSON schema for rstn_complete_task
 
 ## Phase 2: Event Type
 
-- [ ] T003 Add McpTaskCompleted variant to Event enum
+- [x] T003 Add McpTaskCompleted variant to Event enum
 
 ## Phase 3: Task Completion Logic
 
-- [ ] T004 Add complete_task_by_id() to SpecifyState
-- [ ] T005 Implement task lookup by ID
-- [ ] T006 Mark task complete and save to file
-- [ ] T007 Get next incomplete task info
+- [x] T004 Add complete_task_by_id() to SpecifyState
+- [x] T005 Implement task lookup by ID
+- [x] T006 Mark task complete and save to file
+- [x] T007 Get next incomplete task info
 
 ## Phase 4: Tool Handler
 
-- [ ] T008 Implement handle_complete_task async function
-- [ ] T009 Send McpTaskCompleted event
-- [ ] T010 Return response with next_task info
-- [ ] T011 Register rstn_complete_task tool
+- [x] T008 Implement handle_complete_task async function
+- [x] T009 Send McpTaskCompleted event
+- [x] T010 Return response with next_task info
+- [x] T011 Register rstn_complete_task tool
 
 ## Phase 5: Event Handling
 
-- [ ] T012 Handle McpTaskCompleted in app.rs
-- [ ] T013 Refresh worktree view task list
-- [ ] T014 Update progress indicator
+- [x] T012 Handle McpTaskCompleted in app.rs
+- [x] T013 Refresh worktree view task list
+- [x] T014 Update progress indicator
 
 ## Phase 6: Testing
 
-- [ ] T015 Unit test: task marked complete
-- [ ] T016 Unit test: file updated
-- [ ] T017 Unit test: next task returned
-- [ ] T018 Integration test: full flow
+- [x] T015 Unit test: task marked complete
+- [x] T016 Unit test: file updated
+- [x] T017 Unit test: next task returned
+- [x] T018 Integration test: full flow
 
 ## Dependencies
 

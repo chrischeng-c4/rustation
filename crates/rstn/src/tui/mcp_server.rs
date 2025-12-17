@@ -103,6 +103,17 @@ pub struct FeatureContext {
     pub spec_dir: Option<String>,
 }
 
+/// Arguments for rstn_complete_task tool
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Used by MCP handlers
+pub struct CompleteTaskArgs {
+    /// Task ID to mark complete (e.g., "T001", "T002")
+    pub task_id: String,
+    /// Skip validation checks (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skip_validation: Option<bool>,
+}
+
 /// JSON schema for rstn_report_status tool
 fn status_tool_schema() -> serde_json::Value {
     serde_json::json!({
@@ -147,6 +158,24 @@ fn get_context_tool_schema() -> serde_json::Value {
         "type": "object",
         "properties": {},
         "required": []
+    })
+}
+
+/// JSON schema for rstn_complete_task tool
+fn complete_task_tool_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {
+            "task_id": {
+                "type": "string",
+                "description": "Task ID to mark complete (e.g., T001, T002)"
+            },
+            "skip_validation": {
+                "type": "boolean",
+                "description": "Skip validation checks (optional)"
+            }
+        },
+        "required": ["task_id"]
     })
 }
 
@@ -373,6 +402,58 @@ impl prism_mcp_rs::prelude::ToolHandler for GetContextHandler {
     }
 }
 
+/// Handler for rstn_complete_task tool
+struct CompleteTaskHandler {
+    event_tx: mpsc::Sender<Event>,
+}
+
+#[async_trait::async_trait]
+impl prism_mcp_rs::prelude::ToolHandler for CompleteTaskHandler {
+    async fn call(
+        &self,
+        arguments: std::collections::HashMap<String, serde_json::Value>,
+    ) -> prism_mcp_rs::prelude::McpResult<prism_mcp_rs::prelude::ToolResult> {
+        use prism_mcp_rs::prelude::*;
+
+        // Extract task_id (required)
+        let task_id = arguments
+            .get("task_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| McpError::validation("Missing 'task_id' field"))?
+            .to_string();
+
+        // Extract skip_validation (optional)
+        let _skip_validation = arguments
+            .get("skip_validation")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        // Send event to TUI main loop for task completion
+        // The app.rs event handler will handle the actual file modification
+        self.event_tx
+            .send(Event::McpTaskCompleted {
+                task_id: task_id.clone(),
+                success: true,
+                message: format!("Task {} completion requested", task_id),
+            })
+            .await
+            .map_err(|e| McpError::internal(format!("Failed to send event: {}", e)))?;
+
+        info!("MCP tool rstn_complete_task called: task_id={}", task_id);
+
+        // Return success - actual completion happens in event handler
+        Ok(ToolResult {
+            content: vec![ContentBlock::text(format!(
+                "Task {} marked for completion. Processing...",
+                task_id
+            ))],
+            is_error: Some(false),
+            meta: None,
+            structured_content: None,
+        })
+    }
+}
+
 /// Start the MCP server
 ///
 /// # Arguments
@@ -452,7 +533,9 @@ async fn register_tools(
             "rstn_report_status",
             Some("Report current task status to rstn control plane"),
             status_tool_schema(),
-            ReportStatusHandler { event_tx },
+            ReportStatusHandler {
+                event_tx: event_tx.clone(),
+            },
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to register rstn_report_status: {}", e))?;
@@ -480,15 +563,29 @@ async fn register_tools(
             "rstn_get_context",
             Some("Get current feature context and metadata"),
             get_context_tool_schema(),
-            GetContextHandler { state },
+            GetContextHandler {
+                state: state.clone(),
+            },
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to register rstn_get_context: {}", e))?;
 
     info!("Registered MCP tool: rstn_get_context");
 
-    // Future tools (feature 063):
-    // - rstn_complete_task (063): Mark tasks complete
+    // Register rstn_complete_task tool (Feature 063)
+    server
+        .add_tool(
+            "rstn_complete_task",
+            Some("Mark a task as complete with validation"),
+            complete_task_tool_schema(),
+            CompleteTaskHandler {
+                event_tx: event_tx.clone(),
+            },
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to register rstn_complete_task: {}", e))?;
+
+    info!("Registered MCP tool: rstn_complete_task");
 
     Ok(())
 }

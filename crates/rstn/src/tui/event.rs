@@ -63,6 +63,12 @@ pub enum Event {
         prompt: Option<String>,
         message: Option<String>,
     },
+    /// MCP tool called: rstn_complete_task
+    McpTaskCompleted {
+        task_id: String,
+        success: bool,
+        message: String,
+    },
     /// Commit workflow started
     CommitStarted,
     /// Security scan blocked commit
