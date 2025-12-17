@@ -49,11 +49,14 @@ async fn main() -> Result<()> {
     } else {
         // Default: run TUI mode
         debug!("running in TUI mode");
-        run_tui_mode(session_id)
+        run_tui_mode(session_id).await
     }
 }
 
-fn run_tui_mode(session_id: String) -> Result<()> {
+async fn run_tui_mode(session_id: String) -> Result<()> {
+    use rstn::tui::mcp_server::{self, McpServerConfig};
+    use tokio::sync::mpsc;
+
     info!("starting TUI mode");
 
     // Check if we have a TTY
@@ -66,12 +69,40 @@ fn run_tui_mode(session_id: String) -> Result<()> {
     }
     debug!("TTY check passed");
 
+    // Start MCP server for Claude Code communication
+    debug!("starting MCP server");
+    let (mcp_event_tx, _mcp_event_rx) = mpsc::channel(100);
+    let mcp_config = McpServerConfig::default();
+    let mcp_handle = match mcp_server::start_server(mcp_config, mcp_event_tx).await {
+        Ok(handle) => {
+            info!("MCP server started on {}", handle.url());
+            // Write MCP config for Claude Code discovery
+            if let Err(e) = mcp_server::write_mcp_config(handle.port()) {
+                tracing::warn!("Failed to write MCP config: {}", e);
+            }
+            Some(handle)
+        }
+        Err(e) => {
+            tracing::warn!("Failed to start MCP server (continuing without it): {}", e);
+            None
+        }
+    };
+
     debug!("creating App instance with session_id: {}", session_id);
     let mut app = App::new_with_session(Some(session_id));
     debug!("App created successfully");
 
     debug!("running app main loop");
     let result = app.run();
+
+    // Cleanup MCP server
+    if let Some(handle) = mcp_handle {
+        debug!("shutting down MCP server");
+        handle.shutdown().await;
+        if let Err(e) = mcp_server::cleanup_mcp_config() {
+            tracing::warn!("Failed to cleanup MCP config: {}", e);
+        }
+    }
 
     match &result {
         Ok(_) => info!("TUI exited normally"),
