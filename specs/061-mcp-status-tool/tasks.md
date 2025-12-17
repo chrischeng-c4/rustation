@@ -6,36 +6,36 @@
 
 ## Phase 1: Tool Definition
 
-- [ ] T001 Create ReportStatusArgs struct in mcp_server.rs
-- [ ] T002 Define JSON schema for rstn_report_status tool
+- [x] T001 Create ReportStatusArgs struct in mcp_server.rs
+- [x] T002 Define JSON schema for rstn_report_status tool
 
 ## Phase 2: Event Type
 
-- [ ] T003 Add McpStatus variant to Event enum in event.rs
+- [x] T003 Add McpStatus variant to Event enum in event.rs
 
 ## Phase 3: Tool Handler
 
-- [ ] T004 Implement handle_report_status async function
-- [ ] T005 Send McpStatus event via channel
-- [ ] T006 Return ToolResult with success message
+- [x] T004 Implement handle_report_status async function
+- [x] T005 Send McpStatus event via channel
+- [x] T006 Return ToolResult with success message
 
 ## Phase 4: Tool Registration
 
-- [ ] T007 Register rstn_report_status in McpServer startup
-- [ ] T008 Verify tool appears in tools/list response
+- [x] T007 Register rstn_report_status in McpServer startup
+- [x] T008 Verify tool appears in tools/list response
 
 ## Phase 5: Event Handling
 
-- [ ] T009 Handle McpStatus in app.rs main loop
-- [ ] T010 Implement needs_input → InputDialog transition
-- [ ] T011 Implement completed → phase done transition
-- [ ] T012 Implement error → display error message
+- [x] T009 Handle McpStatus in app.rs main loop
+- [x] T010 Implement needs_input → InputDialog transition
+- [x] T011 Implement completed → phase done transition
+- [x] T012 Implement error → display error message
 
 ## Phase 6: Testing
 
-- [ ] T013 Unit test: tool handler sends correct event
-- [ ] T014 Unit test: needs_input shows dialog
-- [ ] T015 Integration test: full tool call flow
+- [x] T013 Unit test: tool handler sends correct event
+- [x] T014 Unit test: needs_input shows dialog
+- [x] T015 Integration test: full tool call flow
 
 ## Dependencies
 

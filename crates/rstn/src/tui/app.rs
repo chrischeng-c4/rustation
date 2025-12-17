@@ -2157,6 +2157,48 @@ impl App {
                     debug!("main_loop iteration {}: Event::ClaudeCompleted", iteration);
                     self.handle_claude_completed(phase, success, session_id, status);
                 }
+                Event::McpStatus {
+                    status,
+                    prompt,
+                    message,
+                } => {
+                    tracing::info!("Handling MCP status: {}", status);
+
+                    match status.as_str() {
+                        "needs_input" => {
+                            // Same logic as handle_claude_completed Line 1701-1710
+                            let prompt_text =
+                                prompt.unwrap_or_else(|| "Enter your response:".to_string());
+                            self.worktree_view.pending_follow_up = true;
+                            self.input_dialog = Some(InputDialog::new("Claude Input", prompt_text));
+                            self.input_mode = true;
+                            self.status_message =
+                                Some("Waiting for your response...".to_string());
+                            tracing::info!("Showing input dialog with prompt");
+                        }
+                        "error" => {
+                            // Same logic as handle_claude_completed Line 1712-1718
+                            let error_msg =
+                                message.unwrap_or_else(|| "Unknown error".to_string());
+                            self.worktree_view.command_done();
+                            self.status_message = Some(format!("Error: {}", error_msg));
+                            self.worktree_view
+                                .add_output(format!("❌ Error: {}", error_msg));
+                            tracing::error!("Task error: {}", error_msg);
+                        }
+                        "completed" => {
+                            // Same logic as handle_claude_completed Line 1719-1722
+                            self.worktree_view.command_done();
+                            self.status_message = Some("Task completed successfully".to_string());
+                            self.worktree_view.add_output("✓ Task completed".to_string());
+                            tracing::info!("Task completed successfully");
+                        }
+                        _ => {
+                            tracing::warn!("Unknown MCP status: {}", status);
+                            self.status_message = Some(format!("Unknown status: {}", status));
+                        }
+                    }
+                }
                 Event::CommitStarted => {
                     self.status_message = Some("Commit workflow started...".to_string());
                 }

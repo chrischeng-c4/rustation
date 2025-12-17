@@ -71,6 +71,42 @@ pub struct ToolResponse {
     pub data: Option<serde_json::Value>,
 }
 
+/// Arguments for rstn_report_status tool
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReportStatusArgs {
+    /// Status type: "needs_input" | "completed" | "error"
+    pub status: String,
+    /// Prompt text for needs_input status
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    /// Error message for error status
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+/// JSON schema for rstn_report_status tool
+fn status_tool_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {
+            "status": {
+                "type": "string",
+                "enum": ["needs_input", "completed", "error"],
+                "description": "Current task status"
+            },
+            "prompt": {
+                "type": "string",
+                "description": "Prompt to show user (for needs_input)"
+            },
+            "message": {
+                "type": "string",
+                "description": "Error message (for error status)"
+            }
+        },
+        "required": ["status"]
+    })
+}
+
 /// Handle for controlling the MCP server
 pub struct McpServerHandle {
     /// Shutdown signal sender
@@ -118,6 +154,69 @@ impl McpServerHandle {
     }
 }
 
+/// Handler for rstn_report_status tool
+struct ReportStatusHandler {
+    event_tx: mpsc::Sender<Event>,
+}
+
+#[async_trait::async_trait]
+impl prism_mcp_rs::prelude::ToolHandler for ReportStatusHandler {
+    async fn call(
+        &self,
+        arguments: std::collections::HashMap<String, serde_json::Value>,
+    ) -> prism_mcp_rs::prelude::McpResult<prism_mcp_rs::prelude::ToolResult> {
+        use prism_mcp_rs::prelude::*;
+
+        // Extract status (required)
+        let status = arguments
+            .get("status")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| McpError::validation("Missing 'status' field"))?
+            .to_string();
+
+        // Validate status enum
+        if !["needs_input", "completed", "error"].contains(&status.as_str()) {
+            return Err(McpError::validation(
+                "status must be 'needs_input', 'completed', or 'error'",
+            ));
+        }
+
+        // Extract optional fields
+        let prompt = arguments
+            .get("prompt")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        let message = arguments
+            .get("message")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        // Send event to TUI main loop
+        self.event_tx
+            .send(Event::McpStatus {
+                status: status.clone(),
+                prompt: prompt.clone(),
+                message: message.clone(),
+            })
+            .await
+            .map_err(|e| McpError::internal(format!("Failed to send event: {}", e)))?;
+
+        info!("MCP tool rstn_report_status called: status={}", status);
+
+        // Return success
+        Ok(ToolResult {
+            content: vec![ContentBlock::text(format!(
+                "Status '{}' reported successfully",
+                status
+            ))],
+            is_error: Some(false),
+            meta: None,
+            structured_content: None,
+        })
+    }
+}
+
 /// Start the MCP server
 ///
 /// # Arguments
@@ -128,7 +227,7 @@ impl McpServerHandle {
 /// A handle to control the server
 pub async fn start_server(
     config: McpServerConfig,
-    _event_tx: mpsc::Sender<Event>,
+    event_tx: mpsc::Sender<Event>,
 ) -> Result<McpServerHandle> {
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let state = Arc::new(Mutex::new(McpState::default()));
@@ -150,9 +249,8 @@ pub async fn start_server(
         // Initialize the server
         server.initialize().await.map_err(|e| anyhow::anyhow!("Failed to initialize MCP server: {}", e))?;
 
-        // Register tools (empty for now - will be added in feature 061-063)
-        // This is where rstn_report_status, rstn_read_spec, etc. will be registered
-        register_tools(&server, state_clone.clone()).await?;
+        // Register tools
+        register_tools(&server, state_clone.clone(), event_tx.clone()).await?;
     }
 
     // Create HTTP transport
@@ -188,16 +286,28 @@ pub async fn start_server(
 
 /// Register all MCP tools
 async fn register_tools(
-    _server: &McpServer,
+    server: &McpServer,
     _state: Arc<Mutex<McpState>>,
+    event_tx: mpsc::Sender<Event>,
 ) -> Result<()> {
-    // Tools will be registered in feature 061-063:
-    // - rstn_report_status (061): Report status changes
+    // Register rstn_report_status tool (Feature 061)
+    server
+        .add_tool(
+            "rstn_report_status",
+            Some("Report current task status to rstn control plane"),
+            status_tool_schema(),
+            ReportStatusHandler { event_tx },
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to register rstn_report_status: {}", e))?;
+
+    info!("Registered MCP tool: rstn_report_status");
+
+    // Future tools (features 062-063):
     // - rstn_read_spec (062): Read spec artifacts
     // - rstn_get_context (062): Get feature context
     // - rstn_complete_task (063): Mark tasks complete
 
-    info!("MCP tools registered (none yet - pending features 061-063)");
     Ok(())
 }
 

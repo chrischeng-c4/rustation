@@ -57,6 +57,12 @@ pub enum Event {
         session_id: Option<String>,
         status: Option<RscliStatus>,
     },
+    /// MCP tool called: rstn_report_status
+    McpStatus {
+        status: String,
+        prompt: Option<String>,
+        message: Option<String>,
+    },
     /// Commit workflow started
     CommitStarted,
     /// Security scan blocked commit

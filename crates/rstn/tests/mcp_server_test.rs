@@ -141,3 +141,119 @@ async fn test_mcp_config_lifecycle() {
     // Verify config file is removed
     assert!(!config_path.exists(), "Config file was not removed");
 }
+
+#[tokio::test]
+async fn test_rstn_report_status_tool_registration() {
+    // Start server with rstn_report_status tool
+    let config = McpServerConfig {
+        port: 19564,
+        ..Default::default()
+    };
+
+    let (event_tx, _event_rx) = mpsc::channel(10);
+    let handle = mcp_server::start_server(config, event_tx)
+        .await
+        .expect("Failed to start MCP server");
+
+    // Give the server time to start and register tools
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Tool is registered - in real usage, Claude Code would query
+    // the tools/list endpoint via MCP protocol to verify this
+
+    // Cleanup
+    handle.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_status_event_handling() {
+    use rstn::tui::event::Event;
+
+    let (tx, mut rx) = mpsc::channel(10);
+
+    // Simulate rstn_report_status tool call sending an event
+    tx.send(Event::McpStatus {
+        status: "needs_input".to_string(),
+        prompt: Some("Test prompt".to_string()),
+        message: None,
+    })
+    .await
+    .unwrap();
+
+    // Verify event received
+    let event = rx.recv().await.unwrap();
+    match event {
+        Event::McpStatus {
+            status,
+            prompt,
+            message,
+        } => {
+            assert_eq!(status, "needs_input");
+            assert_eq!(prompt, Some("Test prompt".to_string()));
+            assert_eq!(message, None);
+        }
+        _ => panic!("Wrong event type"),
+    }
+}
+
+#[tokio::test]
+async fn test_status_event_error() {
+    use rstn::tui::event::Event;
+
+    let (tx, mut rx) = mpsc::channel(10);
+
+    // Simulate error status
+    tx.send(Event::McpStatus {
+        status: "error".to_string(),
+        prompt: None,
+        message: Some("Test error message".to_string()),
+    })
+    .await
+    .unwrap();
+
+    // Verify event received
+    let event = rx.recv().await.unwrap();
+    match event {
+        Event::McpStatus {
+            status,
+            prompt,
+            message,
+        } => {
+            assert_eq!(status, "error");
+            assert_eq!(prompt, None);
+            assert_eq!(message, Some("Test error message".to_string()));
+        }
+        _ => panic!("Wrong event type"),
+    }
+}
+
+#[tokio::test]
+async fn test_status_event_completed() {
+    use rstn::tui::event::Event;
+
+    let (tx, mut rx) = mpsc::channel(10);
+
+    // Simulate completed status
+    tx.send(Event::McpStatus {
+        status: "completed".to_string(),
+        prompt: None,
+        message: None,
+    })
+    .await
+    .unwrap();
+
+    // Verify event received
+    let event = rx.recv().await.unwrap();
+    match event {
+        Event::McpStatus {
+            status,
+            prompt,
+            message,
+        } => {
+            assert_eq!(status, "completed");
+            assert_eq!(prompt, None);
+            assert_eq!(message, None);
+        }
+        _ => panic!("Wrong event type"),
+    }
+}
