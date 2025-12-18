@@ -1023,6 +1023,12 @@ impl WorktreeView {
             return;
         }
 
+        // Render content area - dispatch to Prompt Claude streaming output if running (Task 1.7)
+        if self.content_type == ContentType::PromptRunning {
+            self.render_prompt_running(frame, sections[1]);
+            return;
+        }
+
         // Standard content rendering for Spec/Plan/Tasks
         let content_block = Block::default()
             .borders(Borders::ALL)
@@ -1462,6 +1468,13 @@ impl WorktreeView {
         ViewAction::RunPromptClaude { prompt }
     }
 
+    /// Append streaming output for Prompt Claude (Task 1.7)
+    ///
+    /// Called when new chunks arrive from Claude CLI streaming
+    pub fn append_prompt_output(&mut self, chunk: &str) {
+        self.prompt_output.push_str(chunk);
+    }
+
     /// Render Prompt Claude input UI (Task 1.6)
     ///
     /// Layout:
@@ -1544,6 +1557,114 @@ impl WorktreeView {
                 }),
                 Span::styled("[Ctrl+Enter]", Style::default().fg(Color::Cyan)),
                 Span::raw(" Submit"),
+            ]),
+        ];
+
+        let footer_paragraph = Paragraph::new(footer_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
+                    .border_style(Style::default().fg(Color::Magenta)),
+            )
+            .wrap(Wrap { trim: false });
+
+        frame.render_widget(footer_paragraph, sections[2]);
+    }
+
+    /// Render Prompt Claude streaming output (Task 1.7)
+    ///
+    /// Layout:
+    /// - Header (3 lines): Spinner + title
+    /// - Output area (fills space): Accumulated streaming output with auto-scroll
+    /// - Footer (3 lines): Duration/status
+    fn render_prompt_running(&self, frame: &mut Frame, area: Rect) {
+        // Split area: Header (3 lines) + Output (fill) + Footer (3 lines)
+        let sections = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3), // Title with spinner
+                Constraint::Min(5),    // Output area (minimum 5 lines)
+                Constraint::Length(3), // Duration/status
+            ])
+            .split(area);
+
+        // === HEADER: Spinner and title ===
+        let spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
+        let spinner_char = spinner[self.spinner_frame % spinner.len()];
+
+        let title_lines = vec![
+            Line::from(""),
+            Line::from(vec![
+                Span::raw(" "),
+                Span::styled(
+                    format!("{} ", spinner_char),
+                    Style::default().fg(Color::Cyan),
+                ),
+                Span::styled(
+                    "Running: Prompt Claude",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]),
+        ];
+
+        let title_paragraph = Paragraph::new(title_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
+                    .border_style(Style::default().fg(Color::Magenta)),
+            )
+            .wrap(Wrap { trim: false });
+
+        frame.render_widget(title_paragraph, sections[0]);
+
+        // === OUTPUT: Accumulated streaming output ===
+        let output_lines: Vec<Line> = self
+            .prompt_output
+            .lines()
+            .map(|line| Line::from(line.to_string()))
+            .collect();
+
+        // Calculate scroll to show latest output (auto-scroll to bottom)
+        let available_height = sections[1].height.saturating_sub(2) as usize; // Subtract borders
+        let total_lines = output_lines.len();
+        let scroll_offset = if total_lines > available_height {
+            total_lines - available_height
+        } else {
+            0
+        };
+
+        let visible_lines: Vec<Line> = output_lines
+            .into_iter()
+            .skip(scroll_offset)
+            .take(available_height)
+            .collect();
+
+        let output_paragraph = Paragraph::new(visible_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::LEFT | Borders::RIGHT)
+                    .border_style(Style::default().fg(Color::Magenta)),
+            )
+            .wrap(Wrap { trim: false });
+
+        frame.render_widget(output_paragraph, sections[1]);
+
+        // === FOOTER: Duration and status ===
+        // TODO: Calculate actual duration when integrated with app (Task 1.8)
+        let footer_lines = vec![
+            Line::from(""),
+            Line::from(vec![
+                Span::raw(" Streaming...  "),
+                Span::styled(
+                    "[Esc]",
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    " Cancel (not yet implemented)",
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]),
         ];
 
