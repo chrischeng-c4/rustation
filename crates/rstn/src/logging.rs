@@ -12,17 +12,25 @@ use std::path::PathBuf;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use uuid::Uuid;
 
-/// Generate a short session ID for log files
+/// Generate a timestamp-based session ID for log files
 ///
-/// Returns an 8-character hexadecimal string derived from a UUID v4.
-/// This ensures unique session identification for each rstn execution.
+/// Returns a session ID in format: `YYYY-MM-DD-HHMMSS-random`
+/// Example: `2025-12-18-142345-a3f9b2c1`
+///
+/// This format enables:
+/// - Instant chronological sorting (timestamp prefix)
+/// - Age identification at a glance
+/// - Uniqueness guarantee (8-character random suffix = 4.3B possibilities)
 pub fn generate_session_id() -> String {
+    use chrono::Local;
+
+    let now = Local::now();
+    let timestamp = now.format("%Y-%m-%d-%H%M%S");
     let uuid = Uuid::new_v4();
     let bytes = uuid.as_bytes();
-    format!(
-        "{:02x}{:02x}{:02x}{:02x}",
-        bytes[0], bytes[1], bytes[2], bytes[3]
-    )
+    let random = format!("{:02x}{:02x}{:02x}{:02x}", bytes[0], bytes[1], bytes[2], bytes[3]);
+
+    format!("{}-{}", timestamp, random)
 }
 
 /// Initialize logging based on settings
@@ -320,5 +328,73 @@ mod tests {
         #[cfg(not(debug_assertions))]
         assert_eq!(settings.log_level, "info");
         assert!(!settings.log_to_console);
+    }
+
+    #[test]
+    fn test_session_id_format() {
+        let session_id = generate_session_id();
+
+        // Validate format: YYYY-MM-DD-HHMMSS-random
+        // Example: 2025-12-18-142345-a3f9b2c1
+        let pattern = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}-\d{6}-[0-9a-f]{8}$").unwrap();
+        assert!(
+            pattern.is_match(&session_id),
+            "Session ID '{}' does not match expected format YYYY-MM-DD-HHMMSS-random",
+            session_id
+        );
+
+        // Validate timestamp components are reasonable
+        let parts: Vec<&str> = session_id.split('-').collect();
+        assert_eq!(parts.len(), 5, "Session ID should have 5 parts");
+
+        let year: u32 = parts[0].parse().unwrap();
+        let month: u32 = parts[1].parse().unwrap();
+        let day: u32 = parts[2].parse().unwrap();
+        let time: u32 = parts[3].parse().unwrap();
+        let random = parts[4];
+
+        assert!(year >= 2025 && year <= 2100, "Year should be reasonable");
+        assert!(month >= 1 && month <= 12, "Month should be 1-12");
+        assert!(day >= 1 && day <= 31, "Day should be 1-31");
+        assert!(time <= 235959, "Time should be valid HHMMSS");
+        assert_eq!(random.len(), 8, "Random suffix should be 8 hex chars");
+    }
+
+    #[test]
+    fn test_session_id_uniqueness() {
+        use std::collections::HashSet;
+
+        let mut ids = HashSet::new();
+
+        // Generate 1000 session IDs
+        for _ in 0..1000 {
+            let session_id = generate_session_id();
+            // All IDs should be unique (HashSet insert returns false if duplicate)
+            assert!(
+                ids.insert(session_id.clone()),
+                "Duplicate session ID generated: {}",
+                session_id
+            );
+        }
+
+        assert_eq!(ids.len(), 1000, "Should have 1000 unique session IDs");
+    }
+
+    #[test]
+    fn test_session_id_chronological_sorting() {
+        use std::thread::sleep;
+        use std::time::Duration;
+
+        let id1 = generate_session_id();
+        sleep(Duration::from_millis(1100)); // Sleep > 1 second to ensure different timestamp
+        let id2 = generate_session_id();
+
+        // IDs should sort chronologically due to timestamp prefix
+        assert!(
+            id1 < id2,
+            "Session IDs should sort chronologically: '{}' should be < '{}'",
+            id1,
+            id2
+        );
     }
 }
