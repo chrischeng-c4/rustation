@@ -1017,6 +1017,12 @@ impl WorktreeView {
             return;
         }
 
+        // Render content area - dispatch to Prompt Claude input if in that mode (Task 1.6)
+        if self.content_type == ContentType::PromptInput {
+            self.render_prompt_input(frame, sections[1]);
+            return;
+        }
+
         // Standard content rendering for Spec/Plan/Tasks
         let content_block = Block::default()
             .borders(Borders::ALL)
@@ -1446,7 +1452,7 @@ impl WorktreeView {
         if prompt.trim().len() < 3 {
             // TODO: Show validation error in UI (for now, just ignore)
             return ViewAction::None;
-        }
+        };
 
         // Clear input state
         self.prompt_input = None;
@@ -1454,6 +1460,102 @@ impl WorktreeView {
 
         // Return action to execute Claude CLI
         ViewAction::RunPromptClaude { prompt }
+    }
+
+    /// Render Prompt Claude input UI (Task 1.6)
+    ///
+    /// Layout:
+    /// - Title and instructions (3 lines)
+    /// - TextInput widget (multiline, fills most space)
+    /// - Status and keybindings (4 lines)
+    fn render_prompt_input(&self, frame: &mut Frame, area: Rect) {
+        // Split area: Header (3 lines) + Input (fill) + Footer (4 lines)
+        let sections = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3), // Title + instructions
+                Constraint::Min(5),    // Input area (minimum 5 lines)
+                Constraint::Length(4), // Status + keybindings
+            ])
+            .split(area);
+
+        // === HEADER: Title and instructions ===
+        let title_lines = vec![
+            Line::from(Span::styled(
+                "Enter prompt for Claude",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                if self.prompt_edit_mode {
+                    "Type your prompt below (multi-line):"
+                } else {
+                    "Press 'i' to enter edit mode:"
+                },
+                Style::default().fg(Color::Yellow),
+            )),
+        ];
+
+        let title_paragraph = Paragraph::new(title_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
+                    .border_style(Style::default().fg(Color::Magenta)),
+            )
+            .wrap(Wrap { trim: false });
+
+        frame.render_widget(title_paragraph, sections[0]);
+
+        // === INPUT: TextInput widget ===
+        if let Some(ref input) = self.prompt_input {
+            // Render TextInput widget in bordered box
+            let input_block = Block::default()
+                .borders(Borders::LEFT | Borders::RIGHT)
+                .border_style(Style::default().fg(Color::Magenta));
+
+            let input_inner = input_block.inner(sections[1]);
+            frame.render_widget(input_block, sections[1]);
+            frame.render_widget(input, input_inner);
+        }
+
+        // === FOOTER: Status and keybindings ===
+        let edit_mode_status = if self.prompt_edit_mode {
+            Span::styled("EDIT", Style::default().fg(Color::Green))
+        } else {
+            Span::styled("VIEW", Style::default().fg(Color::Yellow))
+        };
+
+        let footer_lines = vec![
+            Line::from(vec![
+                Span::raw("Edit mode: "),
+                edit_mode_status,
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("[i]", Style::default().fg(Color::Green)),
+                Span::raw(" Edit  "),
+                Span::styled("[Esc]", Style::default().fg(Color::Red)),
+                Span::raw(if self.prompt_edit_mode {
+                    " Exit edit  "
+                } else {
+                    " Cancel     "
+                }),
+                Span::styled("[Ctrl+Enter]", Style::default().fg(Color::Cyan)),
+                Span::raw(" Submit"),
+            ]),
+        ];
+
+        let footer_paragraph = Paragraph::new(footer_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
+                    .border_style(Style::default().fg(Color::Magenta)),
+            )
+            .wrap(Wrap { trim: false });
+
+        frame.render_widget(footer_paragraph, sections[2]);
     }
 
     /// Start implement mode to execute tasks (Feature 056)
