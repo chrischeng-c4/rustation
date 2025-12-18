@@ -34,23 +34,52 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    use std::time::Instant;
+
+    // Track session start time for duration calculation
+    let session_start = Instant::now();
+
     // Load settings and initialize logging
     let settings = Settings::load();
     let session_id = logging::init(&settings);
 
-    info!(session_id = %session_id, "rstn session started");
+    info!(
+        session_id = %session_id,
+        version = version::FULL_VERSION,
+        "📍 Session started"
+    );
+
     let args = Args::parse();
     debug!(cli = args.cli, command = ?args.command, "parsed arguments");
 
     // If --cli flag is provided OR a command is specified, run in CLI mode
-    if args.cli || args.command.is_some() {
+    let result = if args.cli || args.command.is_some() {
         debug!("running in CLI mode");
         run_cli_mode(args).await
     } else {
         // Default: run TUI mode
         debug!("running in TUI mode");
         run_tui_mode(session_id).await
+    };
+
+    // Log session end with duration
+    let duration = session_start.elapsed();
+    match &result {
+        Ok(_) => info!(
+            duration_secs = duration.as_secs_f64(),
+            "✅ Session ended successfully ({}s)",
+            duration.as_secs()
+        ),
+        Err(e) => tracing::error!(
+            error = %e,
+            duration_secs = duration.as_secs_f64(),
+            "❌ Session ended with error ({}s): {}",
+            duration.as_secs(),
+            e
+        ),
     }
+
+    result
 }
 
 async fn run_tui_mode(session_id: String) -> Result<()> {
@@ -106,11 +135,7 @@ async fn run_tui_mode(session_id: String) -> Result<()> {
         if let Err(e) = mcp_server::cleanup_mcp_config() {
             tracing::warn!("Failed to cleanup MCP config: {}", e);
         }
-    }
-
-    match &result {
-        Ok(_) => info!("TUI exited normally"),
-        Err(e) => tracing::error!(error = %e, "TUI exited with error"),
+        debug!("MCP server shutdown complete");
     }
 
     result.map_err(|e| rstn::RscliError::Other(anyhow::anyhow!("{}", e)))
