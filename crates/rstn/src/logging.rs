@@ -12,6 +12,18 @@ use std::path::PathBuf;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use uuid::Uuid;
 
+/// Custom time formatter for file logs with milliseconds
+/// Format: [YYYY-MM-DD HH:MM:SS.mmm]
+struct MillisecondTimer;
+
+impl fmt::time::FormatTime for MillisecondTimer {
+    fn format_time(&self, w: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
+        use chrono::Local;
+        let now = Local::now();
+        write!(w, "{}", now.format("%Y-%m-%d %H:%M:%S%.3f"))
+    }
+}
+
 /// Generate a timestamp-based session ID for log files
 ///
 /// Returns a session ID in format: `YYYY-MM-DD-HHMMSS-random`
@@ -77,9 +89,11 @@ pub fn init(settings: &Settings) -> String {
         ))
     });
 
-    // File layer - always enabled
+    // File layer - always enabled with millisecond timestamps
+    // Format: [YYYY-MM-DD HH:MM:SS.mmm] LEVEL [TARGET] Message (file:line)
     let file_layer = fmt::layer()
         .with_writer(file_appender)
+        .with_timer(MillisecondTimer)
         .with_target(true)
         .with_thread_ids(false)
         .with_file(true)
@@ -396,5 +410,51 @@ mod tests {
             id1,
             id2
         );
+    }
+
+    #[test]
+    fn test_millisecond_timer_format() {
+        use tracing_subscriber::fmt::time::FormatTime;
+
+        let timer = MillisecondTimer;
+        let mut writer = String::new();
+        let mut fmt_writer = fmt::format::Writer::new(&mut writer);
+
+        // Format time and verify it matches expected pattern
+        timer.format_time(&mut fmt_writer).unwrap();
+
+        // Should match: YYYY-MM-DD HH:MM:SS.mmm
+        // Example: 2025-12-18 14:23:45.123
+        let pattern =
+            regex::Regex::new(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$").unwrap();
+        assert!(
+            pattern.is_match(&writer),
+            "Timestamp '{}' does not match expected format YYYY-MM-DD HH:MM:SS.mmm",
+            writer
+        );
+
+        // Verify timestamp components are reasonable
+        // Format: 2025-12-18 14:23:45.123
+        let parts: Vec<&str> = writer.split(&[' ', ':', '.'][..]).collect();
+        assert_eq!(parts.len(), 5, "Should have 5 parts after split");
+
+        let date_parts: Vec<&str> = parts[0].split('-').collect();
+        assert_eq!(date_parts.len(), 3, "Date should have 3 parts");
+        let year: u32 = date_parts[0].parse().unwrap();
+        let month: u32 = date_parts[1].parse().unwrap();
+        let day: u32 = date_parts[2].parse().unwrap();
+
+        let hour: u32 = parts[1].parse().unwrap();
+        let minute: u32 = parts[2].parse().unwrap();
+        let second: u32 = parts[3].parse().unwrap();
+        let millis: u32 = parts[4].parse().unwrap();
+
+        assert!(year >= 2025 && year <= 2100, "Year should be reasonable");
+        assert!(month >= 1 && month <= 12, "Month should be 1-12");
+        assert!(day >= 1 && day <= 31, "Day should be 1-31");
+        assert!(hour <= 23, "Hour should be 0-23");
+        assert!(minute <= 59, "Minute should be 0-59");
+        assert!(second <= 59, "Second should be 0-59");
+        assert!(millis <= 999, "Milliseconds should be 0-999");
     }
 }
