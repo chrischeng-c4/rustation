@@ -79,6 +79,76 @@ START: New work?
 See: kb/04-sdd-workflow/when-to-use-which.md for detailed guide
 </tree>
 
+<tree name="When to use Design-First Planning">
+START: Planning rstn TUI feature?
+│
+├─► Does feature involve interactive flow?
+│   ├─ YES → Continue checking
+│   └─ NO → Use standard SDD workflow
+│
+├─► Does it involve ANY of these?
+│   ├─ rstn ↔ Claude Code communication → Design-First Planning REQUIRED
+│   ├─ rstn ↔ MCP server interaction → Design-First Planning REQUIRED
+│   ├─ Multi-step user workflows → Design-First Planning REQUIRED
+│   ├─ State machine (>3 states) → Design-First Planning REQUIRED
+│   ├─ Async operations / streaming → Design-First Planning REQUIRED
+│   └─ Simple UI-only change → Standard SDD
+│
+└─► Use Design-First Planning:
+    Plan phase MUST include:
+    1. Flow chart (Mermaid)
+    2. Sequence chart (Mermaid)
+    3. State machine (Mermaid)
+    4. Logging specification
+    5. Verification method
+
+Examples requiring Design-First Planning:
+- Prompt Claude command (rstn → Claude → MCP)
+- Task execution workflow (multi-step states)
+- Commit review flow (state machine)
+- Stream processing (async + parsing)
+
+Examples NOT requiring Design-First:
+- Add new widget (simple UI)
+- Update styling (no interaction)
+- Bug fix (no new flow)
+</tree>
+
+<tree name="Design-First Planning Requirements">
+When plan.md involves interactive flows, MUST include these sections:
+
+1. Flow Diagram (Mermaid)
+   - How does data flow through the system?
+   - What components are involved?
+   - rstn → Claude → MCP → back?
+
+2. Sequence Diagram (Mermaid)
+   - Timeline of interactions
+   - Who calls whom? When?
+   - What messages are exchanged?
+
+3. State Machine (Mermaid)
+   - What states exist?
+   - What triggers transitions?
+   - What are the state variables?
+
+4. Logging Specification
+   - What events to log?
+   - What format (panel vs file)?
+   - What checkpoints to verify?
+
+5. Verification Method
+   - How to test this flow?
+   - What are observable checkpoints?
+   - How to reproduce issues?
+
+Template: See kb/01-architecture/ for examples:
+- worktree-view-redesign.md (UI/UX)
+- rstn-integration-flow.md (Flow + Sequence)
+- worktree-state-machine.md (State Machine)
+- logging-specification.md (Logging)
+</tree>
+
 <tree name="SDD Workflow (Full)">
 START: New feature request (using Full SDD)
 │
@@ -87,7 +157,19 @@ START: New feature request (using Full SDD)
 │   └─ YES → Continue
 │
 ├─► Does plan.md exist?
-│   ├─ NO → Run /speckit.plan
+│   ├─ NO → Check if Design-First Planning needed
+│   │        (see "When to use Design-First Planning" tree)
+│   │        │
+│   │        ├─ YES → Run /speckit.plan WITH flow diagrams
+│   │        │        MUST include:
+│   │        │        - Flow chart (Mermaid)
+│   │        │        - Sequence chart (Mermaid)
+│   │        │        - State machine (Mermaid)
+│   │        │        - Logging specification
+│   │        │        - Verification method
+│   │        │
+│   │        └─ NO → Run /speckit.plan (standard)
+│   │
 │   └─ YES → Continue
 │
 ├─► Does tasks.md exist?
@@ -95,7 +177,9 @@ START: New feature request (using Full SDD)
 │   └─ YES → Continue
 │
 ├─► Are all tasks complete?
-│   ├─ NO → Implement next task, then dispatch to tui-tester
+│   ├─ NO → Implement next task
+│   │        If Design-First: Implement logging FIRST
+│   │        Then implement feature following flow diagrams
 │   └─ YES → Continue
 │
 ├─► Do all tests pass?
@@ -309,6 +393,18 @@ Comprehensive documentation (created 2025-12-18):
 - `kb/03-complexity-analysis/technical-debt.md` - Current issues & metrics
 - `kb/04-sdd-workflow/when-to-use-which.md` - Full vs Lightweight SDD decision guide
 
+Worktree Redesign - Design-First Examples (2025-12-18):
+- `kb/01-architecture/worktree-view-redesign.md` - Three-column layout (20/40/40)
+- `kb/01-architecture/rstn-integration-flow.md` - Flow + Sequence diagrams (4 Mermaid)
+- `kb/01-architecture/worktree-state-machine.md` - State machine (7 Mermaid)
+- `kb/01-architecture/logging-specification.md` - Two-tier logging + event checklist
+
+IMPORTANT: For rstn TUI features with interactive flows:
+1. MUST create flow diagrams BEFORE implementation (see Design-First Planning tree)
+2. Plan phase MUST include: Flow chart, Sequence chart, State machine, Logging spec, Verification method
+3. Implement logging FIRST (observability)
+4. Reference design docs in code/commits
+
 Key insights:
 - WorktreeView: 4,118 lines, 54+ fields (needs refactoring)
 - App: 3,404 lines (needs refactoring)
@@ -324,6 +420,9 @@ Key insights:
 
 <rule severity="NEVER">Skip SDD phases → Leads to misaligned code → Follow specify → plan → tasks → implement</rule>
 <rule severity="NEVER">Implement without spec → No traceability → Run /speckit.specify first</rule>
+<rule severity="NEVER">Implement interactive flow without design diagrams → Leads to complexity → Use Design-First Planning (flow chart, sequence chart, state machine, logging spec)</rule>
+<rule severity="NEVER">Skip flow diagrams for rstn TUI features → Can't debug interaction → Create Mermaid diagrams in plan phase</rule>
+<rule severity="NEVER">Implement without logging spec → No observability → Define what to log BEFORE coding</rule>
 <rule severity="NEVER">Dispatch to tui-tester without context → Agent lacks info → Use context template</rule>
 <rule severity="NEVER">Hardcode test coordinates → Breaks on resize → Calculate from layout rects</rule>
 <rule severity="NEVER">Forget EnableMouseCapture → Mouse events won't work → Add to terminal setup</rule>
@@ -331,6 +430,18 @@ Key insights:
 <rule severity="NEVER">Skip clippy → Lints accumulate → Run cargo clippy before commit</rule>
 <rule severity="NEVER">Use -p + stream-json without --verbose → CLI error → Always add --verbose flag</rule>
 <rule severity="NEVER">Use "transport" in MCP config → Invalid schema → Use "type" field instead</rule>
+
+<bad-example name="Skip flow diagrams">
+User: "Add Prompt Claude command"
+Assistant: *Directly implements without creating flow diagrams*
+❌ WRONG: Missing Design-First Planning (flow chart, sequence, state machine)
+</bad-example>
+
+<bad-example name="No logging spec">
+User: "Add MCP tool call"
+Assistant: *Implements feature but doesn't specify what to log*
+❌ WRONG: Can't debug interaction without logging specification
+</bad-example>
 
 <bad-example name="No context dispatch">
 Task(subagent_type="tui-tester", prompt="Write mouse tests")
