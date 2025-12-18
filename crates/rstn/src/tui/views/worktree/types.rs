@@ -53,11 +53,12 @@ impl GitCommand {
     }
 }
 
-/// Unified command that can be either an SDD phase or a Git action
+/// Unified command that can be a workflow command, SDD phase, or Git action
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
-    SddPhase(SpecPhase, PhaseStatus),
-    GitAction(GitCommand),
+    PromptClaude,                     // Primary workflow command
+    SddPhase(SpecPhase, PhaseStatus), // SDD workflow phases
+    GitAction(GitCommand),            // Git actions
 }
 
 /// Content type to display in middle panel
@@ -67,8 +68,10 @@ pub enum ContentType {
     Plan,
     Tasks,
     CommitReview,
-    SpecifyInput,   // Feature 051: Input feature description
-    SpecifyReview,  // Feature 051: Review/edit generated spec
+    SpecifyInput,    // Feature 051: Input feature description
+    SpecifyReview,   // Feature 051: Review/edit generated spec
+    PromptInput,     // Prompt Claude: Multi-line prompt input
+    PromptRunning,   // Prompt Claude: Streaming output display
 }
 
 impl ContentType {
@@ -80,6 +83,8 @@ impl ContentType {
             ContentType::CommitReview => "Commit Review",
             ContentType::SpecifyInput => "Specify Input",
             ContentType::SpecifyReview => "Specify Review",
+            ContentType::PromptInput => "Prompt Claude",
+            ContentType::PromptRunning => "Claude Running",
         }
     }
 }

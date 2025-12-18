@@ -353,6 +353,7 @@ impl WorktreeView {
             ContentType::Tasks => self.tasks_content.as_deref(),
             ContentType::CommitReview => None, // Rendered separately via render_commit_review()
             ContentType::SpecifyInput | ContentType::SpecifyReview => None, // Feature 051: Rendered separately via render_specify_input()
+            ContentType::PromptInput | ContentType::PromptRunning => None, // Rendered separately via render_prompt_input/running()
         }
     }
 
@@ -494,6 +495,7 @@ impl WorktreeView {
             ContentType::Tasks => ContentType::Spec,
             ContentType::CommitReview => ContentType::CommitReview, // Don't allow switching during review
             ContentType::SpecifyInput | ContentType::SpecifyReview => self.content_type, // Feature 051: Don't allow switching during specify workflow
+            ContentType::PromptInput | ContentType::PromptRunning => self.content_type, // Don't allow switching during Prompt Claude workflow
         };
         self.content_scroll = 0;
     }
@@ -908,6 +910,7 @@ impl WorktreeView {
             ContentType::Tasks => 2,
             ContentType::CommitReview => 3,
             ContentType::SpecifyInput | ContentType::SpecifyReview => 0, // Feature 051: Highlight Spec tab during specify workflow
+            ContentType::PromptInput | ContentType::PromptRunning => 0, // Highlight Spec tab during Prompt Claude workflow
         };
 
         // Render tab bar
@@ -2687,6 +2690,8 @@ impl View for WorktreeView {
                         ContentType::CommitReview => ContentType::CommitReview, // No tab cycling during review
                         ContentType::SpecifyInput => ContentType::SpecifyInput, // No tab cycling during specify
                         ContentType::SpecifyReview => ContentType::SpecifyReview, // No tab cycling during specify
+                        ContentType::PromptInput => ContentType::PromptInput, // No tab cycling during prompt input
+                        ContentType::PromptRunning => ContentType::PromptRunning, // No tab cycling during prompt running
                     };
                     self.content_scroll = 0;
                 } else {
@@ -2770,6 +2775,11 @@ impl View for WorktreeView {
                         if let Some(cmd_idx) = self.display_index_to_command_index(display_idx) {
                             if let Some(command) = self.commands.get(cmd_idx) {
                                 return match command {
+                                    Command::PromptClaude => {
+                                        // TODO(Task 1.4): Implement start_prompt_input()
+                                        // self.start_prompt_input();
+                                        ViewAction::None
+                                    }
                                     Command::SddPhase(phase, _) => {
                                         match phase {
                                             // Specify phase uses new interactive flow (Feature 051)

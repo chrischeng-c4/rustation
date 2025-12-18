@@ -33,6 +33,8 @@ pub enum ViewAction {
         command: String,
         options: ClaudeOptions,
     },
+    /// Run Prompt Claude command with user prompt (Primary workflow command)
+    RunPromptClaude { prompt: String },
     /// Start the SDD wizard
     StartWizard,
     /// Show worktree list/manager

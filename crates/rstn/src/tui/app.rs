@@ -468,6 +468,11 @@ impl App {
                     }
                 });
             }
+            ViewAction::RunPromptClaude { prompt } => {
+                // TODO(Task 1.8): Implement Claude CLI execution with streaming
+                debug!("RunPromptClaude triggered with prompt: {}", prompt);
+                // Placeholder: Will spawn Claude CLI and handle streaming in Task 1.8
+            }
             ViewAction::RunSpecPhase {
                 phase,
                 command,
