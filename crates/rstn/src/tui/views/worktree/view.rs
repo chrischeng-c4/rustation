@@ -1326,12 +1326,134 @@ impl WorktreeView {
     /// 4. Press Esc to exit edit mode
     /// 5. Press Ctrl+Enter to submit prompt
     pub fn start_prompt_input(&mut self) {
-        // Initialize TextInput widget for multi-line prompt
-        self.prompt_input = Some(TextInput::new(String::new()));
+        // Initialize TextInput widget for multi-line prompt (20 lines max)
+        self.prompt_input = Some(TextInput::new_multiline(String::new(), 20));
         self.prompt_edit_mode = false; // Start in view mode (press 'i' to edit)
         self.prompt_output.clear();
         self.content_type = ContentType::PromptInput;
         self.focus = WorktreeFocus::Content; // Auto-focus Content area
+    }
+
+    /// Handle key input for Prompt Claude workflow (Task 1.5)
+    ///
+    /// Vim-style modal editing:
+    /// - View mode (default): 'i' to enter edit, 'Esc' to cancel
+    /// - Edit mode: Full editing, 'Esc' to exit edit, 'Ctrl+Enter' to submit
+    pub fn handle_prompt_input_key(&mut self, key: KeyEvent) -> ViewAction {
+        use crossterm::event::{KeyCode, KeyModifiers};
+
+        // Get mutable reference to input widget
+        let Some(input) = self.prompt_input.as_mut() else {
+            return ViewAction::None;
+        };
+
+        // Handle keys based on edit mode
+        if !self.prompt_edit_mode {
+            // VIEW MODE: Only handle mode switching and cancel
+            match key.code {
+                KeyCode::Char('i') => {
+                    // Enter edit mode
+                    self.prompt_edit_mode = true;
+                    input.active = true;
+                    ViewAction::None
+                }
+                KeyCode::Esc => {
+                    // Cancel prompt workflow
+                    self.prompt_input = None;
+                    self.prompt_edit_mode = false;
+                    self.prompt_output.clear();
+                    self.content_type = ContentType::Spec; // Return to default content
+                    self.focus = WorktreeFocus::Commands; // Return focus to commands
+                    ViewAction::None
+                }
+                KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    // Allow Ctrl+Enter submit in view mode too
+                    self.submit_prompt_input()
+                }
+                _ => ViewAction::None,
+            }
+        } else {
+            // EDIT MODE: Full editing capabilities
+            match key.code {
+                KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    input.insert_char(c);
+                    ViewAction::None
+                }
+                KeyCode::Backspace => {
+                    input.delete_char();
+                    ViewAction::None
+                }
+                KeyCode::Delete => {
+                    input.delete_char_forward();
+                    ViewAction::None
+                }
+                KeyCode::Left => {
+                    input.move_cursor_left();
+                    ViewAction::None
+                }
+                KeyCode::Right => {
+                    input.move_cursor_right();
+                    ViewAction::None
+                }
+                KeyCode::Up => {
+                    input.move_cursor_up();
+                    ViewAction::None
+                }
+                KeyCode::Down => {
+                    input.move_cursor_down();
+                    ViewAction::None
+                }
+                KeyCode::Home => {
+                    input.move_cursor_home();
+                    ViewAction::None
+                }
+                KeyCode::End => {
+                    input.move_cursor_end();
+                    ViewAction::None
+                }
+                KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    // Ctrl+Enter: Submit prompt
+                    self.submit_prompt_input()
+                }
+                KeyCode::Enter => {
+                    // Regular Enter: Insert newline
+                    input.insert_newline();
+                    ViewAction::None
+                }
+                KeyCode::Esc => {
+                    // Exit edit mode (don't cancel, just return to view mode)
+                    self.prompt_edit_mode = false;
+                    input.active = false;
+                    ViewAction::None
+                }
+                _ => ViewAction::None,
+            }
+        }
+    }
+
+    /// Submit the prompt and trigger Claude CLI execution (Task 1.5)
+    ///
+    /// Validates minimum length, then returns RunPromptClaude action
+    fn submit_prompt_input(&mut self) -> ViewAction {
+        let Some(input) = self.prompt_input.as_mut() else {
+            return ViewAction::None;
+        };
+
+        // Get prompt text
+        let prompt = input.get_multiline_value();
+
+        // Validate minimum length (at least 3 characters)
+        if prompt.trim().len() < 3 {
+            // TODO: Show validation error in UI (for now, just ignore)
+            return ViewAction::None;
+        }
+
+        // Clear input state
+        self.prompt_input = None;
+        self.prompt_edit_mode = false;
+
+        // Return action to execute Claude CLI
+        ViewAction::RunPromptClaude { prompt }
     }
 
     /// Start implement mode to execute tasks (Feature 056)
@@ -2742,6 +2864,11 @@ impl View for WorktreeView {
             }
             // T037: Otherwise route to review handler
             return self.handle_specify_review_input(key);
+        }
+
+        // Route to Prompt Claude input handler when in PromptInput mode (Task 1.5)
+        if self.content_type == ContentType::PromptInput && self.focus == WorktreeFocus::Content {
+            return self.handle_prompt_input_key(key);
         }
 
         match key.code {
