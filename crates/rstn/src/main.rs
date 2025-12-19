@@ -3,7 +3,9 @@
 //! Launches TUI mode by default. Use --cli flag for classic CLI mode.
 
 use clap::Parser;
-use rstn::cli::{Commands, McpCommands, ServiceCommands, SpecCommands, WorktreeCommands};
+use rstn::cli::{
+    Commands, McpCommands, ServiceCommands, SessionCommands, SpecCommands, WorktreeCommands,
+};
 use rstn::settings::Settings;
 use rstn::tui::state::StateInvariants;
 use rstn::tui::App;
@@ -302,6 +304,34 @@ async fn run_cli_mode(args: Args) -> Result<()> {
             }
             ServiceCommands::Status { name } => {
                 commands::service::status(name).await?;
+            }
+        },
+
+        Commands::Session { command } => match command {
+            SessionCommands::List {
+                limit,
+                filter_type,
+                filter_status,
+            } => {
+                commands::session::list(limit, filter_type, filter_status).await?;
+            }
+            SessionCommands::Info { session_id } => {
+                commands::session::info(session_id).await?;
+            }
+            SessionCommands::Logs {
+                session_id,
+                tail,
+                head,
+                follow,
+            } => {
+                commands::session::logs(session_id, tail, head, follow).await?;
+            }
+            SessionCommands::Cleanup {
+                older_than_days,
+                dry_run,
+                force,
+            } => {
+                commands::session::cleanup(older_than_days, dry_run, force).await?;
             }
         },
 

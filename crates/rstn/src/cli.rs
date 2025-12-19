@@ -105,6 +105,12 @@ pub enum Commands {
         command: ServiceCommands,
     },
 
+    /// Session management (query and inspect rstn sessions)
+    Session {
+        #[command(subcommand)]
+        command: SessionCommands,
+    },
+
     /// Send a prompt directly to Claude and stream the response
     Prompt {
         /// The prompt message to send to Claude
@@ -203,6 +209,63 @@ pub enum ServiceCommands {
     Status {
         /// Service name
         name: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SessionCommands {
+    /// List recent sessions
+    List {
+        /// Maximum number of sessions to display
+        #[arg(short, long, default_value = "20")]
+        limit: usize,
+
+        /// Filter by command type (e.g., "prompt")
+        #[arg(long)]
+        filter_type: Option<String>,
+
+        /// Filter by status (e.g., "completed", "failed")
+        #[arg(long)]
+        filter_status: Option<String>,
+    },
+
+    /// Show detailed session information
+    Info {
+        /// Session ID or prefix (e.g., "abc123")
+        session_id: String,
+    },
+
+    /// Display session log file
+    Logs {
+        /// Session ID or prefix
+        session_id: String,
+
+        /// Show last N lines
+        #[arg(long)]
+        tail: Option<usize>,
+
+        /// Show first N lines
+        #[arg(long)]
+        head: Option<usize>,
+
+        /// Follow log file (tail -f mode)
+        #[arg(short, long)]
+        follow: bool,
+    },
+
+    /// Clean up old sessions
+    Cleanup {
+        /// Delete sessions older than N days
+        #[arg(long, default_value = "30")]
+        older_than_days: u32,
+
+        /// Preview changes without deleting
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Delete even active sessions
+        #[arg(long)]
+        force: bool,
     },
 }
 

@@ -189,6 +189,18 @@ impl SessionManager {
             })?;
         Ok(())
     }
+
+    /// Delete a session from the database
+    ///
+    /// **Note**: This only deletes the metadata. Log files must be deleted separately.
+    pub fn delete_session(&self, session_id: &str) -> Result<()> {
+        self.db
+            .execute("DELETE FROM sessions WHERE session_id = ?1", params![session_id])
+            .map_err(|e| {
+                RscliError::Other(anyhow::anyhow!("Failed to delete session: {}", e))
+            })?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
