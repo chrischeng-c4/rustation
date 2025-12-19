@@ -206,6 +206,12 @@ Questions or suggestions for the knowledge base?
 
 ## Changelog
 
+- 2025-12-19: **Phase 4 (Developer Documentation)** - Created comprehensive developer guides
+  - Created contribution-guide.md - Setup, workflow, state testing MANDATORY, PR requirements
+  - Created testing-guide.md - State-first testing (round-trip, transitions, invariants)
+  - Created debugging.md - State inspection, logs, common issues, advanced techniques
+  - Updated CLAUDE.md - Complete knowledge-base section rewrite for v2
+  - **KB REORGANIZATION COMPLETE** - All 4 phases finished
 - 2025-12-19: **Phase 3 (User Documentation)** - Created getting-started guides for new users
   - Created installation.md - Complete installation guide with prerequisites, troubleshooting
   - Created quick-start.md - First 10 minutes walkthrough with navigation, common actions
