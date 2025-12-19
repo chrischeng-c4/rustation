@@ -386,31 +386,56 @@ Key implementation file:
 </claude-cli-docs>
 
 <knowledge-base>
-Comprehensive documentation (created 2025-12-18):
-- `kb/00-index.md` - START HERE (navigation hub)
-- `kb/01-architecture/state-serializability.md` - **CORE PRINCIPLE**: State as JSON/YAML (Feature 079)
-- `kb/01-architecture/overview.md` - System architecture
-- `kb/01-architecture/rstn-tui-architecture.md` - TUI design (current + target)
-- `kb/03-complexity-analysis/technical-debt.md` - Current issues & metrics
-- `kb/04-sdd-workflow/when-to-use-which.md` - Full vs Lightweight SDD decision guide
+**rustation v2 Knowledge Base** (reorganized 2025-12-19):
 
-Worktree Redesign - Design-First Examples (2025-12-18):
-- `kb/01-architecture/worktree-view-redesign.md` - Three-column layout (20/40/40)
-- `kb/01-architecture/rstn-integration-flow.md` - Flow + Sequence diagrams (4 Mermaid)
-- `kb/01-architecture/worktree-state-machine.md` - State machine (7 Mermaid)
-- `kb/01-architecture/logging-specification.md` - Two-tier logging + event checklist
+**START HERE**:
+- `kb/00-index.md` - Navigation hub for all documentation
 
-IMPORTANT: For rstn TUI features with interactive flows:
-1. MUST create flow diagrams BEFORE implementation (see Design-First Planning tree)
-2. Plan phase MUST include: Flow chart, Sequence chart, State machine, Logging spec, Verification method
-3. Implement logging FIRST (observability)
-4. Reference design docs in code/commits
+**For New Users** (Phase 3 - User Documentation):
+- `kb/01-getting-started/installation.md` - Install rstn on your system
+- `kb/01-getting-started/quick-start.md` - Run your first session in 10 minutes
+- `kb/01-getting-started/concepts.md` - Core concepts (state-first, CLI/TUI, SDD, MCP)
 
-Key insights:
-- WorktreeView: 4,118 lines, 54+ fields (needs refactoring)
-- App: 3,404 lines (needs refactoring)
-- SDD effectiveness: 83% success rate (20/24 features with full SDD completed)
-- Target: 5-6 month refactoring roadmap
+**For Contributors** (Phase 4 - Developer Documentation):
+- `kb/04-development/contribution-guide.md` - Setup, workflow, **state testing MANDATORY**
+- `kb/04-development/testing-guide.md` - How to write state tests (round-trip, transitions, invariants)
+- `kb/04-development/debugging.md` - State inspection, logs, common issues
+- `kb/04-development/sdd-workflow.md` - Full vs Lightweight SDD decision guide
+
+**Core Architecture** (Phase 2 - v2 Principles):
+- `kb/02-architecture/state-first.md` - **🎯 CORE PRINCIPLE**: All state MUST be JSON/YAML serializable
+- `kb/02-architecture/core-principles.md` - Three pillars (state-first, CLI/TUI separation, testing-first)
+
+**API Reference**:
+- `kb/03-api-reference/mcp-tools.md` - MCP tool schemas (rstn ↔ Claude Code)
+- `kb/03-api-reference/claude-cli.md` - Condensed CLI reference
+- `kb/03-api-reference/claude-cli-full.md` - Complete CLI reference
+- `kb/03-api-reference/claude-headless.md` - Headless mode patterns
+
+**v1 Archive** (historical reference only):
+- `kb/99-archive/` - All v1 content archived (2025-12-19)
+- `kb/99-archive/v1-analysis/technical-debt.md` - v1 problems (God classes, state explosion)
+- `kb/99-archive/v1-designs/` - Unimplemented v1 designs (worktree redesign, state machine, logging spec)
+
+**CRITICAL REQUIREMENTS for ALL features**:
+1. **State tests MANDATORY**: Round-trip serialization + transitions + invariants
+2. All state structs derive `Serialize + Deserialize + Debug + Clone`
+3. NO hidden state (closures, thread-locals, non-serializable types)
+4. See `kb/04-development/testing-guide.md` for examples
+5. See `kb/02-architecture/state-first.md` for principles
+
+**Development Workflow**:
+- New feature? → See `kb/04-development/sdd-workflow.md` (Full vs Lightweight SDD)
+- Writing tests? → See `kb/04-development/testing-guide.md` (state-first testing)
+- Debugging? → See `kb/04-development/debugging.md` (state inspection, logs)
+- Contributing? → See `kb/04-development/contribution-guide.md` (PR requirements)
+
+**Key v2 Insights**:
+- State-first architecture = core differentiator from v1
+- Test state, not UI (stable, observable, deterministic)
+- CLI/TUI share business logic (test via CLI first)
+- v1 archived (God classes, tight coupling, fragile tests)
+- SDD effectiveness: 83% success rate with full workflow
 </knowledge-base>
 
 </grounding>
