@@ -1,29 +1,41 @@
 # Archived Specifications
 
-This directory contains completed feature specifications that have been implemented and merged.
+**Project Restart**: All previous specs archived. Starting fresh with new architecture.
 
 ## Archive Structure
 
-- `phase-1-2-rush/` - Rush shell features (Phase 1-2: MVP & Control Flow)
-  - Features 001-035: Complete and merged
-  
-- `phase-9-tui-dx/` - TUI & Developer Experience features (Phase 9)
-  - Features 051-065: Complete and merged
-  - Includes: Interactive workflows, MCP architecture, prompt management
+### `legacy-v1/` - Original Rustation v1 (2024-2025)
+All features 001-050+ from the original implementation:
+- **036-050**: Active TUI features at time of restart
+- **Phase 1-2 Rush** (001-035): See `phase-1-2-rush/`
+- **Phase 9 TUI/DX** (051-065): See `phase-9-tui-dx/`
 
-## Why Archive?
+### `phase-1-2-rush/` - Rush Shell MVP & Control Flow
+Features 001-035 (Complete):
+- MVP, tab completion, pipes, redirections
+- Control flow, loops, functions
+- Variables, expansions, builtins
 
-Per project policy: **Specs without test/verification solutions are archived once implementation is complete or abandoned.**
+### `phase-9-tui-dx/` - Interactive Workflows & MCP
+Features 051-065 (Complete):
+- Interactive spec-kit workflows
+- MCP server architecture
+- Prompt content management
 
-Active specs remain in `specs/` directory. Archived specs serve as historical reference.
+## Why Archive Everything?
 
-## Restoration
+**Fresh Start**: Restarting rustation with new architecture and approach. Previous implementation served as learning foundation.
 
-To reference an archived spec:
-```bash
-# View archived spec
-cat specs/archive/phase-9-tui-dx/060-mcp-server-infrastructure/spec.md
+## Policy
 
-# Restore to active (if needed)
-mv specs/archive/<phase>/<feature>/ specs/
-```
+**Specs are archived when:**
+- Project restarts with new architecture
+- Features complete without active maintenance
+- No test/verification solution exists
+
+Active development uses `specs/` directory only.
+
+---
+
+**Archived**: 2025-12-19  
+**Reason**: Project restart - new architecture
