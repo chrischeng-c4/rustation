@@ -20,6 +20,18 @@ Welcome to the rustation knowledge base! This is your central hub for understand
 
 ---
 
+## 🚀 New to rustation?
+
+**Get started in 10 minutes**:
+
+1. **[Installation Guide](01-getting-started/installation.md)** - Install rstn on your system
+2. **[Quick Start](01-getting-started/quick-start.md)** - Run your first session
+3. **[Core Concepts](01-getting-started/concepts.md)** - Understand state-first architecture
+
+**Already installed?** Jump to [Quick Start](01-getting-started/quick-start.md)
+
+---
+
 ## Quick Links
 
 **For Contributors**:
@@ -29,8 +41,10 @@ Welcome to the rustation knowledge base! This is your central hub for understand
 - [MCP Tools Reference](03-api-reference/mcp-tools.md) - Available MCP tools
 
 **For Users**:
+- [Installation Guide](01-getting-started/installation.md) - Install rstn
+- [Quick Start](01-getting-started/quick-start.md) - First steps
+- [Core Concepts](01-getting-started/concepts.md) - Understand v2
 - [MCP Tools Reference](03-api-reference/mcp-tools.md) - Available MCP tools
-- Installation guide (coming soon)
 
 **For Claude Code Integration**:
 - [MCP Tools Reference](03-api-reference/mcp-tools.md) - MCP tool schemas
@@ -49,6 +63,11 @@ Welcome to the rustation knowledge base! This is your central hub for understand
 ```
 kb/
 ├── 00-index.md (this file)           - START HERE
+│
+├── 01-getting-started/               - User Onboarding (NEW)
+│   ├── installation.md               - Install rstn
+│   ├── quick-start.md                - First 10 minutes
+│   └── concepts.md                   - Core concepts
 │
 ├── 02-architecture/                  - Core Principles (v2)
 │   ├── state-first.md                - **🎯 Core principle**: State as JSON/YAML
@@ -187,6 +206,13 @@ Questions or suggestions for the knowledge base?
 
 ## Changelog
 
+- 2025-12-19: **Phase 3 (User Documentation)** - Created getting-started guides for new users
+  - Created installation.md - Complete installation guide with prerequisites, troubleshooting
+  - Created quick-start.md - First 10 minutes walkthrough with navigation, common actions
+  - Created concepts.md - Core concepts (state-first, CLI/TUI, SDD, MCP, terminology)
+  - Updated index with "New to rustation?" section
+  - Updated Quick Links to include all getting-started guides
+  - Updated Documentation Structure to include 01-getting-started/
 - 2025-12-19: **Phase 2 (Core Foundation)** - Established state-first as north star
   - **CRITICAL FIX**: Corrected MCP protocol in mcp-tools.md (SSE→HTTP, dynamic port)
   - Enhanced state-serializability.md → state-first.md with TL;DR, Mermaid diagram, common pitfalls
