@@ -267,6 +267,601 @@ stateDiagram-v2
 
 ---
 
+## State Persistence
+
+This section covers practical implementation details of state persistence in rstn, answering common questions about how state is stored, loaded, validated, and rendered.
+
+### State File Locations
+
+**Primary Location** (automatic session persistence):
+```bash
+~/.rstn/session.yaml
+```
+- Saved automatically on app exit
+- Loaded automatically on app start
+- YAML format for readability
+
+**CLI Flags** (manual state management):
+```bash
+rstn --save-state <file>    # Save to custom location (JSON)
+rstn --load-state <file>    # Load from custom location (JSON/YAML)
+```
+
+**Related Paths**:
+- `~/.rstn/sessions/{feature}.session` - Claude session IDs
+- `~/.rstn/settings.json` - Application settings
+- `~/.rstn/logs/` - Log files
+- `~/.rstn/mcp-session.json` - MCP server config
+
+**Legacy Migration**:
+The system auto-migrates from old paths:
+- `~/.rustation/` → `~/.rstn/` (priority 2)
+- `~/.rust-station/` → `~/.rstn/` (priority 3)
+
+**Files**: `crates/rstn/src/domain/paths.rs`, `crates/rstn/src/tui/app.rs:2290`
+
+---
+
+### File Format and Schema
+
+**Supported Formats**: YAML (preferred) or JSON
+
+**Auto-Detection**:
+```rust
+pub fn load_from_file(path: &Path) -> Result<Self, Box<dyn Error>> {
+    let content = std::fs::read_to_string(path)?;
+
+    // Try JSON first
+    if let Ok(state) = serde_json::from_str::<AppState>(&content) {
+        Self::check_version(&state.version)?;
+        return Ok(state);
+    }
+
+    // Fall back to YAML
+    if let Ok(state) = serde_yaml::from_str::<AppState>(&content) {
+        Self::check_version(&state.version)?;
+        return Ok(state);
+    }
+
+    Err("Failed to parse state file as JSON or YAML".into())
+}
+```
+
+**Schema Structure**:
+
+Top-level state (4 views, 52 total fields):
+```rust
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AppState {
+    pub version: String,                    // "0.3.0"
+    pub worktree_view: WorktreeViewState,   // 36 fields
+    pub dashboard_view: DashboardState,     // 12 fields
+    pub settings_view: SettingsState,       // 4 fields
+}
+```
+
+WorktreeViewState breakdown (36 fields organized by phase):
+- **P1 - Feature Context** (2): feature_info, worktree_type
+- **P1 - Content Cache** (3): spec_content, plan_content, tasks_content
+- **P1 - Phase Tracking** (2): phases, current_phase
+- **P1 - UI State** (3): focus, content_type, content_scroll
+- **P2 - Commands** (2): commands, command_state_index
+- **P2 - Logging/Output** (7): log_entries, output_scroll, is_running, running_phase, pending_git_command, active_session_id, pending_follow_up
+- **P3 - Input** (3): pending_input_phase, prompt_input, inline_input
+- **P3 - Progress** (3): progress_step, progress_total, progress_message
+- **P4 - Commit Workflow** (8): commit fields
+- **P5 - Specify/Prompt** (3): specify_state, prompt_edit_mode, prompt_output
+
+**Files**: `crates/rstn/src/tui/state/*.rs`
+
+---
+
+### Default State Initialization
+
+**Behavior**: Missing file or load failure → uses `Default::default()`
+
+**Session Load**:
+```rust
+fn load_session() -> Option<AppState> {
+    let session_path = get_data_dir().join("session.yaml");
+
+    if !session_path.exists() {
+        debug!("No session file, using defaults");
+        return None;  // ← Caller uses Default
+    }
+
+    match AppState::load_from_file(&session_path) {
+        Ok(state) => Some(state),
+        Err(e) => {
+            eprintln!("Failed to load: {}, using defaults", e);
+            None  // ← Caller uses Default
+        }
+    }
+}
+```
+
+**Default Implementations**:
+
+All state structs implement `Default` with sensible values:
+```rust
+impl Default for DashboardState {
+    fn default() -> Self {
+        Self {
+            focused_panel: DashboardPanel::QuickActions,
+            git_branch: "main".to_string(),
+            worktree_count: 1,  // ← Satisfies invariant (> 0)
+            // ... all fields have defaults
+        }
+    }
+}
+```
+
+**Defensive Deserialization**:
+
+Settings use `#[serde(default)]` for missing fields:
+```rust
+pub struct Settings {
+    #[serde(default = "default_auto_run")]
+    pub auto_run: bool,
+
+    #[serde(default = "default_max_turns")]
+    pub max_turns: u32,
+
+    // All fields protected
+}
+```
+
+**Result**: App always starts with valid state, never panics on missing file.
+
+**Files**: `crates/rstn/src/tui/state/*.rs`, `crates/rstn/src/tui/app.rs:109`
+
+---
+
+### Error Handling
+
+**Error Scenarios**:
+
+| Scenario | Behavior | Result |
+|----------|----------|--------|
+| Missing file | `read_to_string` fails | Returns `Err(io::Error)` |
+| Corrupted JSON | JSON parser fails | Tries YAML fallback |
+| Corrupted YAML | YAML parser fails | Returns `Err("Failed to parse...")` |
+| Missing fields | Uses `#[serde(default)]` | Fills with defaults, succeeds |
+| Wrong types | Serde fails | Returns `Err(serde error)` |
+| Invalid invariants | `assert_invariants()` | Panics with message |
+| Version mismatch | Logs warning | Returns `Ok()` (Phase 2) |
+
+**Version Checking** (currently lenient):
+```rust
+fn check_version(state_version: &str) -> Result<(), Box<dyn Error>> {
+    let current_version = env!("CARGO_PKG_VERSION");
+
+    if state_version != current_version {
+        eprintln!(
+            "Warning: Version mismatch. State: {}, Current: {}",
+            state_version, current_version
+        );
+        // Phase 2: Allow with warning
+        // Phase 5 will implement strict migration
+    }
+
+    Ok(())  // ← Returns Ok even on mismatch!
+}
+```
+
+**Post-Load Validation**:
+```rust
+// In main.rs
+if let Some(load_path) = &args.load_state {
+    let state = AppState::load_from_file(load_path)?;
+    state.assert_invariants();  // ← Validates constraints!
+}
+```
+
+**Test Coverage**:
+- Corrupted file handling: `test_load_corrupted_session()`
+- Invalid invariants: `test_invalid_state_panics()`
+- Missing fields: `test_missing_fields_use_defaults()`
+
+**Files**: `crates/rstn/src/tui/state/mod.rs:127`, `crates/rstn/tests/*_test.rs`
+
+---
+
+### State Validation (StateInvariants)
+
+**Trait Definition**:
+```rust
+pub trait StateInvariants {
+    fn assert_invariants(&self);
+}
+```
+
+**Invariant Implementations**:
+
+WorktreeViewState:
+```rust
+impl StateInvariants for WorktreeViewState {
+    fn assert_invariants(&self) {
+        // Feature info required for feature worktrees
+        if matches!(self.worktree_type, WorktreeType::FeatureWorktree { .. }) {
+            assert!(self.feature_info.is_some());
+        }
+
+        // Scroll positions reasonable
+        assert!(self.content_scroll < 100000);
+
+        // Command index in bounds
+        if let Some(idx) = self.command_state_index {
+            assert!(idx < self.commands.len());
+        }
+
+        // Running phase consistency
+        if self.running_phase.is_some() {
+            assert!(self.is_running);
+        }
+    }
+}
+```
+
+DashboardState:
+```rust
+impl StateInvariants for DashboardState {
+    fn assert_invariants(&self) {
+        assert!(self.worktree_count > 0);
+    }
+}
+```
+
+SettingsState:
+```rust
+impl StateInvariants for SettingsState {
+    fn assert_invariants(&self) {
+        assert!(self.selected_index < 5);
+    }
+}
+```
+
+AppState (delegates to all views):
+```rust
+impl StateInvariants for AppState {
+    fn assert_invariants(&self) {
+        self.worktree_view.assert_invariants();
+        self.dashboard_view.assert_invariants();
+        self.settings_view.assert_invariants();
+    }
+}
+```
+
+**When Invariants Are Checked**:
+1. After loading state (`main.rs:93`)
+2. In all tests (mandatory)
+3. Before saving (defensive)
+
+**Files**: `crates/rstn/src/tui/state/mod.rs`, `crates/rstn/tests/app_state_test.rs`
+
+---
+
+### State-to-UI Flow
+
+**Architecture**: `UI = render(State)` (pure function)
+
+**Bidirectional Conversion**:
+
+Extract state from view:
+```rust
+pub fn to_state(&self) -> WorktreeViewState {
+    WorktreeViewState {
+        // Persistent fields
+        feature_info: self.feature_info.clone(),
+        spec_content: self.spec_content.clone(),
+        focus: self.focus,
+        content_scroll: self.content_scroll,
+
+        // Extract from ephemeral types
+        command_state_index: self.command_state.selected(),
+        log_entries: self.log_buffer.entries().cloned().collect(),
+
+        // ... 28 more fields
+    }
+}
+```
+
+Reconstruct view from state:
+```rust
+pub fn from_state(state: WorktreeViewState) -> Result<Self> {
+    // Reconstruct ephemeral types
+    let mut command_state = ListState::default();
+    command_state.select(state.command_state_index);
+
+    let log_buffer = LogBuffer::from_entries(state.log_entries);
+
+    Ok(Self {
+        // Restore persistent fields
+        feature_info: state.feature_info,
+        focus: state.focus,
+        content_scroll: state.content_scroll,
+
+        // Reconstructed ephemeral
+        command_state,
+        log_buffer,
+
+        // Fresh ephemeral (not serialized)
+        tick_count: 0,
+        auto_flow: AutoFlowState::new(),
+    })
+}
+```
+
+**Rendering Flow**:
+```rust
+pub fn render(&mut self, frame: &mut Frame) {
+    // Read state to determine view
+    match self.current_view {
+        ViewType::Worktree => {
+            self.worktree_view.render(frame, area);
+        }
+        // ...
+    }
+}
+
+fn render_content(&self, frame: &mut Frame, area: Rect) {
+    // All rendering reads from state
+    let selected_idx = match self.content_type {
+        ContentType::Spec => 0,
+        ContentType::Plan => 1,
+        ContentType::Tasks => 2,
+    };
+
+    let content_lines = self.spec_content
+        .lines()
+        .skip(self.content_scroll)  // ← From state
+        .take(height)
+        .collect();
+
+    frame.render_widget(Paragraph::new(content_lines), area);
+}
+```
+
+**State Update Flow**:
+```
+Event → handle_key() → State Mutation → render() → Frame
+```
+
+**Persistent vs Ephemeral**:
+- **Persistent** (serialized): content, scroll positions, logs, phase tracking
+- **Ephemeral** (reconstructed): ListState, LogBuffer, tick counters, file tracker
+
+**Files**: `crates/rstn/src/tui/app.rs:2821`, `crates/rstn/src/tui/views/worktree/view.rs:3058,3134`
+
+---
+
+### Logging Management (State + Logs = Observability)
+
+**Core Principle**: State snapshots + Event logs = Complete observability
+
+**Why Logging Matters**:
+- **With state alone**: You see WHAT the app's state is at a point in time
+- **With logs alone**: You see WHEN events happened
+- **With state + logs**: You see HOW the app transitioned from state A to state B
+
+**Two-Tier Logging Architecture**:
+
+#### Tier 1: File Logging (Tracing Framework)
+
+**Location**: `~/.rustation/logs/rstn.<session-id>.log`
+
+**Format**:
+```
+[2025-12-19 10:23:45.123] INFO [rstn::tui::app] 📍 Session started session_id=2025-12-19-102345-a3f9 (src/main.rs:59)
+[2025-12-19 10:24:01.456] INFO [rstn::tui::app] Starting spec generation for: new feature (src/tui/app.rs:841)
+[2025-12-19 10:24:15.789] WARN [rstn::tui::app] Commit blocked: 3 warnings, 1 sensitive (src/tui/app.rs:670)
+```
+
+**What Gets Logged**:
+- Session lifecycle (start, end, duration)
+- State transitions (with context fields)
+- Command execution (with exit codes)
+- Errors (with full context)
+- Performance metrics (duration_secs)
+
+**Log Levels**:
+```rust
+TRACE  // Verbose debugging (disabled in release)
+DEBUG  // Development debugging
+INFO   // Normal operations (default)
+WARN   // Warnings (commit blocked, version mismatch)
+ERROR  // Errors (with full context)
+```
+
+**Structured Logging Examples**:
+```rust
+// Session start with context
+tracing::info!(
+    session_id = %session_id,
+    version = version::FULL_VERSION,
+    "📍 Session started"
+);
+
+// Commit workflow with counts
+tracing::info!(
+    groups = groups.len(),
+    warnings = warnings.len(),
+    sensitive = sensitive_files.len(),
+    "Commit groups ready"
+);
+
+// Error with full context
+tracing::error!(
+    error = %e,
+    duration_secs = duration.as_secs_f64(),
+    "❌ Session ended with error"
+);
+```
+
+**Configuration**:
+```bash
+# Environment variable (overrides settings)
+export RSTN_LOG=debug
+rstn
+
+# Or use settings
+# ~/.rstn/settings.json:
+{
+  "logging_enabled": true,
+  "log_level": "info",
+  "log_to_console": false
+}
+```
+
+#### Tier 2: TUI Event Logging (In-App Buffer)
+
+**Purpose**: User-visible event stream in TUI
+
+**LogEntry Structure**:
+```rust
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LogEntry {
+    pub timestamp: SystemTime,      // Serialized as UNIX epoch
+    pub category: LogCategory,      // User, Command, ClaudeStream, etc.
+    pub content: String,
+}
+```
+
+**Categories** (with UI colors):
+- 🧑 **User** (Blue): User actions (key press, focus change)
+- ⚡ **Command** (Cyan): Command execution
+- 🤖 **ClaudeStream** (White): Claude Code output
+- 🔌 **Mcp** (Magenta): MCP tool calls
+- 🔧 **Hook** (Yellow): Shell hooks
+- 📝 **FileChange** (Green): File operations
+- ❌ **Error** (Red): Errors
+- ℹ️ **System** (Gray): System messages
+
+**Circular Buffer**:
+- Max 1000 entries (oldest evicted)
+- Persisted in WorktreeViewState.log_entries
+- Survives app restarts (serialized to session.yaml)
+
+**Logging Methods** (in WorktreeView):
+```rust
+self.log(LogCategory::User, "Switched to Settings view".into());
+self.log(LogCategory::Command, "/speckit.specify".into());
+self.log(LogCategory::FileChange, "File updated: spec.md".into());
+self.log(LogCategory::Error, "Failed to load state".into());
+```
+
+**TUI Visibility**:
+- Displayed in output panel (right side, 40% width)
+- Auto-scrolls on new entries
+- Color-coded by category
+- User can scroll through history
+
+#### State + Logs = Debugging Power
+
+**Scenario**: User reports "commit didn't work"
+
+**Without logs**:
+```bash
+# Load state
+rstn --load-state bug.json
+
+# State shows: pending_git_command = None, is_running = false
+# BUT: Why did it fail? No clue.
+```
+
+**With logs**:
+```bash
+# Check file log
+grep -i "commit" ~/.rustation/logs/rstn.2025-12-19-*.log
+
+# Output:
+[10:24:15.789] WARN Commit blocked: 3 warnings, 1 sensitive file
+[10:24:16.123] INFO User cancelled commit in review dialog
+
+# Now we know: Security scan blocked commit, user cancelled
+```
+
+**With state + logs**:
+```bash
+# Load state
+rstn --load-state bug.json
+
+# State shows:
+# - commit_review.scan_result: Some(ScanResult { warnings: 3, sensitive: 1 })
+# - commit_review.user_cancelled: true
+
+# Logs show:
+# - [10:24:15] WARN Commit blocked: 3 warnings
+# - [10:24:16] INFO User cancelled
+
+# Result: Complete picture of what happened and why
+```
+
+#### Correlation Pattern
+
+**In code**:
+```rust
+// Before state transition
+tracing::debug!(old_state = ?self.to_state(), "Before action");
+
+// Perform action
+self.handle_action(action);
+
+// After state transition
+tracing::debug!(new_state = ?self.to_state(), "After action");
+
+// TUI log
+self.log(LogCategory::User, format!("Action: {:?}", action));
+```
+
+**Result**: Every TUI event has corresponding file log entry with full state context
+
+#### Viewing Logs
+
+**File logs**:
+```bash
+# Live tail
+tail -f ~/.rustation/logs/rstn.log
+
+# Search by keyword
+grep -i "error\|warn" ~/.rustation/logs/rstn.*.log
+
+# View session log
+cat ~/.rustation/logs/rstn.2025-12-19-102345-a3f9.log
+
+# Compressed old logs
+ls ~/.rustation/logs/*.gz
+```
+
+**TUI logs**:
+- Visible in output panel during session
+- Persisted in state (log_entries field)
+- Restored on session load
+
+#### Log Management
+
+**Automatic cleanup**:
+- Old logs (>7 days) deleted
+- Background thread handles rotation
+- Compression for historical logs
+
+**Manual cleanup**:
+```bash
+# Remove all logs
+rm -rf ~/.rustation/logs/
+
+# Remove specific session
+rm ~/.rustation/logs/rstn.2025-12-19-*.log
+```
+
+**Files**:
+- Log initialization: `crates/rstn/src/logging.rs`
+- TUI logging: `crates/rstn/src/tui/logging/{entry.rs,buffer.rs}`
+- State persistence: `crates/rstn/src/tui/state/worktree.rs` (log_entries field)
+- Examples: `crates/rstn/src/tui/app.rs` (search for `tracing::info!`)
+
+---
+
 ## Common Pitfalls
 
 ### ❌ Antipattern: Hidden State
@@ -637,3 +1232,16 @@ State tests come **before** implementation.
 ---
 
 **Key Takeaway**: State is the single source of truth. UI is derived. Tests assert state, not UI.
+
+---
+
+## Changelog
+
+- **2025-12-19**: Added comprehensive "State Persistence" section with 7 subsections answering practical implementation questions:
+  1. State file locations (automatic session.yaml + CLI flags)
+  2. File format and schema (YAML/JSON auto-detection, 52-field AppState structure)
+  3. Default state initialization (Default trait implementations, defensive deserialization)
+  4. Error handling (corrupted files, version checking, post-load validation)
+  5. State validation (StateInvariants trait with assert_invariants())
+  6. State-to-UI flow (bidirectional conversion, pure rendering)
+  7. Logging management (two-tier architecture: file logging + TUI event buffer, State + Logs = Observability principle)
