@@ -407,7 +407,9 @@ impl WorktreeView {
             None
         } else {
             // Git commands: display index 13+ maps to commands 8+
-            Some(display_idx - 6)
+            // Formula: display_idx - (6 offset + num_phases - 1 - 7)
+            // Simplified: display_idx - 5 (since we have 1 Prompt Claude + 7 SDD phases = 8 commands before git)
+            Some(display_idx - 5)
         }
     }
 
@@ -3487,31 +3489,42 @@ mod tests {
         let view = create_test_view();
         let num_phases = view.phases.len();
 
-        // Index 0: "SDD WORKFLOW" header - should return None
+        // Index 0: "WORKFLOW" header - should return None
         assert_eq!(view.display_index_to_command_index(0), None);
 
-        // Indices 1-7: SDD phases - should map to commands 0-6
-        for i in 1..=num_phases {
+        // Index 1: "Prompt Claude" - should map to command 0
+        assert_eq!(view.display_index_to_command_index(1), Some(0));
+
+        // Index 2: separator - should return None
+        assert_eq!(view.display_index_to_command_index(2), None);
+
+        // Index 3: "SDD" header - should return None
+        assert_eq!(view.display_index_to_command_index(3), None);
+
+        // Indices 4-10: SDD phases - should map to commands 1-7
+        for i in 0..num_phases {
+            let display_idx = 4 + i;
+            let expected_cmd_idx = 1 + i;
             assert_eq!(
-                view.display_index_to_command_index(i),
-                Some(i - 1),
+                view.display_index_to_command_index(display_idx),
+                Some(expected_cmd_idx),
                 "Display index {} should map to command index {}",
-                i,
-                i - 1
+                display_idx,
+                expected_cmd_idx
             );
         }
 
-        // Index 8: separator - should return None
-        assert_eq!(view.display_index_to_command_index(num_phases + 1), None);
+        // Index 11: separator - should return None
+        assert_eq!(view.display_index_to_command_index(4 + num_phases), None);
 
-        // Index 9: "GIT ACTIONS" header - should return None
-        assert_eq!(view.display_index_to_command_index(num_phases + 2), None);
+        // Index 12: "GIT" header - should return None
+        assert_eq!(view.display_index_to_command_index(5 + num_phases), None);
 
-        // Indices 10+: Git commands - should map to commands 7+
+        // Indices 13+: Git commands - should map to commands 8+
         let git_count = GitCommand::all().len();
         for i in 0..git_count {
-            let display_idx = num_phases + 3 + i;
-            let expected_cmd_idx = num_phases + i;
+            let display_idx = 6 + num_phases + i;
+            let expected_cmd_idx = 1 + num_phases + i;
             assert_eq!(
                 view.display_index_to_command_index(display_idx),
                 Some(expected_cmd_idx),
@@ -3526,18 +3539,16 @@ mod tests {
     fn test_initial_selection_on_selectable_item() {
         let view = create_test_view();
 
-        // Initial selection should be on index 1 (first SDD phase - Specify)
+        // Initial selection should be on index 1 (Prompt Claude command)
         assert_eq!(view.command_state.selected(), Some(1));
 
-        // Verify index 1 maps to a valid command (command 0 = Specify)
+        // Verify index 1 maps to command 0 (Prompt Claude)
         assert_eq!(view.display_index_to_command_index(1), Some(0));
 
-        // Verify command 0 is indeed Specify
+        // Verify command 0 is Prompt Claude
         match &view.commands[0] {
-            Command::SddPhase(phase, _) => {
-                assert_eq!(phase.name(), "specify");
-            }
-            _ => panic!("First command should be SDD phase Specify"),
+            Command::PromptClaude => {} // Expected
+            _ => panic!("Command 0 should be Prompt Claude"),
         }
     }
 
@@ -3549,21 +3560,22 @@ mod tests {
         // Set focus to Commands panel
         view.focus = WorktreeFocus::Commands;
 
-        // Start at first SDD phase (Specify, index 1)
-        view.command_state.select(Some(1));
+        // Start at first SDD phase (index 4 in new structure)
+        view.command_state.select(Some(4));
 
-        // Scroll down through all SDD phases
-        for i in 2..=num_phases {
+        // Scroll down through all SDD phases (indices 4-10)
+        for i in 0..(num_phases - 1) {
             view.scroll_down();
-            assert_eq!(view.command_state.selected(), Some(i));
+            let expected_idx = 5 + i;
+            assert_eq!(view.command_state.selected(), Some(expected_idx));
             // Verify it's a selectable item
-            assert!(view.display_index_to_command_index(i).is_some());
+            assert!(view.display_index_to_command_index(expected_idx).is_some());
         }
 
-        // Next scroll should skip separator (index 8) and header (index 9)
-        // and land on first git command (index 10)
+        // Next scroll should skip separator (index 11) and header (index 12)
+        // and land on first git command (index 13)
         view.scroll_down();
-        let expected_git_start = num_phases + 3;
+        let expected_git_start = 6 + num_phases;
         assert_eq!(view.command_state.selected(), Some(expected_git_start));
         assert!(view
             .display_index_to_command_index(expected_git_start)
@@ -3586,18 +3598,19 @@ mod tests {
         // Set focus to Commands panel
         view.focus = WorktreeFocus::Commands;
 
-        // Start at first git command (index 10)
-        let git_start_idx = num_phases + 3;
+        // Start at first git command (index 13 in new structure)
+        let git_start_idx = 6 + num_phases;
         view.command_state.select(Some(git_start_idx));
 
-        // Scroll up should skip header (index 9) and separator (index 8)
-        // and land on last SDD phase (index 7)
+        // Scroll up should skip header (index 12) and separator (index 11)
+        // and land on last SDD phase (index 10)
         view.scroll_up();
-        assert_eq!(view.command_state.selected(), Some(num_phases));
-        assert!(view.display_index_to_command_index(num_phases).is_some());
+        let expected_last_phase = 3 + num_phases;
+        assert_eq!(view.command_state.selected(), Some(expected_last_phase));
+        assert!(view.display_index_to_command_index(expected_last_phase).is_some());
 
         // Verify it's an SDD phase
-        if let Some(cmd_idx) = view.display_index_to_command_index(num_phases) {
+        if let Some(cmd_idx) = view.display_index_to_command_index(expected_last_phase) {
             match &view.commands[cmd_idx] {
                 Command::SddPhase(_, _) => {} // Expected
                 _ => panic!("Should be an SDD phase"),
@@ -3645,8 +3658,8 @@ mod tests {
         // Set focus to Commands panel
         view.focus = WorktreeFocus::Commands;
 
-        // Select Specify (display index 1 = command index 0)
-        view.command_state.select(Some(1));
+        // Select Specify (display index 4 = command index 1)
+        view.command_state.select(Some(4));
 
         // Press Enter
         let action = view.handle_key(key_event(KeyCode::Enter));
@@ -3665,8 +3678,8 @@ mod tests {
         let mut view = create_test_view();
         view.focus = WorktreeFocus::Commands;
 
-        // Select Clarify (display index 2 = command index 1)
-        view.command_state.select(Some(2));
+        // Select Clarify (display index 5 = command index 2)
+        view.command_state.select(Some(5));
 
         let action = view.handle_key(key_event(KeyCode::Enter));
 
@@ -3687,7 +3700,7 @@ mod tests {
 
         // Find and select Git Intelligent Commit command
         let num_phases = view.phases.len();
-        let commit_display_idx = num_phases + 3; // First git command (Intelligent Commit)
+        let commit_display_idx = 6 + num_phases; // First git command (index 13)
 
         view.command_state.select(Some(commit_display_idx));
 
@@ -3709,7 +3722,7 @@ mod tests {
 
         // Find and select Git Push command (second git command)
         let num_phases = view.phases.len();
-        let push_display_idx = num_phases + 4;
+        let push_display_idx = 6 + num_phases + 1; // Second git command (index 14)
 
         view.command_state.select(Some(push_display_idx));
 
@@ -3732,7 +3745,7 @@ mod tests {
 
         // Find and select Git Status command (third git command)
         let num_phases = view.phases.len();
-        let status_display_idx = num_phases + 5;
+        let status_display_idx = 6 + num_phases + 2; // Third git command (index 15)
 
         view.command_state.select(Some(status_display_idx));
 
@@ -3755,7 +3768,7 @@ mod tests {
 
         // Find and select Git Add All command (fourth git command)
         let num_phases = view.phases.len();
-        let add_all_display_idx = num_phases + 6;
+        let add_all_display_idx = 6 + num_phases + 3; // Fourth git command (index 16)
 
         view.command_state.select(Some(add_all_display_idx));
 
@@ -3778,7 +3791,7 @@ mod tests {
 
         // Find and select Git Rebase command (fifth git command)
         let num_phases = view.phases.len();
-        let rebase_display_idx = num_phases + 7;
+        let rebase_display_idx = 6 + num_phases + 4; // Fifth git command (index 17)
 
         view.command_state.select(Some(rebase_display_idx));
 
@@ -3846,28 +3859,34 @@ mod tests {
         let mut view = create_test_view();
         view.focus = WorktreeFocus::Commands;
 
-        // Start at first SDD phase (index 1)
-        view.command_state.select(Some(1));
+        // Start at first SDD phase (index 4 in new structure)
+        view.command_state.select(Some(4));
 
-        // Press 'j' to move down
+        // Press 'j' to move down to second SDD phase (index 5)
         view.handle_key(key_event(KeyCode::Char('j')));
-        assert_eq!(view.command_state.selected(), Some(2));
+        assert_eq!(view.command_state.selected(), Some(5));
 
-        // Press 'k' to move up
+        // Press 'k' to move up to first SDD phase (index 4)
         view.handle_key(key_event(KeyCode::Char('k')));
-        assert_eq!(view.command_state.selected(), Some(1));
+        assert_eq!(view.command_state.selected(), Some(4));
     }
 
     #[test]
     fn test_commands_vector_matches_phases_and_git() {
         let view = create_test_view();
 
-        // Commands should contain all SDD phases + all git commands
-        let expected_count = view.phases.len() + GitCommand::all().len();
+        // Commands should contain: Prompt Claude + SDD phases + git commands
+        let expected_count = 1 + view.phases.len() + GitCommand::all().len();
         assert_eq!(view.commands.len(), expected_count);
 
-        // First N commands should be SDD phases
-        for i in 0..view.phases.len() {
+        // Command 0 should be Prompt Claude
+        match &view.commands[0] {
+            Command::PromptClaude => {} // Expected
+            _ => panic!("Command 0 should be Prompt Claude"),
+        }
+
+        // Commands 1-(N) should be SDD phases
+        for i in 1..=view.phases.len() {
             match &view.commands[i] {
                 Command::SddPhase(_, _) => {} // Expected
                 _ => panic!("Command {} should be an SDD phase", i),
@@ -3875,7 +3894,7 @@ mod tests {
         }
 
         // Remaining commands should be git commands
-        for i in view.phases.len()..view.commands.len() {
+        for i in (1 + view.phases.len())..view.commands.len() {
             match &view.commands[i] {
                 Command::GitAction(_) => {} // Expected
                 _ => panic!("Command {} should be a git command", i),
