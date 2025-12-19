@@ -35,7 +35,7 @@ Welcome to the rustation knowledge base! This is your central hub for understand
 ## Quick Links
 
 **For Contributors**:
-- [🎯 State-First Architecture](02-architecture/state-first.md) - **Core principle**: State as JSON/YAML
+- [🎯 State-First Architecture](02-architecture/state-first.md) - **Core principle**: State as JSON/YAML + State Persistence guide
 - [Core Principles](02-architecture/core-principles.md) - v2 architectural pillars
 - [SDD Workflow Guide](04-development/sdd-workflow.md) - When to use full vs lightweight SDD
 - [MCP Tools Reference](03-api-reference/mcp-tools.md) - Available MCP tools
@@ -70,7 +70,7 @@ kb/
 │   └── concepts.md                   - Core concepts
 │
 ├── 02-architecture/                  - Core Principles (v2)
-│   ├── state-first.md                - **🎯 Core principle**: State as JSON/YAML
+│   ├── state-first.md                - **🎯 Core principle**: State as JSON/YAML + State Persistence (7 sections)
 │   └── core-principles.md            - v2 architectural pillars
 │
 ├── 03-api-reference/                 - API Documentation
@@ -110,9 +110,10 @@ kb/
 ### I'm debugging an issue (v2)
 
 1. Check logs at `~/.rustation/logs/rstn.log` or `~/.rstn/logs/`
-2. Review [MCP Tools Reference](03-api-reference/mcp-tools.md) if MCP-related
-3. Use `--save-state` / `--load-state` to reproduce issues
-4. Review recent code in `crates/rstn/src/`
+2. Use `--save-state` / `--load-state` to reproduce issues (see [State Persistence](02-architecture/state-first.md#state-persistence))
+3. Review [State Persistence guide](02-architecture/state-first.md#state-persistence) for state + logs debugging techniques
+4. Review [MCP Tools Reference](03-api-reference/mcp-tools.md) if MCP-related
+5. Review recent code in `crates/rstn/src/`
 
 ### I'm implementing a feature (v2)
 
@@ -206,6 +207,12 @@ Questions or suggestions for the knowledge base?
 
 ## Changelog
 
+- 2025-12-19: **State Persistence Documentation** - Added comprehensive State Persistence section to state-first.md
+  - 7 subsections (608 lines): file locations, schema, initialization, error handling, validation, state-to-UI flow, logging management
+  - **Key addition**: Logging Management section explaining State + Logs = Observability principle
+  - Two-tier logging architecture: file logging (tracing) + TUI event buffer (circular buffer, 8 categories)
+  - Real debugging scenarios showing state snapshots + event logs enable complete observability
+  - All code examples include file references for easy navigation
 - 2025-12-19: **Phase 4 (Developer Documentation)** - Created comprehensive developer guides
   - Created contribution-guide.md - Setup, workflow, state testing MANDATORY, PR requirements
   - Created testing-guide.md - State-first testing (round-trip, transitions, invariants)
