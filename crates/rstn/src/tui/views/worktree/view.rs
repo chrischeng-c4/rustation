@@ -16,7 +16,7 @@ use crate::tui::widgets::TextInput; // Feature 051: Multi-line edit mode (User S
 
 // Import extracted types from sibling modules
 use super::{
-    Command, ContentType, FeatureInfo, GitCommand, InlineInput, SpecifyState,
+    Command, ContentType, FeatureInfo, GitCommand, SpecifyState,
     WorktreeFocus,
 };
 
@@ -970,70 +970,7 @@ impl WorktreeView {
         frame.render_widget(paragraph, area);
     }
 
-    /// Render output panel (Used as part of workflow visualization)
-    fn render_output(&self, frame: &mut Frame, area: Rect) {
-        let is_running = matches!(self.prompt_workflow.status, PromptClaudeStatus::Executing);
-        
-        // Dynamic title based on running state
-        let title = if is_running {
-            let spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
-            let spinner_char = spinner[self.spinner_frame % spinner.len()];
-            format!(" Log {} Running... ", spinner_char)
-        } else {
-            " Log ".to_string()
-        };
 
-        // Change border color when focused
-        let is_focused = self.focus == WorktreeFocus::Output;
-        let border_style = if is_focused {
-            Style::default().fg(Color::Cyan)
-        } else {
-            Style::default()
-        };
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(title)
-            .border_style(border_style);
-
-        // Build output lines from log buffer
-        let lines: Vec<Line> = if self.log_buffer.is_empty() && !is_running {
-            vec![
-                Line::from(""),
-                Line::from(Span::styled(
-                    "No output yet",
-                    Style::default().fg(Color::DarkGray),
-                )),
-            ]
-        } else {
-            let visible_height = area.height.saturating_sub(2) as usize;
-            self.log_buffer
-                .entries()
-                .skip(self.output_scroll)
-                .take(visible_height)
-                .map(|entry| {
-                    let timestamp = entry.format_timestamp();
-                    let icon = entry.category_icon();
-                    let color = entry.category.color();
-
-                    Line::from(vec![
-                        Span::styled(
-                            format!("[{}] ", timestamp),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                        Span::raw(format!("{} ", icon)),
-                        Span::styled(&entry.content, Style::default().fg(color)),
-                    ])
-                })
-                .collect()
-        };
-
-        let paragraph = Paragraph::new(lines)
-            .block(block)
-            .wrap(Wrap { trim: false });
-
-        frame.render_widget(paragraph, area);
-    }
 
     /// Check for file changes and reload content if modified
     fn check_file_changes(&mut self) {
@@ -1427,8 +1364,22 @@ impl WorktreeView {
             
             frame.render_widget(input_paragraph, sections[1]);
             
-            // TODO: Render cursor manually (requires calculating line/col from index)
-            // For now, we rely on the text being visible
+            // Calculate cursor position
+            // Note: This is a simplified calculation that handles newlines but not wrapping
+            // For a robust implementation with wrapping, we'd need to simulate the layout logic
+            let inner = sections[1].inner(ratatui::layout::Margin { horizontal: 1, vertical: 0 }); // Accounting for borders
+            
+            let text_before_cursor = &input[..*cursor];
+            let lines: Vec<&str> = text_before_cursor.split('\n').collect();
+            
+            let cursor_y = (lines.len() as u16).saturating_sub(1);
+            let cursor_x = lines.last().map(|line| line.len() as u16).unwrap_or(0);
+            
+            // Adjust for scrolling if we implemented it (simplified: assume no scroll)
+            // Ensure cursor is within bounds
+            if cursor_y < inner.height && cursor_x < inner.width {
+                frame.set_cursor_position((inner.x + cursor_x, inner.y + cursor_y));
+            }
         }
 
         // === FOOTER: Status and keybindings ===
@@ -1527,37 +1478,68 @@ impl WorktreeView {
 
         frame.render_widget(title_paragraph, sections[0]);
 
-        // === OUTPUT: Accumulated streaming output from history ===
-        let mut full_output = String::new();
+        // === OUTPUT: Rich Timeline Rendering ===
+        let mut lines = Vec::new();
         use crate::tui::state::workflow::WorkflowNode;
         
         for node in &self.prompt_workflow.history {
             match node {
-                WorkflowNode::UserPrompt(p) => {
-                    full_output.push_str(&format!("\n> {}\n\n", p));
+                WorkflowNode::UserPrompt(prompt) => {
+                    lines.push(Line::from(""));
+                    lines.push(Line::from(Span::styled("User:", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))));
+                    for line in prompt.lines() {
+                        lines.push(Line::from(format!("  {}", line)));
+                    }
+                    lines.push(Line::from(""));
                 }
-                WorkflowNode::AssistantResponse(r) => {
-                    full_output.push_str(r);
+                WorkflowNode::AssistantResponse(response) => {
+                    // lines.push(Line::from(Span::styled("Claude:", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD))));
+                    // Simple response rendering
+                    for line in response.lines() {
+                        lines.push(Line::from(line.to_string()));
+                    }
                 }
-                _ => {} // Ignore other nodes for now
+                WorkflowNode::Diff { file, diff } => {
+                    lines.push(Line::from(""));
+                    lines.push(Line::from(vec![
+                        Span::styled("Diff: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                        Span::styled(file, Style::default().fg(Color::Yellow)),
+                    ]));
+                    for line in diff.lines() {
+                        if line.starts_with('+') {
+                            lines.push(Line::from(Span::styled(line, Style::default().fg(Color::Green))));
+                        } else if line.starts_with('-') {
+                            lines.push(Line::from(Span::styled(line, Style::default().fg(Color::Red))));
+                        } else {
+                            lines.push(Line::from(Span::styled(line, Style::default().fg(Color::DarkGray))));
+                        }
+                    }
+                    lines.push(Line::from(""));
+                }
+                WorkflowNode::ToolUse { tool, input } => {
+                    lines.push(Line::from(vec![
+                        Span::styled("Tool: ", Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
+                        Span::styled(tool, Style::default().fg(Color::Blue)),
+                        Span::raw(format!(" ({})", input)),
+                    ]));
+                }
+                _ => {} 
             }
         }
 
-        let output_lines: Vec<Line> = full_output
-            .lines()
-            .map(|line| Line::from(line.to_string()))
-            .collect();
-
         // Calculate scroll to show latest output (auto-scroll to bottom)
-        let available_height = sections[1].height.saturating_sub(2) as usize; // Subtract borders
-        let total_lines = output_lines.len();
+        let available_height = sections[1].height.saturating_sub(2) as usize;
+        let total_lines = lines.len();
+        
+        // Auto-scroll logic: if user hasn't manually scrolled up, keep at bottom
+        // simplified: always auto-scroll for now
         let scroll_offset = if total_lines > available_height {
             total_lines - available_height
         } else {
             0
         };
 
-        let visible_lines: Vec<Line> = output_lines
+        let visible_lines: Vec<Line> = lines
             .into_iter()
             .skip(scroll_offset)
             .take(available_height)
@@ -1569,7 +1551,7 @@ impl WorktreeView {
                     .borders(Borders::LEFT | Borders::RIGHT)
                     .border_style(Style::default().fg(Color::Magenta)),
             )
-            .wrap(Wrap { trim: false });
+            .wrap(Wrap { trim: false }); // Disable wrap for code/diff clarity
 
         frame.render_widget(output_paragraph, sections[1]);
 

@@ -10,24 +10,16 @@ pub enum WorkflowNode {
     /// Response from the assistant (text content)
     AssistantResponse(String),
     
-    /// Tool execution request
-    ToolCall {
-        name: String,
-        args: Value,
-        status: ToolStatus,
+    /// File modification (Unified Diff)
+    Diff {
+        file: String,
+        diff: String,
     },
     
-    /// Result of a tool execution
-    ToolResult {
-        name: String,
-        result: String,
-    },
-    
-    /// File modification proposal (Diff)
-    FileDiff {
-        path: String,
-        old_content: String,
-        new_content: String,
+    /// Tool usage summary
+    ToolUse {
+        tool: String,
+        input: String,
     },
     
     /// Error message

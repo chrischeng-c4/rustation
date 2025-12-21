@@ -14,13 +14,13 @@ struct Feature {
     description: String,
     status: String,
     #[serde(default)]
-    phase: u32,
+    _phase: u32,
 }
 
 #[derive(Debug, Deserialize)]
 struct FeatureCatalog {
-    project: String,
-    description: String,
+    _project: String,
+    _description: String,
     features: Vec<Feature>,
 }
 

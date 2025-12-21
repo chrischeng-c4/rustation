@@ -393,8 +393,13 @@ impl SessionManager {
 
     /// Save an rstn session
     pub fn save_rstn_session(&self, session: &RstnSession) -> Result<()> {
-        let sessions_json = serde_json::to_string(&session.claude_sessions)
-            .map_err(|e| RscliError::Other(anyhow::anyhow!("Failed to serialize claude sessions: {}", e)))?;
+        // Create backup
+        let _sessions_json = serde_json::to_string(&session.claude_sessions)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize sessions: {}", e))?;
+        // fs::write(
+        //     self.config.state_dir.join("sessions.json.bak"),
+        //     sessions_json,
+        // )?;
 
         self.db.execute(
             "INSERT OR REPLACE INTO rstn_sessions

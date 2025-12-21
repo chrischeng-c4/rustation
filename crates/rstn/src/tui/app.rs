@@ -3212,7 +3212,7 @@ impl App {
     fn render(&mut self, frame: &mut ratatui::Frame) {
         use ratatui::layout::{Constraint, Direction, Layout};
         use ratatui::style::{Color, Style};
-        use ratatui::widgets::{Block, Borders, Paragraph, Tabs};
+        use ratatui::widgets::{ListState, Paragraph};
 
         let size = frame.area();
 

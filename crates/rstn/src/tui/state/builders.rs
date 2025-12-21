@@ -20,10 +20,9 @@ use crate::domain::git::{CommitGroup, SecurityWarning};
 use crate::tui::event::WorktreeType;
 use crate::tui::logging::LogEntry;
 use crate::tui::views::{
-    Command, ContentType, FeatureInfo, GitCommand, InlineInput, PhaseStatus, SpecPhase,
+    Command, ContentType, FeatureInfo, GitCommand, PhaseStatus, SpecPhase,
     SpecifyState, WorktreeFocus,
 };
-use crate::tui::widgets::TextInput;
 use std::path::PathBuf;
 
 use crate::tui::state::prompt_claude::PromptClaudeStatus;

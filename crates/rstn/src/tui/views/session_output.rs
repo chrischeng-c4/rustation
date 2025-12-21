@@ -15,7 +15,7 @@ use std::time::Instant;
 /// Tool execution tracking
 #[derive(Debug, Clone)]
 struct ActiveTool {
-    name: String,
+    _name: String,
     start_time: Instant,
 }
 
@@ -149,7 +149,7 @@ impl SessionOutputView {
                                 self.active_tools.insert(
                                     id.clone(),
                                     ActiveTool {
-                                        name: tool_name.to_string(),
+                                        _name: tool_name.to_string(),
                                         start_time: Instant::now(),
                                     },
                                 );

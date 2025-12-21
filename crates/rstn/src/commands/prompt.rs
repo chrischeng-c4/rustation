@@ -13,12 +13,9 @@ use tokio::sync::Mutex;
 
 /// CLI execution mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum InputMode {
-    /// Pure CLI mode (stdout streaming)
-    CLI,
-    /// Temporary TUI mode for input dialog (currently active but not used for logic)
-    #[allow(dead_code)]
-    MiniTUI,
+enum _InputMode {
+    Normal,
+    Editing,
 }
 
 /// System prompt for RSCLI MCP integration
