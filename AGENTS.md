@@ -328,7 +328,7 @@ rustation/
 <rule severity="NEVER">Use -p + stream-json without --verbose → CLI error → Always add --verbose flag</rule>
 <rule severity="NEVER">Use "transport" in MCP config → Invalid schema → Use "type" field instead</rule>
 <rule severity="NEVER">Implement features without state tests → Untestable code → All features MUST have state serialization and transition tests</rule>
-<rule severity="NEVER">Create non-serializable state → Breaks core principle → All state structs MUST derive Serialize + Deserialize</rule>
+<rule severity="NEVER">Use concrete language code blocks (rust, python, shell) in `kb/` files → KB is for architecture, not implementation → Use `mermaid` or `pseudo-code` instead</rule>
 
 </negative-constraints>
 

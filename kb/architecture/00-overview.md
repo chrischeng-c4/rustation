@@ -290,6 +290,7 @@ fn test_prompt_ui() {
 
 ## Related Documents
 
+- [System Requirements & High-Level Design](09-system-requirements.md) - User requirements mapping
 - [State-First Architecture](01-state-first-principle.md) - Deep dive into principle #1
 - [SDD Workflow](../02-how-to-guides/sdd-workflow.md) - Development process
 - [CLAUDE.md](../../CLAUDE.md) - CLI/TUI architecture pattern
