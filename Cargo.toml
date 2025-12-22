@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
-members = [
-    "crates/*",
-]
+members = []
+# Note: rstn/ is now Python-based (see rstn/pyproject.toml)
+# Rust code moved to legacy-crates/ for reference
 
 [workspace.package]
 version = "0.1.0"

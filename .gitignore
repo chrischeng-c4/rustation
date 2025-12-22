@@ -55,6 +55,37 @@ perf.data.old
 .specify/scripts/python/sessions.json
 .specify/scripts/python/__pycache__/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+*.log
+
 # Prevent accidental commits of directories created by shell testing
 # These are created when rush shell interprets command fragments as paths
 **/--*

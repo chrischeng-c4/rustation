@@ -31,6 +31,39 @@ Respond in English (U.S.) by default. Use Traditional Chinese only when user wri
 - **Delete Aggressively**: Remove unused code and UI elements
 - **Minimal Complexity**: Only add features that are immediately needed
 
+### Code File Size Limits
+
+**Critical Rule**: Prevent monolithic code files
+
+- **500 lines**: Consider splitting the file into smaller modules
+- **1000 lines**: MUST split the file - no exceptions
+- **Benefits**:
+  - Easier code review and navigation
+  - Better module boundaries and separation of concerns
+  - Reduced cognitive load
+  - Prevents god classes/modules
+
+**When to split**:
+- Extract related functions into a submodule
+- Move tests to separate `tests.rs` or `mod_test.rs` files
+- Create feature-specific modules (e.g., `state/worktree.rs`, `state/dashboard.rs`)
+- Use `mod.rs` as a thin coordination layer that re-exports from submodules
+
+**Example**:
+```
+Before (1200 lines):
+  src/state.rs
+
+After:
+  src/state/
+    ├── mod.rs          (50 lines - re-exports only)
+    ├── app.rs          (200 lines)
+    ├── worktree.rs     (300 lines)
+    ├── dashboard.rs    (150 lines)
+    ├── settings.rs     (150 lines)
+    └── tests.rs        (350 lines)
+```
+
 ### Examples
 
 **Keybinding Management** (KB-First approach):
@@ -329,6 +362,8 @@ rustation/
 <rule severity="NEVER">Use "transport" in MCP config → Invalid schema → Use "type" field instead</rule>
 <rule severity="NEVER">Implement features without state tests → Untestable code → All features MUST have state serialization and transition tests</rule>
 <rule severity="NEVER">Use concrete language code blocks (rust, python, shell) in `kb/` files → KB is for architecture, not implementation → Use `mermaid` or `pseudo-code` instead</rule>
+<rule severity="NEVER">Create files >500 lines without considering split → Monolithic code, hard to maintain → Split at 500 lines, MUST split at 1000 lines</rule>
+<rule severity="NEVER">Put all code in single file → Creates god modules → Use submodules (mod.rs pattern) for organization</rule>
 
 </negative-constraints>
 
