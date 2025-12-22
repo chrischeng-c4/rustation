@@ -90,10 +90,14 @@ def reduce_key_pressed(state: AppState, msg: KeyPressed) -> tuple[AppState, list
 
     # Handle command selection (j/k for vim-like navigation)
     if msg.key == "j" and msg.modifiers.is_empty():
+        if not state.worktree_view.commands:
+            return state, []
         current_idx = state.worktree_view.selected_command_index
         new_idx = min(current_idx + 1, len(state.worktree_view.commands) - 1)
         return reduce_select_command(state, SelectCommand(index=new_idx))
     elif msg.key == "k" and msg.modifiers.is_empty():
+        if not state.worktree_view.commands:
+            return state, []
         current_idx = state.worktree_view.selected_command_index
         new_idx = max(current_idx - 1, 0)
         return reduce_select_command(state, SelectCommand(index=new_idx))

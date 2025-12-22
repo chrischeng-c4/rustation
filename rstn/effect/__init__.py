@@ -198,6 +198,78 @@ class Batch(AppEffect):
     effects: list[AppEffect] = Field(description="Effects to execute")
 
 
+# ========================================
+# Domain-Specific Effects
+# ========================================
+
+
+class RunGitCommand(AppEffect):
+    """Run a git command."""
+
+    args: list[str] = Field(description="Git command arguments")
+    cwd: Path = Field(description="Working directory")
+    effect_id: str = Field(default="", description="Effect identifier for result mapping")
+
+
+class RunCargoCommand(AppEffect):
+    """Run a cargo command."""
+
+    subcommand: str = Field(description="Cargo subcommand (build, test, clippy, etc.)")
+    args: list[str] = Field(default_factory=list, description="Additional arguments")
+    cwd: Path = Field(description="Working directory")
+    capture_output: bool = Field(default=True, description="Whether to capture output")
+    effect_id: str = Field(default="", description="Effect identifier")
+
+
+class RunClaudeCli(AppEffect):
+    """Run Claude CLI with optional streaming output."""
+
+    prompt: str = Field(description="Prompt for Claude")
+    output_format: str = Field(default="text", description="Output format (text, json, stream-json)")
+    timeout_secs: int = Field(default=120, description="Timeout in seconds")
+    system_prompt_file: Path | None = Field(default=None, description="System prompt file path")
+    cwd: Path = Field(description="Working directory")
+    workflow_id: str = Field(description="Workflow ID for streaming updates")
+
+
+class CreateDirectory(AppEffect):
+    """Create directory (with parents)."""
+
+    path: Path = Field(description="Directory path to create")
+    exist_ok: bool = Field(default=True, description="Don't error if exists")
+
+
+class ListDirectory(AppEffect):
+    """List directory contents."""
+
+    path: Path = Field(description="Directory path to list")
+    pattern: str = Field(default="*", description="Glob pattern")
+    effect_id: str = Field(default="", description="Effect identifier")
+
+
+class CheckFileExists(AppEffect):
+    """Check if file exists."""
+
+    path: Path = Field(description="File path to check")
+    effect_id: str = Field(default="", description="Effect identifier")
+
+
+class RenameFile(AppEffect):
+    """Rename/move a file."""
+
+    src: Path = Field(description="Source path")
+    dst: Path = Field(description="Destination path")
+
+
+class RunBashCommand(AppEffect):
+    """Run a bash command (shell execution)."""
+
+    command: str = Field(description="Command string to execute")
+    cwd: Path = Field(description="Working directory")
+    effect_id: str = Field(default="", description="Effect identifier")
+    timeout_secs: int = Field(default=120, description="Timeout in seconds")
+
+
 # Note: executor import is at the end to avoid circular imports
 # This is intentional and marked with noqa
 __all__ = [
@@ -230,6 +302,15 @@ __all__ = [
     "QuitApp",
     # Batch
     "Batch",
+    # Domain-Specific Effects
+    "RunGitCommand",
+    "RunCargoCommand",
+    "RunClaudeCli",
+    "CreateDirectory",
+    "ListDirectory",
+    "CheckFileExists",
+    "RenameFile",
+    "RunBashCommand",
     # Executor
     "EffectExecutor",
     "DefaultEffectExecutor",

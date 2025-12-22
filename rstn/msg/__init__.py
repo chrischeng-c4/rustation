@@ -255,6 +255,172 @@ class Noop(AppMsg):
     pass
 
 
+# ========================================
+# Domain Result Events
+# ========================================
+
+
+class GitCommandCompleted(AppMsg):
+    """Git command execution completed."""
+
+    effect_id: str = Field(description="Effect identifier")
+    exit_code: int = Field(description="Exit code")
+    stdout: str = Field(description="Standard output")
+    stderr: str = Field(description="Standard error")
+
+
+class CargoCommandCompleted(AppMsg):
+    """Cargo command execution completed."""
+
+    effect_id: str = Field(description="Effect identifier")
+    success: bool = Field(description="Whether command succeeded")
+    stdout: str = Field(description="Standard output")
+    stderr: str = Field(description="Standard error")
+
+
+class ClaudeStreamDelta(AppMsg):
+    """Claude CLI streaming output delta."""
+
+    workflow_id: WorkflowId = Field(description="Workflow identifier")
+    delta: str = Field(description="Text delta")
+
+
+class ClaudeCompleted(AppMsg):
+    """Claude CLI execution completed."""
+
+    workflow_id: WorkflowId = Field(description="Workflow identifier")
+    output: str = Field(description="Full output")
+    success: bool = Field(description="Whether execution succeeded")
+    error: str | None = Field(default=None, description="Error message if failed")
+
+
+class DirectoryCreated(AppMsg):
+    """Directory created successfully."""
+
+    path: Path = Field(description="Directory path")
+
+
+class DirectoryListed(AppMsg):
+    """Directory listing completed."""
+
+    effect_id: str = Field(description="Effect identifier")
+    path: Path = Field(description="Directory path")
+    entries: list[str] = Field(description="Directory entries")
+
+
+class FileExistsChecked(AppMsg):
+    """File existence check completed."""
+
+    effect_id: str = Field(description="Effect identifier")
+    path: Path = Field(description="File path")
+    exists: bool = Field(description="Whether file exists")
+
+
+class FileRenamed(AppMsg):
+    """File renamed/moved successfully."""
+
+    src: Path = Field(description="Source path")
+    dst: Path = Field(description="Destination path")
+
+
+# ========================================
+# Domain Workflow Events
+# ========================================
+
+
+class SecurityScanRequested(AppMsg):
+    """Request security scan of staged changes."""
+
+    scan_all: bool = Field(default=False, description="Scan all changes (not just staged)")
+
+
+class SecurityScanCompleted(AppMsg):
+    """Security scan completed."""
+
+    blocked: bool = Field(description="Whether commit should be blocked")
+    warning_count: int = Field(description="Number of warnings")
+    critical_count: int = Field(description="Number of critical issues")
+
+
+class SpecGenerationRequested(AppMsg):
+    """Request spec generation."""
+
+    description: str = Field(description="Feature description")
+
+
+class SpecGenerationStarted(AppMsg):
+    """Spec generation workflow started."""
+
+    feature_number: str = Field(description="Allocated feature number")
+    feature_name: str = Field(description="Generated feature name")
+
+
+class SpecGenerationCompleted(AppMsg):
+    """Spec generation completed."""
+
+    spec_path: str = Field(description="Path to generated spec")
+    success: bool = Field(description="Whether generation succeeded")
+    error: str | None = Field(default=None, description="Error if failed")
+
+
+class PlanGenerationRequested(AppMsg):
+    """Request plan generation."""
+
+    feature_name: str = Field(description="Feature name to generate plan for")
+
+
+class PlanGenerationStarted(AppMsg):
+    """Plan generation workflow started."""
+
+    feature_name: str = Field(description="Feature name")
+
+
+class PlanGenerationCompleted(AppMsg):
+    """Plan generation completed."""
+
+    plan_path: str = Field(description="Path to plan file")
+    artifacts: list[str] = Field(default_factory=list, description="Generated artifact paths")
+    success: bool = Field(description="Whether generation succeeded")
+    error: str | None = Field(default=None, description="Error if failed")
+
+
+class ClarifySessionRequested(AppMsg):
+    """Request clarify session."""
+
+    spec_path: str = Field(description="Path to spec to clarify")
+
+
+class ClarifySessionStarted(AppMsg):
+    """Clarify session started."""
+
+    spec_path: str = Field(description="Spec being clarified")
+    question_count: int = Field(description="Number of questions generated")
+
+
+class ClarifyQuestionReady(AppMsg):
+    """Next clarify question ready."""
+
+    question_id: int = Field(description="Question ID")
+    question_text: str = Field(description="Question text")
+    category: str = Field(description="Question category")
+    remaining: int = Field(description="Remaining questions")
+
+
+class ClarifyAnswerSubmitted(AppMsg):
+    """Clarify answer submitted."""
+
+    question_id: int = Field(description="Question ID")
+    answer: str = Field(description="User's answer")
+
+
+class ClarifySessionCompleted(AppMsg):
+    """Clarify session completed."""
+
+    spec_path: str = Field(description="Spec path")
+    questions_answered: int = Field(description="Number of questions answered")
+    spec_updated: bool = Field(description="Whether spec was updated")
+
+
 # Export all message types
 __all__ = [
     "AppMsg",
@@ -289,4 +455,27 @@ __all__ = [
     "StateSaved",
     "Quit",
     "Noop",
+    # Domain Result Events
+    "GitCommandCompleted",
+    "CargoCommandCompleted",
+    "ClaudeStreamDelta",
+    "ClaudeCompleted",
+    "DirectoryCreated",
+    "DirectoryListed",
+    "FileExistsChecked",
+    "FileRenamed",
+    # Domain Workflow Events
+    "SecurityScanRequested",
+    "SecurityScanCompleted",
+    "SpecGenerationRequested",
+    "SpecGenerationStarted",
+    "SpecGenerationCompleted",
+    "PlanGenerationRequested",
+    "PlanGenerationStarted",
+    "PlanGenerationCompleted",
+    "ClarifySessionRequested",
+    "ClarifySessionStarted",
+    "ClarifyQuestionReady",
+    "ClarifyAnswerSubmitted",
+    "ClarifySessionCompleted",
 ]

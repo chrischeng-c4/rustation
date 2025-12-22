@@ -1,42 +1,25 @@
-# Link debug builds to ~/.local/bin (hot reload: just rebuild to update)
-install-dev: build-debug
+# rstn v2 - Python CLI
+
+# Install to ~/.local/bin
+install:
+    uv pip install -e ".[dev]"
     mkdir -p ~/.local/bin
-    ln -sf {{justfile_directory()}}/target/debug/rstn ~/.local/bin/rstn
-    ln -sf {{justfile_directory()}}/target/debug/rush ~/.local/bin/rush
-    @echo "Linked DEBUG builds to ~/.local/bin (hot reload enabled)"
+    ln -sf {{justfile_directory()}}/.venv/bin/rstn ~/.local/bin/rstn
+    @echo "Installed rstn to ~/.local/bin/rstn"
 
-# Build release binary
-build:
-    cargo build --release
+# Run tests
+test:
+    uv run pytest tests/ -v
 
-# Build debug binary
-build-debug:
-    cargo build
+# Run tests with coverage
+test-cov:
+    uv run pytest tests/ --cov=rstn --cov-report=term-missing
 
-# Install release builds to ~/.local/bin
-install: build
-    mkdir -p ~/.local/bin
-    cp target/release/rstn ~/.local/bin/
-    cp target/release/rush ~/.local/bin/
-    @echo "Installed RELEASE builds to ~/.local/bin"
+# Check code quality (ruff + mypy)
+check:
+    uv run ruff check rstn/ tests/
+    uv run mypy rstn/ --ignore-missing-imports
 
-# Quick link just rstn debug for fast iteration
-install-rstn-dev:
-    cargo build -p rstn
-    mkdir -p ~/.local/bin
-    ln -sf {{justfile_directory()}}/target/debug/rstn ~/.local/bin/rstn
-    @echo "Linked DEBUG rstn to ~/.local/bin (hot reload enabled)"
-
-# Check which build type is currently installed
-which-build:
-    #!/usr/bin/env bash
-    echo "Checking installed binaries in ~/.local/bin..."
-    rstn_type=$([ -L ~/.local/bin/rstn ] && echo "symlink" || echo "binary")
-    rstn_ver=$(~/.local/bin/rstn --version 2>/dev/null | grep -o '\[.*\]' || echo "not installed")
-    echo "rstn: [$rstn_type] $rstn_ver"
-    rush_type=$([ -L ~/.local/bin/rush ] && echo "symlink" || echo "binary")
-    rush_ver=$(~/.local/bin/rush --version 2>/dev/null | grep -o '\[.*\]' || echo "not installed")
-    echo "rush: [$rush_type] $rush_ver"
-
-# Build and install (alias for backward compatibility)
-all: install-dev
+# Fix lint issues
+fix:
+    uv run ruff check --fix rstn/ tests/

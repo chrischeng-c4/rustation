@@ -16,12 +16,21 @@ from typing import Any
 from textual import events, work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
-from textual.widgets import Footer, Header, Label, Static
+from textual.widgets import Footer, Header, Static
 
 from rstn.effect import DefaultEffectExecutor, MessageSender
+from rstn.logging import get_logger
 from rstn.msg import AppMsg, KeyModifiers, KeyPressed, MouseClicked, Quit, Tick
 from rstn.reduce import reduce
 from rstn.state import AppState
+from rstn.tui.render import render_app
+from rstn.tui.render.widgets import (
+    CommandListWidget,
+    ContentAreaWidget,
+    StatusBarWidget,
+)
+
+log = get_logger("rstn.tui")
 
 
 class RstnApp(App[None]):
@@ -44,19 +53,22 @@ class RstnApp(App[None]):
         height: 1fr;
     }
 
-    #command-list {
+    #command-panel {
         width: 30%;
         border: solid $primary;
     }
 
-    #content-area {
+    #content-panel {
         width: 70%;
         border: solid $secondary;
     }
 
-    .status-bar {
-        height: 1;
-        background: $boost;
+    #command-list {
+        height: 100%;
+    }
+
+    #content-area {
+        height: 100%;
     }
     """
 
@@ -110,22 +122,26 @@ class RstnApp(App[None]):
         return QueueMessageSender(self._msg_queue)
 
     def compose(self) -> ComposeResult:
-        """Compose the UI layout."""
+        """Compose the UI layout.
+
+        Uses custom widgets that accept render output from pure render functions.
+        Layout: 30% command list | 70% content area
+        """
         yield Header()
         with Container(id="main-container"):
-            with Vertical(id="command-list"):
+            with Vertical(id="command-panel"):
                 yield Static("Commands", classes="title")
-                yield Label("No commands", id="command-label")
-            with Vertical(id="content-area"):
+                yield CommandListWidget(id="command-list")
+            with Vertical(id="content-panel"):
                 yield Static("Content", classes="title")
-                yield Label("Empty", id="content-label")
-        yield Static(
-            self.state.error_message or "Ready", classes="status-bar", id="status-bar"
-        )
+                yield ContentAreaWidget(id="content-area")
+        yield StatusBarWidget(id="status-bar")
         yield Footer()
 
     async def on_mount(self) -> None:
         """Handle mount event - start background tasks."""
+        log.info("TUI mounted")
+
         # Start message processing loop
         self.process_messages()
 
@@ -152,7 +168,7 @@ class RstnApp(App[None]):
             except TimeoutError:
                 continue
             except Exception as e:
-                self.log(f"Error processing message: {e}")
+                log.exception("Error processing message", error=str(e))
 
     async def _handle_message(self, msg: AppMsg) -> None:
         """Handle a message by running it through reduce.
@@ -181,40 +197,32 @@ class RstnApp(App[None]):
             self.exit()
 
     def _update_ui(self) -> None:
-        """Update UI based on current state."""
+        """Update UI based on current state.
+
+        Uses pure render functions to generate output, then applies to widgets.
+        UI = render(State)
+        """
         try:
-            # Update status bar
-            status_bar = self.query_one("#status-bar", Static)
-            status_bar.update(self.state.error_message or "Ready")
+            # Generate render output (pure function)
+            render_output = render_app(self.state)
 
-            # Update command list
-            command_label = self.query_one("#command-label", Label)
-            if self.state.worktree_view.commands:
-                cmd_text = "\n".join(
-                    f"{'>' if i == self.state.worktree_view.selected_command_index else ' '} {cmd.label}"
-                    for i, cmd in enumerate(self.state.worktree_view.commands)
-                )
-                command_label.update(cmd_text)
-            else:
-                command_label.update("No commands")
+            # Apply to widgets
+            command_list = self.query_one("#command-list", CommandListWidget)
+            command_list.update_from_render(render_output.command_list)
 
-            # Update content area
-            content_label = self.query_one("#content-label", Label)
-            content_type = self.state.worktree_view.content_type
-            if content_type.value == "spec" and self.state.worktree_view.spec_content:
-                content_label.update(self.state.worktree_view.spec_content)
-            elif content_type.value == "plan" and self.state.worktree_view.plan_content:
-                content_label.update(self.state.worktree_view.plan_content)
-            elif self.state.worktree_view.workflow_output:
-                content_label.update(self.state.worktree_view.workflow_output)
-            else:
-                content_label.update("Empty")
+            content_area = self.query_one("#content-area", ContentAreaWidget)
+            content_area.update_from_render(render_output.content_area)
+
+            status_bar = self.query_one("#status-bar", StatusBarWidget)
+            status_bar.update_from_render(render_output.status_bar)
 
         except Exception as e:
-            self.log(f"Error updating UI: {e}")
+            log.exception("Error updating UI", error=str(e))
 
     async def _cleanup(self) -> None:
         """Cleanup resources before exit."""
+        log.info("TUI cleanup started")
+
         # Cancel timer
         if self._timer_task:
             self._timer_task.cancel()
@@ -225,6 +233,7 @@ class RstnApp(App[None]):
 
         # Cleanup executor
         await self._executor.cleanup()
+        log.info("TUI cleanup complete")
 
     # Event handlers
 
@@ -314,5 +323,11 @@ def run_tui(state_file: Path | None = None) -> None:
     Args:
         state_file: Optional path to saved state file
     """
-    app = RstnApp(state_file=state_file)
-    app.run()
+    log.info("Starting TUI", state_file=str(state_file) if state_file else None)
+    try:
+        app = RstnApp(state_file=state_file)
+        app.run()
+        log.info("TUI exited normally")
+    except Exception as e:
+        log.exception("TUI crashed", error=str(e))
+        raise
