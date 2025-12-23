@@ -188,6 +188,17 @@ class QuitApp(AppEffect):
 
 
 # ========================================
+# Clipboard
+# ========================================
+
+
+class CopyToClipboard(AppEffect):
+    """Copy content to system clipboard."""
+
+    content: str = Field(description="Content to copy to clipboard")
+
+
+# ========================================
 # Batch
 # ========================================
 
@@ -300,6 +311,8 @@ __all__ = [
     # UI Updates
     "Render",
     "QuitApp",
+    # Clipboard
+    "CopyToClipboard",
     # Batch
     "Batch",
     # Domain-Specific Effects

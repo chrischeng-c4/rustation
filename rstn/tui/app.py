@@ -16,7 +16,7 @@ from typing import Any
 from textual import events, work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Header, Static
 
 from rstn.effect import DefaultEffectExecutor, MessageSender
 from rstn.logging import get_logger
@@ -27,7 +27,9 @@ from rstn.tui.render import render_app
 from rstn.tui.render.widgets import (
     CommandListWidget,
     ContentAreaWidget,
+    FooterWidget,
     StatusBarWidget,
+    TabBarWidget,
 )
 
 log = get_logger("rstn.tui")
@@ -46,6 +48,12 @@ class RstnApp(App[None]):
     CSS = """
     Screen {
         layout: vertical;
+    }
+
+    #tab-bar {
+        height: 1;
+        background: $surface;
+        padding: 0 1;
     }
 
     #main-container {
@@ -70,16 +78,18 @@ class RstnApp(App[None]):
     #content-area {
         height: 100%;
     }
+
+    #custom-footer {
+        height: 1;
+        background: $boost;
+        padding: 0 1;
+        text-style: dim;
+    }
     """
 
-    BINDINGS = [
-        ("q", "quit", "Quit"),
-        ("1", "switch_view('worktree')", "Worktree"),
-        ("2", "switch_view('dashboard')", "Dashboard"),
-        ("3", "switch_view('settings')", "Settings"),
-        ("j", "next_command", "Next"),
-        ("k", "prev_command", "Prev"),
-    ]
+    # Note: Key bindings are handled through the reducer (reduce_key_pressed)
+    # We don't use Textual's BINDINGS to avoid duplicate handling
+    BINDINGS = []
 
     def __init__(
         self,
@@ -109,6 +119,9 @@ class RstnApp(App[None]):
         # Timer task
         self._timer_task: asyncio.Task[None] | None = None
 
+        # Flag to prevent duplicate quit processing
+        self._quitting = False
+
     def _create_message_sender(self) -> MessageSender:
         """Create message sender for executor feedback."""
 
@@ -125,9 +138,10 @@ class RstnApp(App[None]):
         """Compose the UI layout.
 
         Uses custom widgets that accept render output from pure render functions.
-        Layout: 30% command list | 70% content area
+        Layout: Header | TabBar | (30% Sidebar | 70% Content) | StatusBar | Footer
         """
         yield Header()
+        yield TabBarWidget(id="tab-bar")
         with Container(id="main-container"):
             with Vertical(id="command-panel"):
                 yield Static("Commands", classes="title")
@@ -136,11 +150,14 @@ class RstnApp(App[None]):
                 yield Static("Content", classes="title")
                 yield ContentAreaWidget(id="content-area")
         yield StatusBarWidget(id="status-bar")
-        yield Footer()
+        yield FooterWidget(id="custom-footer")
 
     async def on_mount(self) -> None:
         """Handle mount event - start background tasks."""
         log.info("TUI mounted")
+
+        # Initial UI render
+        self._update_ui()
 
         # Start message processing loop
         self.process_messages()
@@ -176,6 +193,10 @@ class RstnApp(App[None]):
         Args:
             msg: Message to handle
         """
+        # Skip if already quitting
+        if self._quitting:
+            return
+
         # Run through reducer
         new_state, effects = reduce(self.state, msg)
 
@@ -193,6 +214,7 @@ class RstnApp(App[None]):
 
         # Handle quit
         if isinstance(msg, Quit) or not self.state.running:
+            self._quitting = True
             await self._cleanup()
             self.exit()
 
@@ -207,6 +229,9 @@ class RstnApp(App[None]):
             render_output = render_app(self.state)
 
             # Apply to widgets
+            tab_bar = self.query_one("#tab-bar", TabBarWidget)
+            tab_bar.update_from_render(render_output.tab_bar)
+
             command_list = self.query_one("#command-list", CommandListWidget)
             command_list.update_from_render(render_output.command_list)
 
@@ -215,6 +240,9 @@ class RstnApp(App[None]):
 
             status_bar = self.query_one("#status-bar", StatusBarWidget)
             status_bar.update_from_render(render_output.status_bar)
+
+            footer = self.query_one("#custom-footer", FooterWidget)
+            footer.update_from_render(render_output.footer)
 
         except Exception as e:
             log.exception("Error updating UI", error=str(e))
@@ -270,51 +298,6 @@ class RstnApp(App[None]):
         """
         msg = MouseClicked(x=event.x, y=event.y)
         await self._handle_message(msg)
-
-    # Actions (bound to keys)
-
-    async def action_quit(self) -> None:
-        """Quit the application."""
-        await self._handle_message(Quit())
-
-    async def action_switch_view(self, view: str) -> None:
-        """Switch to a different view.
-
-        Args:
-            view: View name
-        """
-        from rstn.msg import SwitchView
-        from rstn.state.types import ViewType
-
-        view_map = {
-            "worktree": ViewType.WORKTREE,
-            "dashboard": ViewType.DASHBOARD,
-            "settings": ViewType.SETTINGS,
-        }
-
-        if view in view_map:
-            msg = SwitchView(view=view_map[view])
-            await self._handle_message(msg)
-
-    async def action_next_command(self) -> None:
-        """Select next command."""
-        from rstn.msg import SelectCommand
-
-        current = self.state.worktree_view.selected_command_index
-        count = len(self.state.worktree_view.commands)
-        if count > 0:
-            next_idx = min(current + 1, count - 1)
-            msg = SelectCommand(index=next_idx)
-            await self._handle_message(msg)
-
-    async def action_prev_command(self) -> None:
-        """Select previous command."""
-        from rstn.msg import SelectCommand
-
-        current = self.state.worktree_view.selected_command_index
-        if current > 0:
-            msg = SelectCommand(index=current - 1)
-            await self._handle_message(msg)
 
 
 def run_tui(state_file: Path | None = None) -> None:

@@ -11,13 +11,17 @@ from textual.widgets import Static
 from rstn.tui.render import (
     CommandListRender,
     ContentAreaRender,
+    FooterRender,
     StatusBarRender,
+    TabBarRender,
 )
 
 __all__ = [
     "CommandListWidget",
     "ContentAreaWidget",
     "StatusBarWidget",
+    "TabBarWidget",
+    "FooterWidget",
 ]
 
 
@@ -208,3 +212,123 @@ class StatusBarWidget(Static):
         if self._last_render is None:
             return "normal"
         return self._last_render.style
+
+
+class TabBarWidget(Static):
+    """Widget for displaying the tab bar.
+
+    Shows tabs for high-level view navigation: 1 Worktree | 2 Dashboard | 3 Settings
+    Active tab is highlighted.
+    """
+
+    DEFAULT_CSS = """
+    TabBarWidget {
+        height: 1;
+        background: $surface;
+        padding: 0 1;
+    }
+
+    TabBarWidget .active-tab {
+        background: $accent;
+        color: $text;
+    }
+    """
+
+    def __init__(
+        self,
+        content: str = "",
+        *,
+        name: str | None = None,
+        id: str | None = None,  # noqa: A002
+        classes: str | None = None,
+        disabled: bool = False,
+    ) -> None:
+        """Initialize tab bar widget."""
+        super().__init__(
+            content,
+            name=name,
+            id=id,
+            classes=classes,
+            disabled=disabled,
+        )
+        self._last_render: TabBarRender | None = None
+
+    def update_from_render(self, render_output: TabBarRender) -> None:
+        """Update widget from render output.
+
+        Args:
+            render_output: TabBarRender containing tab labels and active state
+        """
+        self._last_render = render_output
+
+        # Format tabs with visual indicators
+        parts = []
+        for label, is_active in render_output.tabs:
+            if is_active:
+                parts.append(f"[bold reverse] {label} [/]")
+            else:
+                parts.append(f" {label} ")
+
+        content = "│".join(parts)
+        self.update(content)
+
+    @property
+    def active_index(self) -> int:
+        """Get currently active tab index."""
+        if self._last_render is None:
+            return 0
+        return self._last_render.active_index
+
+
+class FooterWidget(Static):
+    """Widget for displaying the footer with shortcuts.
+
+    Shows keyboard shortcuts: q quit | y copy visual | Y copy state
+    """
+
+    DEFAULT_CSS = """
+    FooterWidget {
+        height: 1;
+        background: $boost;
+        padding: 0 1;
+        text-style: dim;
+    }
+    """
+
+    def __init__(
+        self,
+        content: str = "",
+        *,
+        name: str | None = None,
+        id: str | None = None,  # noqa: A002
+        classes: str | None = None,
+        disabled: bool = False,
+    ) -> None:
+        """Initialize footer widget."""
+        super().__init__(
+            content,
+            name=name,
+            id=id,
+            classes=classes,
+            disabled=disabled,
+        )
+        self._last_render: FooterRender | None = None
+
+    def update_from_render(self, render_output: FooterRender) -> None:
+        """Update widget from render output.
+
+        Args:
+            render_output: FooterRender containing shortcut descriptions
+        """
+        self._last_render = render_output
+
+        # Format shortcuts with separator
+        content = " | ".join(render_output.shortcuts)
+        self.update(content)
+
+    @property
+    def shortcuts(self) -> list[str]:
+        """Get current shortcuts."""
+        if self._last_render is None:
+            return []
+        return self._last_render.shortcuts

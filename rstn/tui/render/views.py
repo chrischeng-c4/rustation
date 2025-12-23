@@ -16,7 +16,9 @@ from rstn.state.worktree import ContentType, WorktreeViewState
 from rstn.tui.render import (
     CommandListRender,
     ContentAreaRender,
+    FooterRender,
     StatusBarRender,
+    TabBarRender,
     ViewRender,
 )
 from rstn.tui.render.content import (
@@ -32,6 +34,8 @@ __all__ = [
     "render_command_list",
     "render_content_area",
     "render_status_bar",
+    "render_tab_bar",
+    "render_footer",
     "render_worktree_view",
     "render_dashboard_view",
     "render_settings_view",
@@ -165,6 +169,50 @@ def render_status_bar(state: AppState) -> StatusBarRender:
     )
 
 
+def render_tab_bar(state: AppState) -> TabBarRender:
+    """Render tab bar with view tabs.
+
+    Tabs: 1 Worktree | 2 Dashboard | 3 Settings
+    Active tab is highlighted.
+
+    Args:
+        state: Root application state
+
+    Returns:
+        TabBarRender with tab labels and active state
+    """
+    current_view = state.current_view
+
+    tabs = [
+        ("1 Worktree", current_view == ViewType.WORKTREE),
+        ("2 Dashboard", current_view == ViewType.DASHBOARD),
+        ("3 Settings", current_view == ViewType.SETTINGS),
+    ]
+
+    active_index = {
+        ViewType.WORKTREE: 0,
+        ViewType.DASHBOARD: 1,
+        ViewType.SETTINGS: 2,
+    }.get(current_view, 0)
+
+    return TabBarRender(tabs=tabs, active_index=active_index)
+
+
+def render_footer(_state: AppState) -> FooterRender:
+    """Render footer with keyboard shortcuts.
+
+    Shortcuts: q quit | y copy visual | Y copy state
+
+    Args:
+        _state: Root application state (unused for now)
+
+    Returns:
+        FooterRender with shortcut labels
+    """
+    shortcuts = ["q quit", "y copy visual", "Y copy state"]
+    return FooterRender(shortcuts=shortcuts)
+
+
 def render_worktree_view(state: AppState) -> ViewRender:
     """Render complete worktree view.
 
@@ -176,9 +224,11 @@ def render_worktree_view(state: AppState) -> ViewRender:
     """
     worktree = state.worktree_view
     return ViewRender(
+        tab_bar=render_tab_bar(state),
         command_list=render_command_list(worktree),
         content_area=render_content_area(worktree),
         status_bar=render_status_bar(state),
+        footer=render_footer(state),
         view_name="worktree",
     )
 
@@ -224,9 +274,11 @@ Select a workflow to view details.
     )
 
     return ViewRender(
+        tab_bar=render_tab_bar(state),
         command_list=command_list,
         content_area=content_area,
         status_bar=render_status_bar(state),
+        footer=render_footer(state),
         view_name="dashboard",
     )
 
@@ -282,9 +334,11 @@ def render_settings_view(state: AppState) -> ViewRender:
     )
 
     return ViewRender(
+        tab_bar=render_tab_bar(state),
         command_list=command_list,
         content_area=content_area,
         status_bar=render_status_bar(state),
+        footer=render_footer(state),
         view_name="settings",
     )
 

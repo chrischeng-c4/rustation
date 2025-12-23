@@ -256,6 +256,23 @@ class Noop(AppMsg):
 
 
 # ========================================
+# Copy Actions
+# ========================================
+
+
+class CopyContentRequested(AppMsg):
+    """Request to copy current view content to clipboard."""
+
+    pass
+
+
+class CopyStateRequested(AppMsg):
+    """Request to copy full application state (JSON) to clipboard."""
+
+    pass
+
+
+# ========================================
 # Domain Result Events
 # ========================================
 
@@ -455,6 +472,9 @@ __all__ = [
     "StateSaved",
     "Quit",
     "Noop",
+    # Copy Actions
+    "CopyContentRequested",
+    "CopyStateRequested",
     # Domain Result Events
     "GitCommandCompleted",
     "CargoCommandCompleted",

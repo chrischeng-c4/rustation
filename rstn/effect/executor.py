@@ -18,6 +18,7 @@ from rstn.effect import (
     Batch,
     CancelAgent,
     CancelWorkflow,
+    CopyToClipboard,
     DeleteFile,
     LoadState,
     LogDebug,
@@ -131,6 +132,8 @@ class DefaultEffectExecutor:
                 await self._execute_render(effect)
             elif isinstance(effect, QuitApp):
                 await self._execute_quit_app(effect)
+            elif isinstance(effect, CopyToClipboard):
+                await self._execute_copy_to_clipboard(effect)
             else:
                 await self.msg_sender.send(
                     ErrorOccurred(message=f"Unknown effect type: {type(effect)}")
@@ -458,6 +461,69 @@ class DefaultEffectExecutor:
         from rstn.msg import Quit
 
         await self.msg_sender.send(Quit())
+
+    async def _execute_copy_to_clipboard(self, effect: CopyToClipboard) -> None:
+        """Copy content to system clipboard.
+
+        Args:
+            effect: CopyToClipboard effect
+        """
+        import platform
+        import shutil
+
+        try:
+            system = platform.system()
+
+            if system == "Darwin":  # macOS
+                proc = subprocess.Popen(
+                    ["pbcopy"],
+                    stdin=subprocess.PIPE,
+                )
+                proc.communicate(effect.content.encode("utf-8"))
+            elif system == "Linux":
+                # Try xclip first, then xsel
+                if shutil.which("xclip"):
+                    proc = subprocess.Popen(
+                        ["xclip", "-selection", "clipboard"],
+                        stdin=subprocess.PIPE,
+                    )
+                    proc.communicate(effect.content.encode("utf-8"))
+                elif shutil.which("xsel"):
+                    proc = subprocess.Popen(
+                        ["xsel", "--clipboard", "--input"],
+                        stdin=subprocess.PIPE,
+                    )
+                    proc.communicate(effect.content.encode("utf-8"))
+                else:
+                    await self.msg_sender.send(
+                        ErrorOccurred(
+                            message="No clipboard tool found (xclip or xsel)"
+                        )
+                    )
+                    return
+            elif system == "Windows":
+                # Use clip.exe on Windows
+                proc = subprocess.Popen(
+                    ["clip"],
+                    stdin=subprocess.PIPE,
+                )
+                proc.communicate(effect.content.encode("utf-8"))
+            else:
+                await self.msg_sender.send(
+                    ErrorOccurred(message=f"Unsupported platform: {system}")
+                )
+                return
+
+            await self.msg_sender.send(
+                EffectCompleted(
+                    effect_id="copy_to_clipboard",
+                    result=f"Copied {len(effect.content)} characters to clipboard",
+                )
+            )
+        except Exception as e:
+            await self.msg_sender.send(
+                ErrorOccurred(message=f"Failed to copy to clipboard: {e}")
+            )
 
     async def cleanup(self) -> None:
         """Cleanup all running tasks and timers."""

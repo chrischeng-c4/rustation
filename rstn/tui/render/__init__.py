@@ -24,12 +24,16 @@ __all__ = [
     "CommandListRender",
     "ContentAreaRender",
     "StatusBarRender",
+    "TabBarRender",
+    "FooterRender",
     "ViewRender",
     # Render functions
     "render_app",
     "render_command_list",
     "render_content_area",
     "render_status_bar",
+    "render_tab_bar",
+    "render_footer",
 ]
 
 
@@ -77,21 +81,49 @@ class StatusBarRender:
 
 
 @dataclass(frozen=True)
+class TabBarRender:
+    """Rendered tab bar output.
+
+    Attributes:
+        tabs: List of (label, is_active) tuples
+        active_index: Currently active tab index (0-indexed)
+    """
+
+    tabs: list[tuple[str, bool]]
+    active_index: int
+
+
+@dataclass(frozen=True)
+class FooterRender:
+    """Rendered footer output.
+
+    Attributes:
+        shortcuts: List of shortcut descriptions ("q quit", "y copy", etc.)
+    """
+
+    shortcuts: list[str]
+
+
+@dataclass(frozen=True)
 class ViewRender:
     """Complete view render output.
 
     Contains all rendered components for a view.
 
     Attributes:
+        tab_bar: Rendered tab bar
         command_list: Rendered command list
         content_area: Rendered content area
         status_bar: Rendered status bar
+        footer: Rendered footer
         view_name: Name of the current view ("worktree", "dashboard", "settings")
     """
 
+    tab_bar: TabBarRender
     command_list: CommandListRender
     content_area: ContentAreaRender
     status_bar: StatusBarRender
+    footer: FooterRender
     view_name: str
 
 
@@ -101,5 +133,7 @@ from rstn.tui.render.views import (  # noqa: E402
     render_app,
     render_command_list,
     render_content_area,
+    render_footer,
     render_status_bar,
+    render_tab_bar,
 )
