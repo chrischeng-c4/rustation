@@ -1,138 +1,134 @@
 ---
-title: "Workflow Design: Prompt to Claude"
-description: "Architecture and implementation design for the Prompt to Claude workflow"
+title: "Workflow Design: Prompt to Claude (GUI)"
+description: "Architecture and implementation design for the Prompt to Claude workflow in Tauri"
 category: architecture
 status: draft
-last_updated: 2025-12-23
-version: 1.1.0
-tags: [workflow, claude, cli, streaming, mcp]
+last_updated: 2025-12-24
+version: 2.0.0
+tags: [workflow, claude, tauri, react, streaming]
 weight: 9
 ---
 
-# Design: Prompt to Claude Workflow
+# Design: Prompt to Claude Workflow (GUI)
 
 ## 1. Overview
+The "Prompt to Claude" workflow is the core developer interaction loop. In the GUI version, we move from terminal-based scrolling to a rich, threaded chat interface.
 
-The "Prompt to Claude" workflow is the foundational capability of `rstn`. It allows a user to:
-1.  Input a text prompt in the TUI.
-2.  Send that prompt to the **Claude Code CLI** (`claude`).
-3.  Receive and render the **streaming response** in real-time.
-4.  Maintain **session context** (MCP) for tools and memory.
+**User Experience**:
+1.  User enters a prompt in a multi-line auto-expanding text area.
+2.  Response streams into a Markdown-rendered message bubble.
+3.  Code blocks include "Copy" and "Apply" buttons.
+4.  Tool use (MCP) is visualized with status badges (e.g., "🔍 Searching codebase...").
 
-## 2. Architecture
+---
 
-We utilize the **State-First MVI** pattern.
+## 2. Architecture (Backend-Driven)
 
-### 2.1 State Model
+### 2.1 Backend State (Rust)
+The `PromptClaudeState` remains in Rust to ensure session persistence and reliability.
 
-We use the generic `WorkflowState[T]` container with a specific data payload.
+```rust
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PromptClaudeState {
+    pub session_id: String,
+    pub messages: Vec<Message>,
+    pub is_streaming: bool,
+    pub current_streaming_text: String,
+    pub token_usage: TokenUsage,
+}
 
-```python
-# rstn/state/workflow.py (Existing generic)
-class WorkflowState(BaseModel, Generic[T]):
-    id: str
-    status: WorkflowStatus
-    data: T
-    progress: float
-
-# New: rstn/state/workflows/prompt.py
-class PromptClaudeData(BaseModel):
-    """State specific to the Prompt Claude workflow."""
-    prompt: str
-    # The accumulated response text
-    output: str = ""
-    # The active Claude Code session ID (for continuity)
-    claude_session_id: str | None = None
-    # Token usage / Cost tracking
-    cost_usd: float = 0.0
-    # Path to the session-specific MCP config
-    mcp_config_path: str | None = None
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Message {
+    pub role: Role, // User, Assistant, System, Tool
+    pub content: String,
+    pub timestamp: DateTime<Utc>,
+    pub tool_calls: Option<Vec<ToolCall>>,
+}
 ```
 
-### 2.2 Message Protocol (`AppMsg`)
+### 2.2 Frontend State (React)
+The frontend consumes the state via a `useSyncExternalStore` or a global `Zustand` store synced via Tauri events.
 
-The workflow is driven by specific messages in `rstn/msg/__init__.py`:
+```typescript
+interface MessageBubbleProps {
+  message: Message;
+}
 
-| Message | Payload | Direction | Purpose |
-| :--- | :--- | :--- | :--- |
-| `WorkflowStartRequested` | `type="prompt-claude", params={prompt}` | UI → Reducer | User hits Enter on prompt |
-| `ClaudeStreamDelta` | `workflow_id, delta` | Executor → Reducer | Real-time text chunk |
-| `ClaudeCompleted` | `workflow_id, output, session_id` | Executor → Reducer | Stream finished |
-| `WorkflowFailed` | `workflow_id, error` | Executor → Reducer | Process error / timeout |
-
-### 2.3 Effect: `RunClaudeCli`
-
-This `AppEffect` wraps the execution of the `claude` binary.
-
-**MCP Configuration Strategy:**
-To support multiple sessions and avoid conflicts, the MCP configuration is **session-scoped** (per user request):
-1.  **Location**: `/tmp/rstn/{session_id}/mcp-config.json` (or OS temp equivalent).
-    *   *Alternative*: We can store metadata in `~/.rstn/sessions.db` (SQLite) but the config file itself needs to be on disk for the CLI to read.
-2.  **Lifecycle**: Created when the workflow starts; cleaned up when the session ends.
-**Command Construction:**
-```bash
-claude -p "{prompt}" \
-  --output-format stream-json \
-  --mcp-config /tmp/rstn/{session_id}/mcp-config.json \
-  --print \
-  --verbose \
-  --tools "default" \
-  --max-turns 10 \
-  --permission-mode ask
+const ChatView = () => {
+  const { messages, isStreaming } = useWorkflowState('prompt-claude');
+  // Auto-scroll logic using IntersectionObserver or scrollIntoView
+  return (
+    <ScrollArea>
+      {messages.map(m => <MessageBubble key={m.id} message={m} />)}
+      {isStreaming && <StreamingIndicator />}
+    </ScrollArea>
+  );
+};
 ```
 
-**Logging Requirement:**
-The Executor MUST log **all raw JSONL lines** from `stdout` and `stderr` to the `rstn.log` file (at DEBUG or TRACE level). This is critical for debugging permission flows and protocol errors.
+---
 
-## 3. State Machine
+## 3. Communication
 
-The workflow logic is governed by a strict state machine to manage the lifecycle of the external `claude` process.
+### 3.1 Command: `send_prompt`
+Invoked when the user clicks "Send" or presses `Cmd+Enter`.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Idle
-
-    Idle --> Preparing: WorkflowStartRequested
-    note right of Preparing
-        1. Generate Session ID
-        2. Create /tmp/rstn/{id}/
-        3. Write mcp-config.json
-        4. Check claude binary
-    end note
-
-    Preparing --> Running: RunClaudeCli (Effect Dispatched)
-    Preparing --> Failed: Config/Binary Error
-
-    state Running {
-        [*] --> Streaming
-        Streaming --> Streaming: ClaudeStreamDelta
-        Streaming --> ProcessingTool: Tool Use Request
-        ProcessingTool --> Streaming: Tool Result
-    }
-
-    Running --> Completed: ClaudeCompleted (Exit 0)
-    Running --> Failed: WorkflowFailed (Non-zero Exit)
-    Running --> Cancelled: WorkflowCancelled
-
-    Completed --> [*]
-    Failed --> [*]
-    Cancelled --> [*]
+```rust
+#[tauri::command]
+async fn send_prompt(
+    window: Window,
+    state: State<'_, AppState>,
+    prompt: String
+) -> Result<(), Error> {
+    // 1. Update state: add User message
+    // 2. Dispatch Effect: RunClaudeCli
+    // 3. Backend emits 'state:update'
+}
 ```
 
-## 4. Implementation Plan
+### 3.2 Event: `stream:delta`
+For performance, we emit high-frequency text chunks as lightweight events rather than full state updates.
 
-### Phase 1: Typing & State (Python)
-1.  Define `PromptClaudeData` in `rstn/state/workflows/prompt.py`.
-2.  Register it in `AppState`.
+```rust
+// Backend (Rust)
+window.emit("stream:delta", Payload { delta: chunk })?;
 
-### Phase 2: Domain Logic (Runners)
-1.  Implement `SessionConfigGenerator` to create the `/tmp` structure and JSON file.
-2.  Update `RunClaudeCli` effect to accept `mcp_config_path`.
-
-### Phase 3: Effect Execution
-1.  Update handler in `rstn/effect/executor.py` to use the dynamic config path.
-2.  Implement JSONL stream parsing.
-
-### Phase 4: Reducer Logic
-1.  Update `rstn/reduce/workflow.py` to handle the transitions defined in the State Machine.
+// Frontend (React)
+useEffect(() => {
+  const unlisten = listen("stream:delta", (event) => {
+    setLocalStreamingText(prev => prev + event.payload.delta);
+  });
+  return () => unlisten.then(f => f());
+}, []);
 ```
+
+---
+
+## 4. UI Components (Feature-Specific)
+
+### 4.1 Message Bubble
+- **Markdown**: Rendered via `react-markdown` with `remark-gfm`.
+- **Syntax Highlighting**: `react-syntax-highlighter` using `prism` or `shiki`.
+- **Copy-to-Clipboard**: Integrated into code block headers.
+
+### 4.2 Prompt Input
+- **Type**: `TextareaAutosize`.
+- **Hotkeys**:
+    - `Enter`: New line.
+    - `Cmd/Ctrl + Enter`: Submit.
+    - `Up Arrow`: Edit last message (if input is empty).
+
+---
+
+## 5. Session & MCP
+- **Persistent Storage**: Sessions are stored in SQLite (`~/.rstn/history.db`).
+- **MCP Config**: Managed by the Backend, same as v2, but the path is handled internally by the Tauri Backend service.
+
+---
+
+## 6. Implementation Plan (GUI)
+
+1.  **Backend**: Port the `claude` CLI execution logic (JSONL parsing).
+2.  **Frontend**: Create the `ChatContainer` and `MessageBubble` components using `shadcn/ui`.
+3.  **Bridge**: Implement the `stream:delta` event listener in React.
+4.  **Polish**: Add smooth scrolling and transition animations (Framer Motion).
