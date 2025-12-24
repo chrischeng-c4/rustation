@@ -3,9 +3,9 @@ title: "State-First Architecture - Overview"
 description: "Core principle: All state must be JSON/YAML serializable"
 category: concept
 status: evergreen
-last_updated: 2025-12-21
-version: 0.2.0
-tags: [architecture, state, testing, v2]
+last_updated: 2025-12-24
+version: 3.0.0
+tags: [architecture, state, testing, v3, tauri]
 aliases: ["/02-architecture/state-first.md"]
 weight: 2
 ---
@@ -103,11 +103,11 @@ fn test_prompt_workflow() {
 }
 ```
 
-**vs. UI testing** (hard to observe):
+**vs. DOM testing** (hard to observe):
 ```rust
-// ❌ Fragile: depends on rendering coordinates
-let buffer = terminal.backend().buffer();
-assert_eq!(buffer.get(10, 5).symbol, "│");
+// ❌ Fragile: depends on DOM structure / CSS selectors
+// In GUI, testing via querySelector or pixel coordinates is brittle
+// State-based testing via Tauri Commands is deterministic
 ```
 
 ### 2. **Reproducible Bugs**

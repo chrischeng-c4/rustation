@@ -66,15 +66,15 @@ After:
 
 ### Examples
 
-**Keybinding Management** (KB-First approach):
-1. Define keybindings in `docs/manual/cli/keybindings.md` (user contract)
-2. Implement mapping logic in `crates/rstn/src/tui/keybindings.rs`
-3. Code reads from specification.
+**Tauri Command Design** (KB-First approach):
+1. Define command interface in `kb/architecture/01-system-specification.md`
+2. Implement in `src-tauri/src/commands/`
+3. Frontend invokes via `invoke('command_name', params)`
 
 **State Machine Workflows** (KB-First approach):
-1. Document workflow architecture in `kb/architecture/02-state-first-mvi.md`
+1. Document workflow architecture in `kb/architecture/` (e.g., 09-workflow-prompt-claude.md)
 2. Define state transitions and validation rules in KB
-3. Implement state machine based on KB specification
+3. Implement state machine in Rust based on KB specification
 
 ### Benefits
 
@@ -119,35 +119,34 @@ See: `docs/README.md` for User Documentation.
 
 ### References
 
-- `kb/architecture/01-state-first-principle.md` - **🎯 CORE PRINCIPLE**: All state MUST be JSON/YAML serializable
-- `kb/architecture/00-overview.md` - Three pillars (state-first, CLI/TUI separation, testing-first)
+- `kb/architecture/02-state-first-principle.md` - **🎯 CORE PRINCIPLE**: All state MUST be JSON/YAML serializable
+- `kb/architecture/00-overview.md` - Three pillars (state-first, frontend/backend separation, backend-driven UI)
 - `kb/workflow/testing-guide.md` - How to write state tests
 </state-first-architecture>
 
 ---
 
 <workflow-driven-ui>
-## Workflow-Driven UI (The "n8n" Model)
+## Workflow-Driven UI (Tauri GUI)
 
-The TUI is shifting from a static document viewer to a **Workflow Launcher**.
+The GUI is a **Tauri v2** desktop application with a **3-Tab Structure**.
 
-### 1. Command as Workflow Trigger
+### Navigation (Fixed Sidebar)
 
-- **Left Panel (Commands)**: List of available Workflows.
-- **Action**: Selecting a command triggers a Workflow.
-- **Constraint**: **Single Active Workflow**.
+1. **Workflows Tab** (Home): Prompt-to-Code, Git operations
+2. **Dockers Tab**: Container management dashboard
+3. **Settings Tab**: Configuration
 
-### 2. Dynamic Content Area
+### Backend-Driven UI Model
 
-- **Middle Panel (Content)**: Visualizes the current state of the active Workflow Node.
+- **Source of Truth**: Rust `AppState` (Backend)
+- **Sync**: Backend pushes state updates to Frontend via Tauri Events
+- **Action**: Frontend invokes Tauri Commands to mutate Backend state
+- **No Fat Frontend**: Business logic lives in Rust, not TypeScript
 
-### 3. Log Obsolescence
+### Reference
 
-- **No Log Panel**: Detailed logs are persisted to `~/.rstn/logs/`.
-
-### 4. No Tab Bar
-
-- **Focus**: The interface should be focused on the current task (Worktree).
+See `kb/architecture/01-system-specification.md` for full tech stack.
 </workflow-driven-ui>
 
 ---
@@ -172,9 +171,9 @@ Before starting ANY non-trivial work, work through these steps IN ORDER:
 </step>
 
 <step number="4" name="TESTS NEEDED">
-  - Unit tests: ___
-  - Integration tests: ___
-  - TUI e2e tests: ___ (dispatch to tui-tester)
+  - Unit tests (Rust): ___
+  - Integration tests (Rust): ___
+  - Component tests (React/Vitest): ___
 </step>
 
 <step number="5" name="COMPLETE?">
@@ -221,7 +220,7 @@ See: kb/workflow/sdd-workflow.md for detailed guide
 </tree>
 
 <tree name="When to use Design-First Planning">
-START: Planning rstn TUI feature?
+START: Planning rstn GUI feature?
 │
 ├─► Does feature involve interactive flow?
 │   ├─ YES → Continue checking
@@ -242,23 +241,6 @@ START: Planning rstn TUI feature?
     3. State machine (Mermaid)
     4. Logging specification
     5. Verification method
-</tree>
-
-<tree name="Dispatch to tui-tester">
-START: Need TUI testing?
-│
-├─► Does feature touch TUI code?
-│   ├─ NO → Skip tui-tester, use regular unit tests
-│   └─ YES → Continue
-│
-├─► What TUI component?
-│   ├─ Mouse handling → Dispatch with mouse context
-│   ├─ Keyboard handling → Dispatch with keyboard context
-│   ├─ View/Focus → Dispatch with state context
-│   └─ Widget rendering → Dispatch with render context
-│
-└─► Prepare context, then dispatch:
-    Task(subagent_type="tui-tester", prompt="<context>...</context>")
 </tree>
 
 <tree name="Claude CLI Integration">
@@ -298,8 +280,8 @@ START: rstn needs to call Claude CLI?
 
 <repository-structure>
 rustation/
-├── Cargo.toml              # Workspace root
-├── AGENTS.md               # This file
+├── Cargo.toml              # Workspace root (if any shared Rust libs)
+├── CLAUDE.md               # This file
 ├── docs/                   # User Documentation
 │   ├── get-started/
 │   └── manual/
@@ -307,38 +289,47 @@ rustation/
 │   ├── architecture/
 │   ├── workflow/
 │   └── internals/
-├── crates/
-│   ├── rush/
-│   └── rstn/
+├── src-tauri/              # Rust Backend (Tauri)
+│   ├── src/
+│   │   ├── commands/       # Tauri Commands
+│   │   ├── state/          # AppState
+│   │   └── main.rs
+│   └── tauri.conf.json
+├── src/                    # React Frontend
+│   ├── components/         # shadcn/ui components
+│   ├── features/           # Feature modules
+│   ├── hooks/              # Custom React hooks
+│   └── main.tsx
 ├── specs/{NNN}-{name}/
-└── target/
+└── package.json
 </repository-structure>
 
 <knowledge-base>
-**rustation v2 Documentation** (reorganized 2025-12-22):
+**rustation v3 Documentation** (Tauri GUI):
 
 **Engineering Handbook (`kb/`)**:
 - `kb/README.md` - Start here for development
-- `kb/architecture/01-state-first-principle.md` - **🎯 CORE PRINCIPLE**
-- `kb/architecture/02-state-first-mvi.md` - **Runtime Model**
+- `kb/architecture/00-overview.md` - Three pillars
+- `kb/architecture/01-system-specification.md` - **Tech Stack & Layout**
+- `kb/architecture/02-state-first-principle.md` - **🎯 CORE PRINCIPLE**
 - `kb/workflow/sdd-workflow.md` - SDD Guide
-- `kb/workflow/testing-guide.md` - Testing Guide
+- `kb/workflow/contribution-guide.md` - Tauri dev setup
 
 **User Documentation (`docs/`)**:
 - `docs/README.md` - Start here for usage
 - `docs/get-started/quick-start.md` - Quick Start
-- `docs/manual/cli/commands.md` - Command Reference
 
 **CRITICAL REQUIREMENTS for ALL features**:
 1. **State tests MANDATORY**: Round-trip serialization + transitions + invariants
 2. All state structs derive `Serialize + Deserialize + Debug + Clone`
 3. NO hidden state
-4. See `kb/architecture/01-state-first-principle.md`
+4. NO business logic in React (Logic belongs in Rust)
+5. See `kb/architecture/02-state-first-principle.md`
 
 **Development Workflow**:
-- New feature? → See `kb/workflow/sdd-workflow.md`
-- Writing tests? → See `kb/workflow/testing-guide.md`
-- Contributing? → See `kb/workflow/contribution-guide.md`
+- Run dev: `npm run tauri dev`
+- Rust tests: `cargo test`
+- React tests: `npm test`
 </knowledge-base>
 
 </grounding>
@@ -350,12 +341,11 @@ rustation/
 <rule severity="NEVER">Change architecture without updating KB → Loss of source of truth → Update `kb/` first</rule>
 <rule severity="NEVER">Block work on missing speckit artifacts → speckit is optional → Use KB-first instead</rule>
 <rule severity="NEVER">Implement interactive flow without design diagrams → Leads to complexity → Use Design-First Planning</rule>
-<rule severity="NEVER">Skip flow diagrams for rstn TUI features → Can't debug interaction → Create Mermaid diagrams in plan phase</rule>
+<rule severity="NEVER">Skip flow diagrams for rstn GUI features → Can't debug interaction → Create Mermaid diagrams in plan phase</rule>
 <rule severity="NEVER">Implement without logging spec → No observability → Define what to log BEFORE coding</rule>
-<rule severity="NEVER">Dispatch to tui-tester without context → Agent lacks info → Use context template</rule>
-<rule severity="NEVER">Hardcode test coordinates → Breaks on resize → Calculate from layout rects</rule>
-<rule severity="NEVER">Forget EnableMouseCapture → Mouse events won't work → Add to terminal setup</rule>
-<rule severity="NEVER">Commit without running tests → Broken code enters repo → Run cargo test first</rule>
+<rule severity="NEVER">Put business logic in React → Fat frontend anti-pattern → Logic belongs in Rust Backend</rule>
+<rule severity="NEVER">Mutate state directly from Frontend → Split brain state → Use Tauri Commands to mutate Backend</rule>
+<rule severity="NEVER">Commit without running tests → Broken code enters repo → Run `cargo test` and `npm test` first</rule>
 <rule severity="NEVER">Skip clippy → Lints accumulate → Run cargo clippy before commit</rule>
 <rule severity="NEVER">Use -p + stream-json without --verbose → CLI error → Always add --verbose flag</rule>
 <rule severity="NEVER">Use "transport" in MCP config → Invalid schema → Use "type" field instead</rule>
@@ -372,24 +362,21 @@ rustation/
 Use these markers in workflow updates:
 
 <marker name="STATUS">
-Topic: multi-instance sessions
+Topic: streaming chat UI
 Phase: KB | IMPLEMENT | TEST
 </marker>
 
 <marker name="IMPLEMENTING">
-Task: Add mouse click handler
-File: crates/rstn/src/tui/app.rs
-</marker>
-
-<marker name="DISPATCHING TEST">
-Agent: tui-tester
-Focus: Mouse click on tab bar
+Task: Add send_prompt Tauri Command
+File: src-tauri/src/commands/workflow.rs
 </marker>
 
 <marker name="BUILD CHECK">
 cargo build: PASS
 cargo test: PASS
 cargo clippy: PASS
+npm run lint: PASS
+npm test: PASS
 </marker>
 
 <marker name="READY FOR PR">
@@ -451,9 +438,9 @@ Before committing or creating PR, verify ALL items:
 </checklist>
 
 <checklist name="Testing">
-  <item>Unit tests written?</item>
-  <item>TUI e2e tests dispatched to tui-tester?</item>
-  <item>All tests pass?</item>
+  <item>Rust unit tests written?</item>
+  <item>React component tests written (if UI changed)?</item>
+  <item>All tests pass (`cargo test` + `npm test`)?</item>
   <item>Edge cases covered?</item>
 </checklist>
 
