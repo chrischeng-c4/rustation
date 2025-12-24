@@ -3,8 +3,8 @@ title: "MCP Tool Schemas"
 description: "JSON-RPC tool definitions for rstn MCP server"
 category: reference
 status: implemented
-last_updated: 2025-12-21
-version: 0.2.0
+last_updated: 2025-12-24
+version: 0.3.0
 tags: []
 weight: 1
 aliases: ["/03-api-reference/mcp-tools.md"]
@@ -16,14 +16,60 @@ This document provides detailed schemas and examples for all MCP tools provided 
 
 ## Overview
 
-rstn exposes four MCP tools for Claude Code to interact with the TUI:
+rstn exposes six MCP tools for Claude Code to interact with the TUI:
 
 | Tool | Category | Purpose |
 |------|----------|---------|
+| `rstn_get_app_state` | Data | Get full TUI application state as JSON |
 | `rstn_report_status` | Control | Report task status changes (needs_input, completed, error) |
 | `rstn_read_spec` | Data | Read spec artifacts from current feature |
 | `rstn_get_context` | Data | Get current feature context and metadata |
 | `rstn_complete_task` | Control | Mark a task as complete with validation |
+| `rstn_run_hook` | Control | Run project-configured hook (lint, test, format) |
+
+---
+
+## rstn_get_app_state
+
+**Category**: Data Plane
+**Purpose**: Get full TUI application state as JSON
+
+Use this tool to inspect the complete application state for debugging or context.
+
+### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {},
+  "required": []
+}
+```
+
+No parameters required - returns complete application state.
+
+### Response Structure
+
+```json
+{
+  "running": true,
+  "current_view": "worktree",
+  "project_root": "/path/to/project",
+  "worktree_view": {
+    "commands": [...],
+    "selected_command_index": 0,
+    "workflow_output": "...",
+    "status_message": "Ready"
+  },
+  "active_workflows": {...}
+}
+```
+
+### Use Cases
+
+- Debug current TUI state
+- Inspect active workflows
+- Get current view and focus information
 
 ---
 
@@ -369,6 +415,110 @@ Use this tool to mark tasks complete in `tasks.md` during implementation.
 
 ---
 
+## rstn_run_hook
+
+**Category**: Control Plane
+**Purpose**: Run a project-configured hook command
+
+Use this tool to execute project-specific commands like linting, testing, or formatting.
+
+### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "hook_name": {
+      "type": "string",
+      "description": "Name of the hook (e.g., lint, test, format)"
+    },
+    "args": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Additional arguments to pass to the hook"
+    }
+  },
+  "required": ["hook_name"]
+}
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `hook_name` | string | Yes | Hook name from `.rstn/hooks.yaml` |
+| `args` | string[] | No | Additional arguments |
+
+### Hook Configuration
+
+Hooks are defined in `.rstn/hooks.yaml`:
+
+```yaml
+hooks:
+  lint:
+    command: "uv run ruff check ."
+    timeout_secs: 60
+  test:
+    command: "uv run pytest"
+    timeout_secs: 300
+  format:
+    command: "uv run ruff format ."
+    timeout_secs: 60
+```
+
+### Examples
+
+**Run lint:**
+```json
+{
+  "hook_name": "lint"
+}
+```
+
+**Run test with args:**
+```json
+{
+  "hook_name": "test",
+  "args": ["-v", "--tb=short"]
+}
+```
+
+### Response (Success)
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"hook_name\":\"lint\",\"exit_code\":0,\"stdout\":\"All checks passed!\",\"stderr\":\"\",\"duration_secs\":1.5}"
+    }
+  ],
+  "isError": false
+}
+```
+
+### Response (Hook Not Found)
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Hook not found: deploy. Available: lint, test, format"
+    }
+  ],
+  "isError": true
+}
+```
+
+### Use Cases
+
+- Run linting before committing
+- Execute tests during implementation
+- Format code automatically
+
+---
+
 ## Tool Discovery
 
 Claude Code discovers rstn's MCP tools via `~/.rstn/mcp-session.json`:
@@ -471,7 +621,11 @@ Returned when internal operations fail (file I/O, event dispatch, etc.).
 ## Implementation Reference
 
 For implementation details, see:
-- `crates/rstn/src/tui/mcp_server.rs` - Tool definitions and handlers
-- `crates/rstn/src/tui/event.rs` - Event types
-- `crates/rstn/src/tui/app.rs` - Event handling
-- `crates/rstn/tests/mcp_server_test.rs` - Integration tests
+- `rstn/mcp/tools.py` - Tool definitions and handlers (McpToolRegistry)
+- `rstn/mcp/types.py` - MCP types (McpToolResponse, HookConfig, etc.)
+- `rstn/mcp/server.py` - FastAPI server lifecycle (McpServer)
+- `rstn/mcp/routes.py` - HTTP endpoints for MCP protocol
+- `rstn/mcp/hooks.py` - Hook configuration and execution
+- `rstn/msg/__init__.py` - MCP message types
+- `rstn/reduce/__init__.py` - MCP reducers
+- `tests/test_mcp/` - Unit tests

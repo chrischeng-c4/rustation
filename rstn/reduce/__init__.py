@@ -15,7 +15,7 @@ CRITICAL: Reducers must be pure functions:
 
 from __future__ import annotations
 
-from rstn.reduce.workflow import reduce_workflow
+from rstn.effect import AppEffect, CopyToClipboard, LogInfo, Render
 from rstn.msg import (
     AppMsg,
     ClaudeCompleted,
@@ -23,6 +23,10 @@ from rstn.msg import (
     CopyContentRequested,
     CopyStateRequested,
     KeyPressed,
+    McpCompleteTaskReceived,
+    McpReportStatusReceived,
+    McpServerStarted,
+    McpServerStopped,
     Noop,
     Quit,
     ScrollContent,
@@ -33,6 +37,7 @@ from rstn.msg import (
     WorkflowFailed,
     WorkflowStartRequested,
 )
+from rstn.reduce.workflow import reduce_workflow, reduce_workflow_start
 from rstn.state import AppState
 
 
@@ -53,6 +58,11 @@ def reduce(state: AppState, msg: AppMsg) -> tuple[AppState, list[AppEffect]]:
         >>> new_state, effects = reduce(state, Quit())
         >>> assert not new_state.running
     """
+    from rstn.logging import get_logger
+
+    log = get_logger("rstn.reduce")
+    log.debug("Processing message", msg_type=type(msg).__name__, msg_data=msg.model_dump())
+
     # Dispatch to specific reducers based on message type
     if isinstance(msg, KeyPressed):
         return reduce_key_pressed(state, msg)
@@ -83,6 +93,15 @@ def reduce(state: AppState, msg: AppMsg) -> tuple[AppState, list[AppEffect]]:
         return reduce_quit(state, msg)
     elif isinstance(msg, Noop):
         return state, []
+    # MCP Events
+    elif isinstance(msg, McpServerStarted):
+        return reduce_mcp_server_started(state, msg)
+    elif isinstance(msg, McpServerStopped):
+        return reduce_mcp_server_stopped(state, msg)
+    elif isinstance(msg, McpReportStatusReceived):
+        return reduce_mcp_report_status(state, msg)
+    elif isinstance(msg, McpCompleteTaskReceived):
+        return reduce_mcp_complete_task(state, msg)
     else:
         # Unknown message type - log and ignore
         return state, [LogInfo(message=f"Unknown message type: {type(msg).__name__}")]
@@ -411,6 +430,124 @@ def reduce_copy_state(
     return state, [
         CopyToClipboard(content=state_json),
         LogInfo(message="Copied full state JSON to clipboard"),
+    ]
+
+
+# ========================================
+# MCP Reducers
+# ========================================
+
+
+def reduce_mcp_server_started(
+    state: AppState, msg: McpServerStarted
+) -> tuple[AppState, list[AppEffect]]:
+    """Handle MCP server started event.
+
+    Updates status message to show MCP server is available.
+
+    Args:
+        state: Current state
+        msg: McpServerStarted message
+
+    Returns:
+        Tuple of (new_state, effects)
+    """
+    # Update worktree status to show MCP is ready
+    new_worktree = state.worktree_view.model_copy(
+        update={
+            "status_message": f"MCP server ready on port {msg.port}",
+        }
+    )
+    new_state = state.model_copy(update={"worktree_view": new_worktree})
+
+    return new_state, [
+        Render(),
+        LogInfo(message=f"MCP server started on port {msg.port} (session: {msg.session_id})"),
+    ]
+
+
+def reduce_mcp_server_stopped(
+    state: AppState, msg: McpServerStopped
+) -> tuple[AppState, list[AppEffect]]:
+    """Handle MCP server stopped event.
+
+    Args:
+        state: Current state
+        msg: McpServerStopped message
+
+    Returns:
+        Tuple of (new_state, effects)
+    """
+    return state, [LogInfo(message="MCP server stopped")]
+
+
+def reduce_mcp_report_status(
+    state: AppState, msg: McpReportStatusReceived
+) -> tuple[AppState, list[AppEffect]]:
+    """Handle MCP status report from Claude Code.
+
+    Status types:
+    - needs_input: Claude needs user input, enter input mode with prompt
+    - completed: Task completed successfully
+    - error: Task failed with error message
+
+    Args:
+        state: Current state
+        msg: McpReportStatusReceived message
+
+    Returns:
+        Tuple of (new_state, effects)
+    """
+    if msg.status == "needs_input":
+        # Enter input mode with the prompt from Claude
+        prompt = msg.prompt or "Input requested by Claude:"
+        new_worktree = state.worktree_view.enter_input_mode(prompt=prompt)
+        new_state = state.model_copy(update={"worktree_view": new_worktree})
+        return new_state, [Render()]
+
+    elif msg.status == "completed":
+        # Update status message
+        new_worktree = state.worktree_view.model_copy(
+            update={"status_message": "Task completed"}
+        )
+        new_state = state.model_copy(update={"worktree_view": new_worktree})
+        return new_state, [
+            Render(),
+            LogInfo(message="Claude reported task completed"),
+        ]
+
+    elif msg.status == "error":
+        # Show error in status
+        error_msg = msg.message or "Unknown error"
+        new_worktree = state.worktree_view.model_copy(
+            update={"status_message": f"Error: {error_msg}"}
+        )
+        new_state = state.model_copy(update={"worktree_view": new_worktree})
+        return new_state, [
+            Render(),
+            LogInfo(message=f"Claude reported error: {error_msg}"),
+        ]
+
+    # Unknown status - just log
+    return state, [LogInfo(message=f"Unknown MCP status: {msg.status}")]
+
+
+def reduce_mcp_complete_task(
+    state: AppState, msg: McpCompleteTaskReceived
+) -> tuple[AppState, list[AppEffect]]:
+    """Handle MCP task completion request from Claude Code.
+
+    Args:
+        state: Current state
+        msg: McpCompleteTaskReceived message
+
+    Returns:
+        Tuple of (new_state, effects)
+    """
+    # For now, just log the task completion
+    # In a full implementation, this would update task status in tasks.md
+    return state, [
+        LogInfo(message=f"Task {msg.task_id} marked complete (skip_validation={msg.skip_validation})"),
     ]
 
 

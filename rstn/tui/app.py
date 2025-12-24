@@ -10,6 +10,7 @@ This is the main entry point for the TUI. It implements the State-First MVI patt
 from __future__ import annotations
 
 import asyncio
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,7 @@ from textual.widgets import Header, Static
 
 from rstn.effect import DefaultEffectExecutor, MessageSender
 from rstn.logging import get_logger
+from rstn.mcp import McpServer, McpServerConfig
 from rstn.msg import AppMsg, KeyModifiers, KeyPressed, MouseClicked, Quit, Tick
 from rstn.reduce import reduce
 from rstn.state import AppState
@@ -94,15 +96,22 @@ class RstnApp(App[None]):
     def __init__(
         self,
         state_file: Path | None = None,
+        project_root: Path | None = None,
+        enable_mcp: bool = True,
         **kwargs: Any,
     ) -> None:
         """Initialize TUI app.
 
         Args:
             state_file: Optional path to saved state file
+            project_root: Project root directory (defaults to cwd)
+            enable_mcp: Whether to start MCP server (default True)
             **kwargs: Additional arguments for Textual App
         """
         super().__init__(**kwargs)
+
+        # Project root for MCP and spec operations
+        self._project_root = project_root or Path.cwd()
 
         # Load or create initial state
         if state_file and state_file.exists():
@@ -122,6 +131,11 @@ class RstnApp(App[None]):
         # Flag to prevent duplicate quit processing
         self._quitting = False
 
+        # MCP server (optional)
+        self._enable_mcp = enable_mcp
+        self._mcp_server: McpServer | None = None
+        self._mcp_session_id = str(uuid.uuid4())[:8]  # Short session ID
+
     def _create_message_sender(self) -> MessageSender:
         """Create message sender for executor feedback."""
 
@@ -133,6 +147,14 @@ class RstnApp(App[None]):
                 await self.queue.put(msg)
 
         return QueueMessageSender(self._msg_queue)
+
+    async def _mcp_msg_sender(self, msg: AppMsg) -> None:
+        """Send message from MCP server to TUI queue."""
+        await self._msg_queue.put(msg)
+
+    def _get_state(self) -> AppState:
+        """Get current state (callback for MCP server)."""
+        return self.state
 
     def compose(self) -> ComposeResult:
         """Compose the UI layout.
@@ -165,6 +187,10 @@ class RstnApp(App[None]):
         # Start tick timer if needed
         self._start_tick_timer()
 
+        # Start MCP server if enabled
+        if self._enable_mcp:
+            await self._start_mcp_server()
+
     def _start_tick_timer(self) -> None:
         """Start background tick timer."""
 
@@ -174,6 +200,35 @@ class RstnApp(App[None]):
                 await self._msg_queue.put(Tick())
 
         self._timer_task = asyncio.create_task(tick_loop())
+
+    async def _start_mcp_server(self) -> None:
+        """Start the embedded MCP HTTP server."""
+        from rstn.msg import McpServerStarted
+
+        config = McpServerConfig(
+            host="127.0.0.1",
+            port=0,  # Dynamic port
+            session_id=self._mcp_session_id,
+        )
+
+        self._mcp_server = McpServer(
+            config=config,
+            state_getter=self._get_state,
+            msg_sender=self._mcp_msg_sender,
+            project_root=self._project_root,
+        )
+
+        port = await self._mcp_server.start()
+        log.info(
+            "MCP server started",
+            port=port,
+            session_id=self._mcp_session_id,
+        )
+
+        # Notify TUI via message
+        await self._msg_queue.put(
+            McpServerStarted(port=port, session_id=self._mcp_session_id)
+        )
 
     @work(exclusive=True)
     async def process_messages(self) -> None:
@@ -250,6 +305,11 @@ class RstnApp(App[None]):
     async def _cleanup(self) -> None:
         """Cleanup resources before exit."""
         log.info("TUI cleanup started")
+
+        # Stop MCP server
+        if self._mcp_server:
+            await self._mcp_server.stop()
+            self._mcp_server = None
 
         # Cancel timer
         if self._timer_task:

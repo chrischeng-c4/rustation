@@ -91,8 +91,8 @@ def setup_logging(verbose: bool = False) -> Path:
     Returns:
         Path to the log file
     """
-    # Generate log filename with timestamp
-    timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    # Generate log filename with timestamp: YYYY-MM-DD_HH-MM-SS
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_file = get_log_dir() / f"rstn-py.{timestamp}.log"
 
     # Configure root logger

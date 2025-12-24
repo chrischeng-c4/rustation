@@ -9,6 +9,7 @@ EffectExecutor is responsible for:
 from __future__ import annotations
 
 import asyncio
+import json
 import subprocess
 from typing import TYPE_CHECKING, Protocol
 
@@ -28,6 +29,7 @@ from rstn.effect import (
     ReadFile,
     Render,
     RunBashScript,
+    RunClaudeCli,
     RunCommand,
     SaveState,
     SpawnAgent,
@@ -35,6 +37,7 @@ from rstn.effect import (
     StopTimer,
     WriteFile,
 )
+from rstn.logging import get_logger
 from rstn.msg import (
     AgentCompleted,
     AgentStreamDelta,
@@ -51,6 +54,8 @@ from rstn.msg import (
 
 if TYPE_CHECKING:
     pass
+
+log = get_logger("rstn.effect.executor")
 
 
 class MessageSender(Protocol):
@@ -288,7 +293,7 @@ class DefaultEffectExecutor:
         from rstn.msg import ClaudeCompleted, ClaudeStreamDelta
 
         workflow_id = effect.workflow_id
-        
+
         # Build command
         cmd = [
             "claude", "-p", effect.prompt,
@@ -299,8 +304,23 @@ class DefaultEffectExecutor:
         ]
 
         if effect.mcp_config_path:
+            # Ensure directory exists
+            effect.mcp_config_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # If config file doesn't exist, create a default one (placeholder port 19560)
+            if not effect.mcp_config_path.exists():
+                config = {
+                    "mcpServers": {
+                        "rstn": {
+                            "type": "http",
+                            "url": "http://127.0.0.1:19560/mcp"
+                        }
+                    }
+                }
+                effect.mcp_config_path.write_text(json.dumps(config, indent=2))
+
             cmd.extend(["--mcp-config", str(effect.mcp_config_path)])
-        
+
         if effect.system_prompt_file:
             cmd.extend(["--system-prompt-file", str(effect.system_prompt_file)])
 
@@ -324,22 +344,22 @@ class DefaultEffectExecutor:
                     line_bytes = await process.stdout.readline()
                     if not line_bytes:
                         break
-                    
+
                     line = line_bytes.decode("utf-8").strip()
                     if not line:
                         continue
-                    
+
                     # RAW LOGGING: Crucial for debugging protocol and permissions
                     log.debug("Claude raw output", line=line, workflow_id=workflow_id)
 
                     try:
                         data = json.loads(line)
                         msg_type = data.get("type")
-                        
+
                         # Handle init message to capture session ID
                         if msg_type == "system" and data.get("subtype") == "init":
                             claude_session_id = data.get("session_id")
-                            log.info("Claude session initialized", 
+                            log.info("Claude session initialized",
                                      session_id=claude_session_id, workflow_id=workflow_id)
 
                         # Handle text deltas
@@ -352,7 +372,7 @@ class DefaultEffectExecutor:
                                 await self.msg_sender.send(
                                     ClaudeStreamDelta(workflow_id=workflow_id, delta=text)
                                 )
-                        
+
                         # Fallback for non-streaming assistant messages
                         elif msg_type == "assistant":
                             message = data.get("message", {})

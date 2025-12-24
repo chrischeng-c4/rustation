@@ -5,9 +5,7 @@ Handles starting, updating, and completing workflows.
 
 from __future__ import annotations
 
-import uuid
 from pathlib import Path
-from typing import Any
 
 from rstn.domain.service.session_config import SessionConfigManager
 from rstn.effect import AppEffect, LogInfo, Render, RunClaudeCli
@@ -19,6 +17,7 @@ from rstn.msg import (
     WorkflowFailed,
     WorkflowStartRequested,
 )
+from rstn.resources import get_system_prompt_path
 from rstn.state import AppState
 from rstn.state.workflow import WorkflowState, WorkflowStatus
 from rstn.state.workflows.prompt import PromptClaudeData
@@ -44,7 +43,7 @@ def reduce_workflow(state: AppState, msg: AppMsg) -> tuple[AppState, list[AppEff
         return reduce_workflow_completed(state, msg)
     elif isinstance(msg, WorkflowFailed):
         return reduce_workflow_failed(state, msg)
-    
+
     return state, []
 
 
@@ -68,14 +67,14 @@ def reduce_workflow_start(
     if workflow_type == "prompt-claude":
         # Phase 4: Implementation of Prompt Claude Start
         prompt = msg.params # Simplified for now, in real it would be JSON
-        
+
         # 1. Prepare session-specific MCP config
         # Note: In a pure reducer, we shouldn't do I/O.
-        # But for mcp_config_path, we'll assume the path can be deterministic 
+        # But for mcp_config_path, we'll assume the path can be deterministic
         # or we provide it as an Effect that then triggers the start.
-        # To follow MVI strictly: 
+        # To follow MVI strictly:
         # Reducer -> Effect(CreateConfig) -> Msg(ConfigReady) -> Reducer -> Effect(RunClaude)
-        
+
         # However, for the first implementation, let's keep it simple:
         # We'll use a deterministic path and assume the Executor handles missing dirs.
         session_mgr = SessionConfigManager()
@@ -86,7 +85,7 @@ def reduce_workflow_start(
             prompt=prompt,
             mcp_config_path=str(mcp_config_path)
         )
-        
+
         workflow = WorkflowState[PromptClaudeData](
             id=workflow_id,
             workflow_type=workflow_type,
@@ -97,13 +96,13 @@ def reduce_workflow_start(
         # 3. Update AppState
         new_active = state.active_workflows.copy()
         new_active[workflow_id] = workflow
-        
+
         new_worktree = state.worktree_view.model_copy(update={
             "active_workflow_id": workflow_id,
             "workflow_output": f"🚀 Starting Claude session: {workflow_id}\n\n",
             "status_message": "Claude is thinking..."
         })
-        
+
         new_state = state.model_copy(update={
             "active_workflows": new_active,
             "worktree_view": new_worktree
@@ -116,12 +115,13 @@ def reduce_workflow_start(
             cwd=Path(state.project_root or "."),
             workflow_id=workflow_id,
             mcp_config_path=mcp_config_path,
+            system_prompt_file=get_system_prompt_path(),
             max_turns=10,
             permission_mode="ask"
         ))
-        
+
         effects.append(LogInfo(message=f"Started workflow {workflow_type} ({workflow_id})"))
-        
+
         return new_state, effects
 
     return state, [LogInfo(message=f"Unsupported workflow type: {workflow_type}")]
@@ -152,13 +152,13 @@ def reduce_claude_delta(
     # Update workflow data
     new_data = workflow.data.append_output(delta)
     new_workflow = workflow.model_copy(update={"data": new_data})
-    
+
     new_active = state.active_workflows.copy()
     new_active[workflow_id] = new_workflow
 
     # Update Worktree view output
     new_worktree = state.worktree_view.append_workflow_output(delta)
-    
+
     new_state = state.model_copy(update={
         "active_workflows": new_active,
         "worktree_view": new_worktree
@@ -180,12 +180,12 @@ def reduce_claude_completed(
         Tuple of (new_state, effects)
     """
     workflow_id = msg.workflow_id
-    
+
     if workflow_id not in state.active_workflows:
         return state, []
 
     workflow = state.active_workflows[workflow_id]
-    
+
     # Transition to completed or failed
     if msg.success:
         new_workflow = workflow.complete()
@@ -196,7 +196,7 @@ def reduce_claude_completed(
 
     new_active = state.active_workflows.copy()
     new_active[workflow_id] = new_workflow
-    
+
     new_worktree = state.worktree_view.model_copy(update={
         "status_message": status_msg
     })

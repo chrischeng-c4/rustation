@@ -32,6 +32,10 @@ dependencies = [
     "anthropic>=0.39.0",
     "mcp>=1.0.0",
 
+    # MCP HTTP Server
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+
     # CLI
     "click>=8.1.0",
     "rich>=13.0.0",

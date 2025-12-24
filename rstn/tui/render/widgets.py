@@ -128,7 +128,9 @@ class ContentAreaWidget(Static):
         
         # Auto-scroll to bottom if it's workflow output
         if render_output.content_type == "workflow":
-            self.scroll_end(animate=False)
+            # FIXME: scroll_end causes crash in some cases, re-enable after debugging
+            # self.scroll_end(animate=False)
+            pass
 
     @property
     def content_type(self) -> str:

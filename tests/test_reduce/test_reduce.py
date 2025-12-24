@@ -28,17 +28,16 @@ class TestReduceDispatcher:
         assert new_state == state
         assert effects == []
 
-    def test_reduce_unknown_message(self) -> None:
-        """reduce() handles unknown message types."""
+    def test_reduce_workflow_completed(self) -> None:
+        """reduce() handles WorkflowCompleted message."""
         state = AppState()
 
-        # WorkflowCompleted is not yet handled in basic reducers
+        # WorkflowCompleted is now handled by reduce_workflow
         new_state, effects = reduce(state, WorkflowCompleted(workflow_id="wf-123"))
 
+        # Returns state unchanged if workflow not in active_workflows
         assert new_state == state
-        assert len(effects) == 1
-        assert isinstance(effects[0], LogInfo)
-        assert "Unknown message type" in effects[0].message
+        assert effects == []
 
 
 class TestReduceQuit:
@@ -251,7 +250,11 @@ class TestReduceSelectCommand:
 
     def test_reduce_select_command_no_commands(self) -> None:
         """Select command with no commands does nothing."""
-        state = AppState()  # No commands by default
+        from rstn.state.worktree import WorktreeViewState
+
+        # Create state with empty commands list
+        worktree = WorktreeViewState(commands=[])
+        state = AppState(worktree_view=worktree)
 
         msg = SelectCommand(index=0)
         new_state, effects = reduce(state, msg)

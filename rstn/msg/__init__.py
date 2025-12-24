@@ -438,6 +438,55 @@ class ClarifySessionCompleted(AppMsg):
     spec_updated: bool = Field(description="Whether spec was updated")
 
 
+# ========================================
+# MCP Events
+# ========================================
+
+
+class McpServerStarted(AppMsg):
+    """MCP server started successfully."""
+
+    port: int = Field(description="Port the server is listening on")
+    session_id: str = Field(description="Session identifier")
+
+
+class McpServerStopped(AppMsg):
+    """MCP server stopped."""
+
+    pass
+
+
+class McpReportStatusReceived(AppMsg):
+    """MCP status report received from Claude Code."""
+
+    status: str = Field(description="Status: needs_input, completed, error")
+    prompt: str | None = Field(default=None, description="Input prompt (for needs_input)")
+    message: str | None = Field(default=None, description="Error message (for error)")
+
+
+class McpCompleteTaskReceived(AppMsg):
+    """MCP task completion received from Claude Code."""
+
+    task_id: str = Field(description="Task ID to complete")
+    skip_validation: bool = Field(default=False, description="Skip validation checks")
+
+
+class McpHookRequested(AppMsg):
+    """MCP hook execution requested."""
+
+    hook_name: str = Field(description="Hook name")
+    args: list[str] = Field(default_factory=list, description="Arguments")
+
+
+class McpHookCompleted(AppMsg):
+    """MCP hook execution completed."""
+
+    hook_name: str = Field(description="Hook name")
+    exit_code: int = Field(description="Exit code")
+    stdout: str = Field(description="Standard output")
+    stderr: str = Field(description="Standard error")
+
+
 # Export all message types
 __all__ = [
     "AppMsg",
@@ -498,4 +547,11 @@ __all__ = [
     "ClarifyQuestionReady",
     "ClarifyAnswerSubmitted",
     "ClarifySessionCompleted",
+    # MCP Events
+    "McpServerStarted",
+    "McpServerStopped",
+    "McpReportStatusReceived",
+    "McpCompleteTaskReceived",
+    "McpHookRequested",
+    "McpHookCompleted",
 ]

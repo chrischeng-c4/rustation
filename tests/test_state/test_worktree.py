@@ -75,8 +75,9 @@ class TestWorktreeViewStateCreation:
         assert worktree.plan_content is None
         assert worktree.log_content == []
 
-        # Commands
-        assert worktree.commands == []
+        # Commands (now includes default prompt-claude command)
+        assert len(worktree.commands) == 1
+        assert worktree.commands[0].id == "prompt-claude"
         assert worktree.selected_command_index == 0
 
         # Workflow
@@ -463,7 +464,8 @@ class TestWorktreeStateSerialization:
         loaded = WorktreeViewState.model_validate_json(json_str)
 
         assert loaded.content_type == ContentType.EMPTY
-        assert loaded.commands == []
+        assert len(loaded.commands) == 1
+        assert loaded.commands[0].id == "prompt-claude"
         assert loaded.selected_command_index == 0
 
     def test_worktree_state_dict_round_trip(self) -> None:

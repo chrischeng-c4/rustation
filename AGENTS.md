@@ -87,7 +87,6 @@ After:
 **Policy**: KB-First is the default workflow.
 - Write design/architecture/workflow docs in `kb/`.
 - Write user guides in `docs/`.
-- `specs/` are optional and feature-scoped.
 
 **Before implementing ANY feature**:
 1. Check `kb/` for existing patterns.
