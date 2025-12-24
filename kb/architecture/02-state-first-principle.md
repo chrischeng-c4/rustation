@@ -7,7 +7,7 @@ last_updated: 2025-12-21
 version: 0.2.0
 tags: [architecture, state, testing, v2]
 aliases: ["/02-architecture/state-first.md"]
-weight: 1
+weight: 2
 ---
 
 # 🎯 State Serializability - Core Architecture Principle

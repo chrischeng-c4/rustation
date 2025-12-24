@@ -6,7 +6,7 @@ status: draft
 last_updated: 2025-12-23
 version: 1.1.0
 tags: [workflow, claude, cli, streaming, mcp]
-weight: 10
+weight: 9
 ---
 
 # Design: Prompt to Claude Workflow

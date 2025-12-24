@@ -6,7 +6,7 @@ status: evergreen
 last_updated: 2025-12-21
 version: 0.2.0
 tags: []
-weight: 2
+weight: 0
 aliases: ["/02-architecture/core-principles.md"]
 ---
 
@@ -202,7 +202,7 @@ fn test_prompt_ui() {
 **Key Rules**:
 - ✅ **Command as Trigger**: Left panel lists workflows (e.g., "Prompt Claude"), not navigation menus.
 - ✅ **Dynamic Content**: Right panel visualizes the *current node* of the active workflow.
-- ✅ **Minimalism**: No permanent "Log Panel" (logs go to file). Top "View Tabs" allowed for high-level navigation (Worktree/Dashboard/Settings).
+- ✅ **Minimalism**: No permanent "Log Panel" (logs go to file). Top "View Tabs" allowed for high-level navigation (Workflows/Dockers/Settings).
 - ✅ **Agent Integration**: AI agents are invoked only when the workflow reaches a specific node (e.g., `Node::CallAgent`).
 
 ---

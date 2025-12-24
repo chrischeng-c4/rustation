@@ -6,7 +6,7 @@ status: evergreen
 last_updated: 2025-12-21
 version: 0.2.0
 tags: [architecture, state, serialization, json, yaml]
-weight: 2
+weight: 5
 ---
 
 ## Why State Serializability?

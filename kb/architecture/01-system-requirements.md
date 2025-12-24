@@ -6,7 +6,7 @@ status: draft
 last_updated: 2025-12-22
 version: 0.1.0
 tags: [architecture, requirements, layout, persistence]
-weight: 9
+weight: 1
 ---
 
 # System Requirements & High-Level Design

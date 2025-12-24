@@ -6,7 +6,7 @@ status: evergreen
 last_updated: 2025-12-21
 version: 0.2.0
 tags: [migration, v1, v2, refactoring]
-weight: 4
+weight: 13
 ---
 
 # v1→v2 Migration Guide

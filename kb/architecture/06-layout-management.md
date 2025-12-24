@@ -6,7 +6,7 @@ status: active
 last_updated: 2025-12-22
 version: 1.0.0
 tags: [architecture, layout, ui, tui]
-weight: 7
+weight: 6
 ---
 
 # Layout Management
@@ -57,7 +57,7 @@ Used for general exploration and command triggering.
 block-beta
   columns 10
   Header["Header"]:10
-  TabBar["Tab Bar (1 Worktree | 2 Dashboard | 3 Settings)"]:10
+  TabBar["Tab Bar (1 Workflows | 2 Dockers | 3 Settings)"]:10
   Sidebar["Sidebar (30%)"]:3
   Content["Content (70%)"]:7
   StatusBar["Status Bar"]:10
@@ -83,7 +83,7 @@ block-beta
 
 ### Tab Bar (Top)
 Located directly below the Header. Used for high-level navigation between major application views.
-- **Tabs**: `1 Worktree`, `2 Dashboard`, `3 Settings`
+- **Tabs**: `1 Workflows`, `2 Dockers`, `3 Settings`
 - **Visual**: Active tab is highlighted; others are dimmed.
 
 ### Main Container (Middle)

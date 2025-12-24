@@ -6,7 +6,7 @@ status: active
 last_updated: 2025-12-22
 version: 1.0.0
 tags: [architecture, state, topology, data-structure]
-weight: 6
+weight: 3
 ---
 
 # State Topology

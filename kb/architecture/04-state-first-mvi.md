@@ -6,7 +6,7 @@ status: active
 last_updated: 2025-12-22
 version: 0.2.0
 tags: [architecture, state, testing, mvi, reducer]
-weight: 5
+weight: 4
 ---
 
 # State-First MVI (Unidirectional Data Flow)
