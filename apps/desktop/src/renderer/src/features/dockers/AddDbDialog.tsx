@@ -90,7 +90,12 @@ export function AddDbDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" disabled={disabled}>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          onClick={(e) => e.stopPropagation()}
+        >
           <Database className="mr-1 h-3.5 w-3.5" />
           Add DB
         </Button>

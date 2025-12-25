@@ -124,6 +124,7 @@ export function DockersPage() {
                   key={service.id}
                   service={service}
                   isActive={selectedServiceId === service.id}
+                  onSelect={handleViewLogs}
                   onToggle={handleToggle}
                   onRestart={handleRestart}
                   onViewLogs={handleViewLogs}
@@ -152,7 +153,7 @@ export function DockersPage() {
             onRefresh={selectedServiceId ? () => refreshLogs() : undefined}
             isRefreshing={isRefreshingLogs}
             showCopy={true}
-            emptyMessage="Select a service and click Logs to view output"
+            emptyMessage="Click a service to view its logs"
           />
         </div>
       </div>

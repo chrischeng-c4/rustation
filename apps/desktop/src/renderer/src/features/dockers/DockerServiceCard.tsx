@@ -42,6 +42,7 @@ function getConnectionString(service: DockerService): string {
 interface DockerServiceCardProps {
   service: DockerService
   isActive?: boolean
+  onSelect?: (id: string) => void
   onToggle?: (id: string) => void
   onRestart?: (id: string) => void
   onViewLogs?: (id: string) => void
@@ -52,6 +53,7 @@ interface DockerServiceCardProps {
 export function DockerServiceCard({
   service,
   isActive = false,
+  onSelect,
   onToggle,
   onRestart,
   onViewLogs,
@@ -71,7 +73,13 @@ export function DockerServiceCard({
   }
 
   return (
-    <Card className={cn('w-full transition-colors', isActive && 'border-primary bg-primary/5')}>
+    <Card
+      className={cn(
+        'w-full cursor-pointer transition-colors hover:border-muted-foreground/50',
+        isActive && 'border-primary bg-primary/5'
+      )}
+      onClick={() => onSelect?.(service.id)}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">{service.name}</CardTitle>
@@ -102,8 +110,8 @@ export function DockerServiceCard({
           variant={isRunning ? 'destructive' : 'default'}
           size="sm"
           disabled={!canControl}
-          onClick={() => {
-            console.log('[CARD] Button clicked, service.id:', service.id)
+          onClick={(e) => {
+            e.stopPropagation()
             onToggle?.(service.id)
           }}
         >
@@ -124,13 +132,23 @@ export function DockerServiceCard({
           variant="outline"
           size="sm"
           disabled={!canControl || !isRunning}
-          onClick={() => onRestart?.(service.id)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onRestart?.(service.id)
+          }}
         >
           <RotateCw className="mr-1 h-3.5 w-3.5" />
           Restart
         </Button>
 
-        <Button variant="ghost" size="sm" onClick={() => onViewLogs?.(service.id)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation()
+            onViewLogs?.(service.id)
+          }}
+        >
           <FileText className="mr-1 h-3.5 w-3.5" />
           Logs
         </Button>
@@ -157,7 +175,10 @@ export function DockerServiceCard({
         <Button
           variant="ghost"
           size="sm"
-          onClick={handleCopyConnectionString}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleCopyConnectionString()
+          }}
           className="ml-auto"
         >
           {copied ? (
