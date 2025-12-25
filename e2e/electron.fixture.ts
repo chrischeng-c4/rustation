@@ -31,6 +31,15 @@ export const test = base.extend<{
     // Wait for the first window
     const page = await electronApp.firstWindow()
 
+    // Capture console logs for debugging
+    page.on('console', (msg) => {
+      console.log(`[RENDERER ${msg.type()}]`, msg.text())
+    })
+
+    page.on('pageerror', (error) => {
+      console.error('[RENDERER ERROR]', error.message)
+    })
+
     // Wait for app to be ready
     await page.waitForLoadState('domcontentloaded')
 

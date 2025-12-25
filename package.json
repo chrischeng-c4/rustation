@@ -1,0 +1,43 @@
+{
+  "name": "rustation",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "tauri": "tauri",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@internationalized/date": "^3.10.1",
+    "@lucide/svelte": "^0.561.0",
+    "@playwright/test": "^1.57.0",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tailwindcss/vite": "^4.1.18",
+    "@tauri-apps/cli": "^2.0.0",
+    "@tsconfig/svelte": "^5.0.4",
+    "@wdio/cli": "^9.22.0",
+    "@wdio/local-runner": "^9.22.0",
+    "@wdio/mocha-framework": "^9.22.0",
+    "@wdio/spec-reporter": "^9.20.0",
+    "bits-ui": "^2.14.4",
+    "svelte": "^5.16.0",
+    "svelte-check": "^4.1.1",
+    "tailwind-variants": "^3.2.2",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-shell": "^2.0.0",
+    "clsx": "^2.1.1",
+    "lucide-svelte": "^0.469.0",
+    "tailwind-merge": "^3.4.0"
+  }
+}

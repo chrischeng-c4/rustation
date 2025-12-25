@@ -1,146 +1,105 @@
-import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { useEffect, useCallback } from 'react'
+import { RefreshCw, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { LogPanel } from '@/components/LogPanel'
 import { DockerServiceCard } from './DockerServiceCard'
-import { DockerLogSheet } from './DockerLogSheet'
-import type { DockerService } from '@/types/docker'
-
-// Mock data for development (will be replaced with napi-rs calls)
-const MOCK_SERVICES: DockerService[] = [
-  { id: 'rstn-postgres', name: 'PostgreSQL', image: 'postgres:16-alpine', status: 'running', port: 5432, service_type: 'Database' },
-  { id: 'rstn-mysql', name: 'MySQL', image: 'mysql:8', status: 'stopped', port: 3306, service_type: 'Database' },
-  { id: 'rstn-mongodb', name: 'MongoDB', image: 'mongo:7', status: 'stopped', port: 27017, service_type: 'Database' },
-  { id: 'rstn-redis', name: 'Redis', image: 'redis:7-alpine', status: 'running', port: 6379, service_type: 'Cache' },
-  { id: 'rstn-rabbitmq', name: 'RabbitMQ', image: 'rabbitmq:3-management', status: 'stopped', port: 5672, service_type: 'MessageBroker' },
-  { id: 'rstn-nats', name: 'NATS', image: 'nats:latest', status: 'stopped', port: 4222, service_type: 'Other' },
-]
+import { useDockersState } from '@/hooks/useAppState'
 
 export function DockersPage() {
-  const [services, setServices] = useState<DockerService[]>([])
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null)
-  const [logPanelOpen, setLogPanelOpen] = useState(false)
-  const [logs, setLogs] = useState<string[]>([])
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const { dockers, dispatch, isLoading: isStateLoading } = useDockersState()
+
+  // Derive values from state
+  const services = dockers?.services ?? []
+  const selectedServiceId = dockers?.selected_service_id ?? null
+  const logs = dockers?.logs ?? []
+  const isRefreshing = dockers?.is_loading ?? false
+  const isRefreshingLogs = dockers?.is_loading_logs ?? false
+  const dockerAvailable = dockers?.docker_available ?? null
 
   const selectedService = services.find((s) => s.id === selectedServiceId)
 
-  // Load initial services
+  // Check Docker availability and load services on mount
   useEffect(() => {
-    loadServices()
-  }, [])
-
-  const loadServices = useCallback(async () => {
-    console.log('[FE] loadServices called')
-    try {
-      // TODO: Replace with napi-rs call
-      // const services = await window.api.docker.listServices()
-      setServices(MOCK_SERVICES)
-    } catch (error) {
-      console.warn('[FE] Failed to load services:', error)
-      setServices(MOCK_SERVICES)
-    }
-  }, [])
+    dispatch({ type: 'CheckDockerAvailability' })
+    dispatch({ type: 'RefreshDockerServices' })
+  }, [dispatch])
 
   const handleToggle = useCallback(async (id: string) => {
-    console.log('[FE] handleToggle called:', id)
-    try {
-      // TODO: Replace with napi-rs call
-      // await window.api.docker.toggleService(id)
-      setServices((prev) =>
-        prev.map((s) =>
-          s.id === id
-            ? { ...s, status: s.status === 'running' ? 'stopped' : 'running' }
-            : s
-        )
-      )
-    } catch (error) {
-      console.error('[FE] toggleService failed:', error)
+    const service = services.find((s) => s.id === id)
+    if (!service) return
+
+    if (service.status === 'running') {
+      await dispatch({ type: 'StopDockerService', payload: { service_id: id } })
+    } else {
+      await dispatch({ type: 'StartDockerService', payload: { service_id: id } })
     }
-  }, [])
+  }, [services, dispatch])
 
   const handleRestart = useCallback(async (id: string) => {
-    console.log('[FE] handleRestart called:', id)
-    try {
-      // TODO: Replace with napi-rs call
-      setServices((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, status: 'starting' } : s))
-      )
-      setTimeout(() => {
-        setServices((prev) =>
-          prev.map((s) => (s.id === id ? { ...s, status: 'running' } : s))
-        )
-      }, 500)
-    } catch (error) {
-      console.error('[FE] restartService failed:', error)
-    }
-  }, [])
+    await dispatch({ type: 'RestartDockerService', payload: { service_id: id } })
+  }, [dispatch])
 
   const handleViewLogs = useCallback(async (id: string) => {
-    setSelectedServiceId(id)
-    setLogPanelOpen(true)
-    await refreshLogs(id)
-  }, [])
+    await dispatch({ type: 'SelectDockerService', payload: { service_id: id } })
+    await dispatch({ type: 'FetchDockerLogs', payload: { service_id: id, tail: 100 } })
+  }, [dispatch])
 
-  const refreshLogs = useCallback(async (id?: string) => {
-    const serviceId = id || selectedServiceId
-    if (!serviceId) return
-
-    setIsRefreshing(true)
-    try {
-      // TODO: Replace with napi-rs call
-      // const logs = await window.api.docker.getLogs(serviceId, 100)
-      setLogs([
-        `[${new Date().toISOString()}] Container started`,
-        '[INFO] Initializing...',
-        '[INFO] Ready to accept connections',
-      ])
-    } catch (error) {
-      console.error('[FE] getLogs failed:', error)
-    } finally {
-      setIsRefreshing(false)
-    }
-  }, [selectedServiceId])
-
-  const handleCloseLogPanel = useCallback(() => {
-    setLogPanelOpen(false)
-    setSelectedServiceId(null)
-    setLogs([])
-  }, [])
+  const refreshLogs = useCallback(async () => {
+    if (!selectedServiceId) return
+    await dispatch({ type: 'FetchDockerLogs', payload: { service_id: selectedServiceId, tail: 100 } })
+  }, [selectedServiceId, dispatch])
 
   const handleRefreshAll = useCallback(async () => {
-    setIsRefreshing(true)
-    try {
-      await loadServices()
-    } finally {
-      setIsRefreshing(false)
-    }
-  }, [loadServices])
+    await dispatch({ type: 'RefreshDockerServices' })
+  }, [dispatch])
 
+  const handleRetry = useCallback(async () => {
+    await dispatch({ type: 'CheckDockerAvailability' })
+    await dispatch({ type: 'RefreshDockerServices' })
+  }, [dispatch])
+
+  // CreateDb and CreateVhost still use legacy API for now (they return connection strings)
   const handleCreateDb = useCallback(async (serviceId: string, dbName: string): Promise<string> => {
-    console.log('[FE] handleCreateDb called:', serviceId, dbName)
-    // TODO: Replace with napi-rs call
-    // const connectionString = await window.api.docker.createDatabase(serviceId, dbName)
-    // Mock implementation
-    if (serviceId === 'rstn-postgres') {
-      return `postgresql://postgres:postgres@localhost:5432/${dbName}`
-    } else if (serviceId === 'rstn-mysql') {
-      return `mysql://root:mysql@localhost:3306/${dbName}`
-    } else {
-      return `mongodb://localhost:27017/${dbName}`
-    }
+    const connectionString = await window.api.docker.createDatabase(serviceId, dbName)
+    return connectionString
   }, [])
 
   const handleCreateVhost = useCallback(async (serviceId: string, vhostName: string): Promise<string> => {
-    console.log('[FE] handleCreateVhost called:', serviceId, vhostName)
-    // TODO: Replace with napi-rs call
-    // const connectionString = await window.api.docker.createVhost(serviceId, vhostName)
-    return `amqp://guest:guest@localhost:5672/${vhostName}`
+    const connectionString = await window.api.docker.createVhost(serviceId, vhostName)
+    return connectionString
   }, [])
 
+  // Initial loading state
+  if (isStateLoading || dockerAvailable === null) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  // Docker not available state
+  if (dockerAvailable === false) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center">
+        <AlertCircle className="h-12 w-12 text-muted-foreground" />
+        <h2 className="mt-4 text-xl font-semibold">Docker Not Available</h2>
+        <p className="mt-2 text-muted-foreground">
+          Please ensure Docker is installed and running.
+        </p>
+        <Button variant="outline" className="mt-4" onClick={handleRetry}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Retry
+        </Button>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold">Dockers</h2>
           <p className="mt-1 text-muted-foreground">Container management dashboard</p>
@@ -151,39 +110,52 @@ export function DockersPage() {
         </Button>
       </div>
 
-      {/* Service Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {services.map((service) => (
-          <DockerServiceCard
-            key={service.id}
-            service={service}
-            onToggle={handleToggle}
-            onRestart={handleRestart}
-            onViewLogs={handleViewLogs}
-            onCreateDb={handleCreateDb}
-            onCreateVhost={handleCreateVhost}
-          />
-        ))}
-      </div>
-
-      {/* Empty State */}
-      {services.length === 0 && (
-        <div className="flex h-64 flex-col items-center justify-center rounded-lg border border-dashed">
-          <p className="text-muted-foreground">No Docker services configured</p>
-          <Button variant="outline" className="mt-4">
-            Add Service
-          </Button>
+      {/* Two-column layout */}
+      <div className="flex flex-1 gap-4 overflow-hidden">
+        {/* Left: Service List */}
+        <div className="w-1/2 overflow-hidden rounded-lg border">
+          <div className="border-b bg-muted/40 px-4 py-2">
+            <span className="text-sm font-medium">Services</span>
+          </div>
+          <ScrollArea className="h-[calc(100%-40px)]">
+            <div className="space-y-3 p-4">
+              {services.map((service) => (
+                <DockerServiceCard
+                  key={service.id}
+                  service={service}
+                  isActive={selectedServiceId === service.id}
+                  onToggle={handleToggle}
+                  onRestart={handleRestart}
+                  onViewLogs={handleViewLogs}
+                  onCreateDb={handleCreateDb}
+                  onCreateVhost={handleCreateVhost}
+                />
+              ))}
+              {services.length === 0 && !isRefreshing && (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <p className="text-muted-foreground">No Docker services found</p>
+                  <Button variant="outline" className="mt-4" onClick={handleRefreshAll}>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Refresh
+                  </Button>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
         </div>
-      )}
 
-      {/* Log Panel */}
-      <DockerLogSheet
-        open={logPanelOpen}
-        serviceName={selectedService?.name ?? ''}
-        logs={logs}
-        onClose={handleCloseLogPanel}
-        onRefresh={() => refreshLogs()}
-      />
+        {/* Right: Log Panel */}
+        <div className="w-1/2 overflow-hidden">
+          <LogPanel
+            title={selectedService ? `${selectedService.name} Logs` : 'Logs'}
+            logs={logs}
+            onRefresh={selectedServiceId ? () => refreshLogs() : undefined}
+            isRefreshing={isRefreshingLogs}
+            showCopy={true}
+            emptyMessage="Select a service and click Logs to view output"
+          />
+        </div>
+      </div>
     </div>
   )
 }

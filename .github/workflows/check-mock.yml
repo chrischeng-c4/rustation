@@ -1,0 +1,57 @@
+name: Check for MOCK Data
+
+on:
+  pull_request:
+    paths:
+      - 'apps/desktop/src/renderer/**'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/desktop/src/renderer/**'
+
+jobs:
+  check-mock:
+    name: No MOCK in Production
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for MOCK data in renderer
+        run: |
+          echo "Checking for MOCK data in production code..."
+
+          # Patterns that indicate mock data
+          MOCK_PATTERNS="MOCK_SERVICES|MOCK_COMMANDS|MOCK_DATA|MOCK_"
+
+          # Search in renderer directory
+          if grep -rE "$MOCK_PATTERNS" apps/desktop/src/renderer/; then
+            echo ""
+            echo "❌ ERROR: MOCK data found in production code!"
+            echo ""
+            echo "Production code should not contain mock data."
+            echo "Please remove MOCK_* constants and use window.api.* instead."
+            echo ""
+            echo "See: kb/workflow/definition-of-done.md"
+            exit 1
+          fi
+
+          echo "✅ No MOCK data found in production code"
+
+      - name: Check preload bridge is implemented
+        run: |
+          echo "Checking preload bridge implementation..."
+
+          # Check that preload exposes more than just ping
+          if grep -q "ping: () => 'pong'" apps/desktop/src/preload/index.ts; then
+            # Check if there are real API bindings too
+            if ! grep -q "docker:" apps/desktop/src/preload/index.ts; then
+              echo ""
+              echo "⚠️ WARNING: Preload bridge may not be fully implemented"
+              echo "Only placeholder 'ping' function found."
+              echo ""
+            fi
+          fi
+
+          echo "✅ Preload bridge check complete"

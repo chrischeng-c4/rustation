@@ -310,9 +310,10 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { ServiceStatus, dockerIsAvailable, dockerListServices, dockerStartService, dockerStopService, dockerRestartService, dockerGetLogs, dockerRemoveService } = nativeBinding
+const { ServiceStatus, ServiceType, dockerIsAvailable, dockerListServices, dockerStartService, dockerStopService, dockerRestartService, dockerGetLogs, dockerRemoveService, dockerCreateDatabase, dockerCreateVhost, justfileParse, justfileRun, stateInit, stateGet, stateDispatch } = nativeBinding
 
 module.exports.ServiceStatus = ServiceStatus
+module.exports.ServiceType = ServiceType
 module.exports.dockerIsAvailable = dockerIsAvailable
 module.exports.dockerListServices = dockerListServices
 module.exports.dockerStartService = dockerStartService
@@ -320,3 +321,10 @@ module.exports.dockerStopService = dockerStopService
 module.exports.dockerRestartService = dockerRestartService
 module.exports.dockerGetLogs = dockerGetLogs
 module.exports.dockerRemoveService = dockerRemoveService
+module.exports.dockerCreateDatabase = dockerCreateDatabase
+module.exports.dockerCreateVhost = dockerCreateVhost
+module.exports.justfileParse = justfileParse
+module.exports.justfileRun = justfileRun
+module.exports.stateInit = stateInit
+module.exports.stateGet = stateGet
+module.exports.stateDispatch = stateDispatch

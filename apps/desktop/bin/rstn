@@ -1,0 +1,52 @@
+#!/bin/bash
+# rstn - CLI launcher for rustation desktop app
+#
+# Usage:
+#   rstn           # Open app (no project)
+#   rstn .         # Open current directory as project
+#   rstn /path     # Open specific path as project
+
+set -e
+
+# Resolve symlinks to get the real script location
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [[ -L "$SCRIPT_PATH" ]]; do
+    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Check for built app in different locations
+if [[ -d "$APP_DIR/dist/mac-arm64/rstn-desktop.app" ]]; then
+    APP_PATH="$APP_DIR/dist/mac-arm64/rstn-desktop.app"
+elif [[ -d "$APP_DIR/dist/mac/rstn-desktop.app" ]]; then
+    APP_PATH="$APP_DIR/dist/mac/rstn-desktop.app"
+elif [[ -d "/Applications/rstn-desktop.app" ]]; then
+    APP_PATH="/Applications/rstn-desktop.app"
+else
+    echo "Error: rstn-desktop.app not found."
+    echo "Run 'just build-app' first to build the app."
+    exit 1
+fi
+
+# Resolve the project path argument
+PROJECT_PATH=""
+if [[ -n "$1" ]]; then
+    if [[ "$1" == "." ]]; then
+        PROJECT_PATH="$(pwd)"
+    elif [[ -d "$1" ]]; then
+        PROJECT_PATH="$(cd "$1" && pwd)"
+    else
+        echo "Error: Path does not exist: $1"
+        exit 1
+    fi
+fi
+
+# Launch the app
+if [[ -n "$PROJECT_PATH" ]]; then
+    open -a "$APP_PATH" --args "$PROJECT_PATH"
+else
+    open -a "$APP_PATH"
+fi

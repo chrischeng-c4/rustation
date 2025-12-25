@@ -2907,10 +2907,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "bollard",
  "chrono",
  "dirs 5.0.1",
- "futures-util",
  "once_cell",
  "parking_lot",
  "serde",
@@ -2922,7 +2920,6 @@ dependencies = [
  "tokio",
  "tower-http 0.5.2",
  "tracing",
- "tracing-appender",
  "tracing-subscriber",
  "uuid",
 ]
@@ -2937,11 +2934,13 @@ dependencies = [
  "chrono",
  "dirs 5.0.1",
  "futures-util",
+ "hex",
  "napi",
  "napi-build",
  "napi-derive",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 1.0.69",
  "tokio",
  "tower-http 0.5.2",
@@ -4124,18 +4123,6 @@ dependencies = [
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
-]
-
-[[package]]
-name = "tracing-appender"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "786d480bce6247ab75f005b14ae1624ad978d3029d9113f0a22fa1ac773faeaf"
-dependencies = [
- "crossbeam-channel",
- "thiserror 2.0.17",
- "time",
- "tracing-subscriber",
 ]
 
 [[package]]

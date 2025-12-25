@@ -1,0 +1,17 @@
+# Faster builds configuration
+
+[build]
+# Use sccache for caching
+rustc-wrapper = "sccache"
+# Use all CPU cores
+jobs = 8
+
+[profile.dev]
+# Faster dev builds
+opt-level = 0
+debug = 0  # Disable debug info for faster builds
+incremental = true
+
+[profile.dev.package."*"]
+# Optimize dependencies even in dev mode
+opt-level = 2

@@ -3,8 +3,8 @@ title: "State Topology"
 description: "Structure of the AppState tree, state categories, and data flow"
 category: architecture
 status: active
-last_updated: 2025-12-22
-version: 1.0.0
+last_updated: 2025-12-25
+version: 2.0.0
 tags: [architecture, state, topology, data-structure]
 weight: 3
 ---
@@ -17,13 +17,14 @@ This document defines the structure and hierarchy of the `AppState` tree. It ans
 
 1.  **Single Tree**: There is only one root `AppState`.
 2.  **Explicit Ownership**: Every piece of data has a clear owner.
-3.  **Separation of Concerns**: State is divided by **Lifecycle** (Persistent vs Transient) and **Scope** (Global vs View).
+3.  **Separation of Concerns**: State is divided by **Lifecycle** (Persistent vs Transient) and **Scope** (Global vs Project).
+4.  **Multi-Project**: Multiple projects can be open simultaneously.
 
 ---
 
 ## State Tree Structure
 
-The state tree is organized into four distinct layers.
+The state tree supports multiple projects, each with isolated state.
 
 ### Hierarchy Diagram
 
@@ -31,40 +32,47 @@ The state tree is organized into four distinct layers.
 classDiagram
     class AppState {
         +String version
-        +GlobalConfig config
-        +ViewId active_view
-        +WorkspaceState workspace
+        +Vec~ProjectState~ projects
+        +usize active_project_index
+        +GlobalSettings global_settings
+        +Vec~RecentProject~ recent_projects
     }
 
-    class GlobalConfig {
+    class GlobalSettings {
         +Theme theme
-        +Keybindings keybindings
+        +Option~String~ default_project_path
     }
 
-    class WorkspaceState {
-        +Path project_path
-        +Option~WorkflowState~ active_workflow
-        +LayoutConfig layout
-        +Map~ViewId, ViewState~ views
+    class ProjectState {
+        +String id
+        +PathBuf path
+        +String name
+        +bool is_modified
+        +FeatureTab active_tab
+        +TasksState tasks
+        +DockersState dockers
     }
 
-    class WorkflowState {
-        <<Polymorphic>>
-        +String workflow_id
-        +WorkflowStep current_step
-        +Map~String, Value~ context
+    class TasksState {
+        +Vec~JustCommandInfo~ commands
+        +HashMap~String, TaskStatus~ task_statuses
+        +Option~String~ active_command
+        +Vec~String~ output
+        +bool is_loading
     }
 
-    class ViewState {
-        +ScrollPosition scroll
-        +InputBuffer input
-        +Selection selection
+    class DockersState {
+        +Option~bool~ docker_available
+        +Vec~DockerServiceInfo~ services
+        +Option~String~ selected_service_id
+        +Vec~String~ logs
+        +bool is_loading
     }
 
-    AppState *-- GlobalConfig
-    AppState *-- WorkspaceState
-    WorkspaceState *-- WorkflowState
-    WorkspaceState *-- ViewState
+    AppState *-- GlobalSettings
+    AppState "1" *-- "0..*" ProjectState
+    ProjectState *-- TasksState
+    ProjectState *-- DockersState
 ```
 
 ---
@@ -97,18 +105,24 @@ Handles to system resources. **NEVER serialized.**
 ## Detailed Topology
 
 ### Root Level (`AppState`)
-The entry point. Holds metadata and the highest-level containers.
+The entry point. Holds version, global settings, and the list of open projects.
+- **version**: App version string
+- **projects**: Vector of all open projects
+- **active_project_index**: Which project tab is focused
+- **global_settings**: App-wide preferences (theme, etc.)
+- **recent_projects**: For "Open Recent" menu
 
-### Workspace Level (`WorkspaceState`)
-This is where the "Workflow-Driven UI" lives. It isolates state per-project.
-- **Identity**: Which project is open?
-- **Active Workflow**: What is the user doing right now?
-- **Layout**: How is the screen arranged?
+### Project Level (`ProjectState`)
+Each open project has isolated state. This enables multi-project workflows.
+- **Identity**: path, name, id
+- **Modified indicator**: Shows `*` in tab when tasks are running
+- **Feature tab**: Which sidebar tab is active (Task, Docker, Settings)
+- **Feature states**: TasksState, DockersState
 
-### Workflow Level (`WorkflowState`)
-A polymorphic container for the specific task at hand.
-- **PromptClaude**: Holds chat history, streaming buffer.
-- **GitCommit**: Holds staged files, commit message buffer.
+### Feature Level (`TasksState`, `DockersState`)
+State specific to each feature within a project.
+- **TasksState**: Justfile commands, execution output, task statuses
+- **DockersState**: Docker services, logs, selected service
 
 ---
 

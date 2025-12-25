@@ -127,26 +127,44 @@ See: `docs/README.md` for User Documentation.
 ---
 
 <workflow-driven-ui>
-## Workflow-Driven UI (Tauri GUI)
+## Workflow-Driven UI (Electron + napi-rs)
 
-The GUI is a **Tauri v2** desktop application with a **3-Tab Structure**.
+The GUI is an **Electron** desktop application with **React** frontend and **Rust** backend via **napi-rs**.
 
 ### Navigation (Fixed Sidebar)
 
-1. **Workflows Tab** (Home): Prompt-to-Code, Git operations
+1. **Tasks Tab**: Justfile command runner
 2. **Dockers Tab**: Container management dashboard
 3. **Settings Tab**: Configuration
 
-### Backend-Driven UI Model
+### Architecture Layers
 
-- **Source of Truth**: Rust `AppState` (Backend)
-- **Sync**: Backend pushes state updates to Frontend via Tauri Events
-- **Action**: Frontend invokes Tauri Commands to mutate Backend state
-- **No Fat Frontend**: Business logic lives in Rust, not TypeScript
+```
+┌─────────────────────────────────────────────────────────┐
+│ React Frontend (renderer)                               │
+│   └─ Uses window.api.* (NO MOCK data!)                  │
+├─────────────────────────────────────────────────────────┤
+│ Preload Bridge (preload/index.ts)                       │
+│   └─ Exposes @rstn/core to window.api                   │
+│   └─ MUST connect to real napi-rs, NOT placeholder      │
+├─────────────────────────────────────────────────────────┤
+│ napi-rs Bindings (packages/core)                        │
+│   └─ #[napi] decorated functions                        │
+├─────────────────────────────────────────────────────────┤
+│ Rust Backend (packages/core/src/)                       │
+│   └─ docker.rs, justfile.rs                             │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Critical Rule
+
+**Frontend → Preload → napi-rs → Rust**
+
+Every layer MUST be connected. If ANY layer is missing or placeholder, feature is NOT complete.
 
 ### Reference
 
-See `kb/architecture/01-system-specification.md` for full tech stack.
+See `kb/workflow/definition-of-done.md` for feature completion checklist.
 </workflow-driven-ui>
 
 ---
@@ -243,6 +261,38 @@ START: Planning rstn GUI feature?
     5. Verification method
 </tree>
 
+<tree name="Feature Completion Verification">
+START: Is feature "done"?
+│
+├─► Backend (Rust) implemented?
+│   └─ NO → Implement backend first, run cargo test
+│
+├─► napi-rs binding exported?
+│   └─ NO → Add #[napi] decorator, run pnpm build in packages/core
+│
+├─► Integration test passes? (JS can call Rust)
+│   └─ NO → Fix binding, DO NOT proceed to UI
+│
+├─► Preload bridge connected?
+│   └─ NO → Add functions to window.api in preload/index.ts
+│   └─ Check: Is it using @rstn/core or placeholder?
+│            └─ Placeholder → NOT connected, fix it
+│
+├─► Frontend uses window.api.*?
+│   └─ NO → Remove MOCK_* data, use real API
+│   └─ Check: grep -rE "MOCK_" apps/desktop/src/renderer/
+│            └─ Matches found → NOT done, remove MOCK
+│
+├─► E2E tests real backend?
+│   └─ NO → Update E2E to test real functionality
+│   └─ Check: Does E2E skip gracefully when backend unavailable?
+│            └─ NO → Add availability check
+│
+└─► ALL checks pass?
+    ├─ YES → Feature is DONE ✓
+    └─ NO → Feature is NOT done, fix failing checks
+</tree>
+
 <tree name="Claude CLI Integration">
 START: rstn needs to call Claude CLI?
 │
@@ -280,32 +330,43 @@ START: rstn needs to call Claude CLI?
 
 <repository-structure>
 rustation/
-├── Cargo.toml              # Workspace root (if any shared Rust libs)
-├── CLAUDE.md               # This file
-├── docs/                   # User Documentation
-│   ├── get-started/
-│   └── manual/
-├── kb/                     # Engineering Handbook
+├── Cargo.toml                      # Workspace root
+├── CLAUDE.md                       # This file
+├── docs/                           # User Documentation
+├── kb/                             # Engineering Handbook
 │   ├── architecture/
 │   ├── workflow/
+│   │   └── definition-of-done.md   # 🚨 MANDATORY checklist
 │   └── internals/
-├── src-tauri/              # Rust Backend (Tauri)
-│   ├── src/
-│   │   ├── commands/       # Tauri Commands
-│   │   ├── state/          # AppState
-│   │   └── main.rs
-│   └── tauri.conf.json
-├── src/                    # React Frontend
-│   ├── components/         # shadcn/ui components
-│   ├── features/           # Feature modules
-│   ├── hooks/              # Custom React hooks
-│   └── main.tsx
-├── specs/{NNN}-{name}/
-└── package.json
+├── packages/
+│   └── core/                       # Rust → napi-rs bindings
+│       ├── src/
+│       │   ├── lib.rs              # #[napi] exports
+│       │   ├── docker.rs           # Docker management
+│       │   └── justfile.rs         # Justfile parser
+│       └── package.json
+├── apps/
+│   └── desktop/                    # Electron app
+│       ├── src/
+│       │   ├── main/               # Electron main process
+│       │   ├── preload/            # 🔗 BRIDGE LAYER (window.api)
+│       │   │   ├── index.ts        # Must call @rstn/core, NOT placeholder
+│       │   │   └── index.d.ts      # TypeScript types
+│       │   └── renderer/           # React frontend
+│       │       └── src/
+│       │           ├── features/   # Feature modules
+│       │           └── components/ # shadcn/ui
+│       └── package.json
+├── e2e/                            # Electron E2E tests
+│   ├── docker.spec.ts
+│   └── electron.fixture.ts
+└── .github/
+    └── workflows/
+        └── check-mock.yml          # CI: blocks MOCK in renderer
 </repository-structure>
 
 <knowledge-base>
-**rustation v3 Documentation** (Tauri GUI):
+**rustation v3 Documentation** (Electron + napi-rs):
 
 **Engineering Handbook (`kb/`)**:
 - `kb/README.md` - Start here for development
@@ -313,23 +374,26 @@ rustation/
 - `kb/architecture/01-system-specification.md` - **Tech Stack & Layout**
 - `kb/architecture/02-state-first-principle.md` - **🎯 CORE PRINCIPLE**
 - `kb/workflow/sdd-workflow.md` - SDD Guide
-- `kb/workflow/contribution-guide.md` - Tauri dev setup
+- `kb/workflow/definition-of-done.md` - **🚨 MANDATORY**: Feature completion checklist
+- `kb/workflow/contribution-guide.md` - Dev setup
 
 **User Documentation (`docs/`)**:
 - `docs/README.md` - Start here for usage
 - `docs/get-started/quick-start.md` - Quick Start
 
 **CRITICAL REQUIREMENTS for ALL features**:
-1. **State tests MANDATORY**: Round-trip serialization + transitions + invariants
-2. All state structs derive `Serialize + Deserialize + Debug + Clone`
-3. NO hidden state
+1. **Definition of Done MANDATORY**: All layers connected (see `kb/workflow/definition-of-done.md`)
+2. **NO MOCK data** in renderer production code
+3. **Preload must connect to @rstn/core**, NOT be placeholder
 4. NO business logic in React (Logic belongs in Rust)
-5. See `kb/architecture/02-state-first-principle.md`
+5. E2E tests must test REAL backend behavior
 
 **Development Workflow**:
-- Run dev: `npm run tauri dev`
+- Build core: `cd packages/core && pnpm build`
+- Build desktop: `cd apps/desktop && pnpm build`
+- Run dev: `cd apps/desktop && pnpm dev`
 - Rust tests: `cargo test`
-- React tests: `npm test`
+- E2E tests: `cd e2e && pnpm exec playwright test --config playwright.config.ts`
 </knowledge-base>
 
 </grounding>
@@ -353,6 +417,11 @@ rustation/
 <rule severity="NEVER">Use concrete language code blocks (rust, python, shell) in `kb/` files → KB is for architecture, not implementation → Use `mermaid` or `pseudo-code` instead</rule>
 <rule severity="NEVER">Create files >500 lines without considering split → Monolithic code, hard to maintain → Split at 500 lines, MUST split at 1000 lines</rule>
 <rule severity="NEVER">Put all code in single file → Creates god modules → Use submodules (mod.rs pattern) for organization</rule>
+<rule severity="NEVER">Use MOCK_* data in renderer production code → Fake complete anti-pattern → Use window.api.* from real backend</rule>
+<rule severity="NEVER">Leave preload as placeholder → Bridge layer missing → Connect preload to @rstn/core before building UI</rule>
+<rule severity="NEVER">Claim feature complete without verifying all layers → Fake complete → Run DoD checklist in kb/workflow/definition-of-done.md</rule>
+<rule severity="NEVER">Write E2E tests that only test MOCK UI → Tests prove nothing → E2E must test real backend behavior</rule>
+<rule severity="NEVER">Skip integration test after binding → Can't verify JS→Rust connection → Test binding works before building UI</rule>
 
 </negative-constraints>
 
@@ -452,3 +521,71 @@ Before committing or creating PR, verify ALL items:
 
 If ANY item is NO, fix it before proceeding.
 </self-correction>
+
+---
+
+<definition-of-done>
+## Definition of Done (DoD) - MANDATORY
+
+**A feature is NOT complete until ALL layers are connected and tested with REAL data.**
+
+See: `kb/workflow/definition-of-done.md` for full checklist.
+
+### Anti-Pattern: "Fake Complete"
+
+```
+❌ UI works but uses MOCK_* data
+❌ E2E tests pass but test MOCK, not real backend
+❌ Backend implemented but bridge layer missing
+❌ Tests pass = Feature complete (WRONG!)
+```
+
+### Layer Verification Checklist
+
+Before claiming ANY feature is "done", verify ALL layers:
+
+| Layer | Verification |
+|-------|--------------|
+| 1. Backend (Rust) | `cargo test` passes, functions work |
+| 2. Binding (napi-rs) | Exported with `#[napi]`, types generated |
+| 3. Bridge (Preload) | Functions in `window.api.*`, NOT placeholder |
+| 4. Frontend (React) | Uses `window.api.*`, NO `MOCK_*` constants |
+| 5. E2E Tests | Tests REAL backend, skips gracefully if unavailable |
+
+### Mandatory Verification Steps
+
+**BEFORE saying "feature complete":**
+
+1. **Check for MOCK data**:
+   ```
+   grep -rE "MOCK_SERVICES|MOCK_COMMANDS|MOCK_" apps/desktop/src/renderer/
+   ```
+   If ANY matches → Feature is NOT complete
+
+2. **Verify preload bridge**:
+   - Open `apps/desktop/src/preload/index.ts`
+   - Confirm functions call `@rstn/core`, not placeholders
+
+3. **Run E2E with real backend**:
+   - E2E must test actual functionality
+   - If E2E passes with MOCK data, it's testing nothing
+
+### Development Order (MANDATORY)
+
+```
+1. Backend (Rust)     → cargo test
+2. Binding (napi-rs)  → pnpm build (in packages/core)
+3. Integration Test   → Verify JS can call Rust
+4. Bridge (Preload)   → Add to window.api
+5. Frontend (React)   → Use window.api.*, NO MOCK
+6. E2E Test           → Test real behavior
+```
+
+**NEVER skip step 3-4. This is where "fake complete" happens.**
+
+### CI Enforcement
+
+CI automatically blocks MOCK data in production:
+- `.github/workflows/check-mock.yml` - Fails PR if MOCK found in renderer
+
+</definition-of-done>

@@ -1,67 +1,70 @@
 ---
-title: "Tauri System Specification"
-description: "Detailed specification for the rustation v3 (Tauri) rewrite"
+title: "System Specification"
+description: "Detailed specification for rustation v3 (Electron + napi-rs)"
 category: architecture
-status: draft
-last_updated: 2025-12-24
-version: 1.0.0
-tags: [architecture, tauri, gui, spec]
+status: active
+last_updated: 2025-12-25
+version: 2.0.0
+tags: [architecture, electron, napi-rs, gui, spec]
 weight: 1
 ---
 
-# Rustation v3: Tauri System Specification
+# Rustation v3: System Specification
 
 ## 1. Executive Summary
 
-**Rustation v3** is a native desktop application for developer workflows, rewritten from the v2 TUI to **Tauri v2**. This shift enables richer visualizations, embedded media, and a modern GUI experience while retaining the robust Rust business logic.
+**Rustation v3** is a native desktop application for developer workflows, built with **Electron + React + napi-rs**. This architecture enables rich UI with native Rust performance for business logic.
 
 ### Core Value Proposition
-- **Hybrid Power**: Performance of Rust + Flexibility of Web UI.
-- **Workflow Centric**: Optimized for "Prompt-to-Code" and container management.
+- **Hybrid Power**: Performance of Rust (napi-rs) + Flexibility of Web UI (React).
+- **Multi-Project**: Open and manage multiple projects in tabs.
+- **Workflow Centric**: Optimized for task running and container management.
 - **Local First**: Full offline capability, local Docker/Git management.
 
 ---
 
 ## 2. Technology Stack
 
-### 2.1 Backend (Host)
-- **Runtime**: [Tauri v2](https://v2.tauri.app/)
+### 2.1 Backend (Native Module)
+- **Runtime**: [Electron](https://www.electronjs.org/) (Node.js)
+- **Native Binding**: [napi-rs](https://napi.rs/) (Rust → Node.js)
 - **Language**: Rust (Edition 2021)
-- **Database**: SQLite (via `sqlx`) for persistent history.
 - **Docker**: `bollard` (Rust Docker client) or CLI wrapper.
-- **State**: `parking_lot::RwLock<AppState>` (In-memory, serialized).
+- **State**: `tokio::sync::RwLock<AppState>` (In-memory, serialized).
 
-### 2.2 Frontend (Webview)
+### 2.2 Frontend (Renderer)
 - **Framework**: [React 19](https://react.dev/)
-- **Build Tool**: [Vite](https://vitejs.dev/)
+- **Build Tool**: [Vite](https://vitejs.dev/) via [electron-vite](https://electron-vite.org/)
 - **Language**: TypeScript
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 - **Components**: [shadcn/ui](https://ui.shadcn.com/) (Radix UI based)
-- **State Management**: `tanstack-query` (Server state) + `zustand` (Client state).
+- **State Management**: State-first (Rust owns state, React subscribes)
 - **Icons**: `lucide-react`.
 
 ---
 
 ## 3. Architecture Patterns
 
-### 3.1 The "Backend-Driven UI" Model
+### 3.1 The "State-First" Model
 
 The frontend is a **visual projection** of the backend state.
-- **Source of Truth**: Rust `AppState`.
-- **Sync**: Backend pushes full or delta state updates to Frontend via Events.
-- **Action**: Frontend invokes Commands to mutate Backend state.
+- **Source of Truth**: Rust `AppState` (owned by napi-rs module).
+- **Sync**: Backend pushes state updates to Frontend via IPC events.
+- **Action**: Frontend dispatches actions via IPC to mutate Backend state.
 
 ```mermaid
 sequenceDiagram
-    participant React as React Frontend
-    participant Tauri as Tauri Bridge
-    participant Rust as Rust Core
+    participant React as React (Renderer)
+    participant Preload as Preload (IPC Bridge)
+    participant Main as Main Process
+    participant Rust as Rust (napi-rs)
 
-    React->>Tauri: invoke('run_workflow', { id: '...' })
-    Tauri->>Rust: dispatch(Action::RunWorkflow)
+    React->>Preload: stateApi.dispatch(action)
+    Preload->>Main: ipcRenderer.invoke('state:dispatch')
+    Main->>Rust: core.stateDispatch(actionJson)
     Rust->>Rust: reduce(state, action)
-    Rust->>Tauri: emit('state-update', new_state)
-    Tauri->>React: useEvent('state-update')
+    Rust->>Main: callback(stateJson)
+    Main->>React: webContents.send('state:update')
     React->>React: re-render()
 ```
 
@@ -69,21 +72,32 @@ sequenceDiagram
 
 ```
 rustation/
-├── src-tauri/           # Rust Backend
-│   ├── src/
-│   │   ├── domain/      # Business Logic (Ported from v2)
-│   │   ├── commands/    # Tauri Commands
-│   │   ├── state/       # AppState Definition
-│   │   └── main.rs      # Entry Point
-│   ├── capabilities/    # Security Config
-│   └── tauri.conf.json  # App Config
+├── packages/
+│   └── core/                # Rust napi-rs module
+│       ├── src/
+│       │   ├── app_state.rs # AppState definition
+│       │   ├── actions.rs   # Action enum
+│       │   ├── reducer.rs   # State reducer
+│       │   ├── docker/      # Docker management
+│       │   ├── justfile.rs  # Justfile parser
+│       │   └── lib.rs       # napi exports
+│       └── Cargo.toml
 │
-├── src/                 # React Frontend
-│   ├── components/      # UI Components (shadcn)
-│   ├── features/        # Feature Modules (Workflows, Docker)
-│   ├── hooks/           # Custom Hooks (useBackend)
-│   ├── lib/             # Utilities
-│   └── main.tsx         # Entry Point
+├── apps/
+│   └── desktop/             # Electron app
+│       ├── src/
+│       │   ├── main/        # Electron main process
+│       │   ├── preload/     # IPC bridge
+│       │   └── renderer/    # React frontend
+│       │       ├── src/
+│       │       │   ├── components/  # shadcn/ui
+│       │       │   ├── features/    # Feature modules
+│       │       │   ├── hooks/       # useAppState, etc.
+│       │       │   └── types/       # TypeScript types
+│       └── electron.vite.config.ts
+│
+├── kb/                      # Knowledge Base (Architecture docs)
+└── package.json             # Monorepo root
 ```
 
 ---
@@ -91,34 +105,43 @@ rustation/
 ## 4. Feature Specifications
 
 ### 4.1 Layout & Navigation
-**Requirement**: 3-Tab Structure (Fixed Sidebar or Top Bar).
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  [*proj-1] [proj-2] [proj-3] [+]            ← Project Tabs     │
+├──────────┬──────────────────────────────────────────────────────┤
+│ [Task]   │  cmd1  │  填空 arg                [exe]             │
+│ [Docker] │  cmd2  │─────────────────────────────────────────── │
+│[Settings]│  ...   │  log output                                │
+│          │        │                                            │
+└──────────┴────────┴────────────────────────────────────────────┘
+   Sidebar   Commands        Right Panel (Args + Log)
+```
 
 *   **Window**: 1200x800 default, min 800x600.
 *   **Theme**: System preference default, toggleable Dark/Light.
-*   **Navigation**:
-    1.  **Workflows** (Home/Dev)
-    2.  **Dockers** (Container Ops)
-    3.  **Settings** (Config)
+*   **Project Tabs** (Top): Multiple projects open simultaneously.
+*   **Feature Tabs** (Sidebar):
+    1.  **Task** - Justfile commands
+    2.  **Docker** - Container management
+    3.  **Settings** - Configuration
 
-### 4.2 Tab 1: Workflows
-The core development interface.
-- **Left Panel (List)**: Available workflows (Prompt Claude, Git Commit, Spec Gen).
-- **Right Panel (Detail)**:
-    - **Prompt Input**: Rich text editor (Markdown support).
-    - **Chat Stream**: Virtualized list of messages (User/Assistant).
-    - **Artifacts**: Collapsible panels for file diffs, specs.
+### 4.2 Task Tab
+Justfile command runner with argument support.
+- **Left Panel**: List of commands from `justfile`
+- **Right Panel (Top)**: Argument input form + Execute button
+- **Right Panel (Bottom)**: Command output log
 
-### 4.3 Tab 2: Dockers
+### 4.3 Docker Tab
 Container management dashboard.
-- **Service Grid**: Cards for PostgreSQL, Redis, etc.
-- **Status Indicators**: Real-time traffic light (Green/Red/Grey).
-- **Controls**: Play/Stop/Restart buttons per card.
-- **Logs**: Drawer/Modal with streaming logs (xterm.js or virtual list).
+- **Left Panel**: Service cards (PostgreSQL, Redis, etc.)
+- **Right Panel**: Logs for selected service
+- **Controls**: Start/Stop/Restart buttons per card.
 
-### 4.4 Tab 3: Settings
+### 4.4 Settings Tab
 Configuration management.
-- **Form**: API Keys, Paths, Theme, Defaults.
-- **Validation**: Immediate feedback via Zod schemas.
+- **Form**: Theme, Default paths.
+- **Validation**: Immediate feedback.
 
 ---
 
@@ -126,44 +149,47 @@ Configuration management.
 
 ### 5.1 Communication Protocol
 
-**Commands (Frontend -> Backend)**:
-- `get_app_state() -> AppState`
-- `run_workflow(workflow_id: str, params: json)`
-- `docker_action(service: str, action: str)`
-- `set_setting(key: str, value: json)`
+**IPC Channels (Renderer -> Main -> Rust)**:
+- `state:dispatch` - Dispatch an action to mutate state
+- `state:get` - Get current state snapshot
 
-**Events (Backend -> Frontend)**:
-- `state:update`: Full state payload (throttled).
-- `stream:chunk`: Token stream for LLM responses.
-- `docker:status`: Real-time container status change.
+**IPC Events (Rust -> Main -> Renderer)**:
+- `state:update` - Full state JSON pushed on every change
 
-### 5.2 Security (Tauri v2)
-- **Permissions**: Explicitly allow shell commands (docker, git, claude).
-- **Scope**: Restrict file system access to Project Root + `~/.rstn`.
-- **CSP**: Strict Content Security Policy.
+**napi-rs Exports**:
+- `stateInit(callback)` - Initialize state with update listener
+- `stateDispatch(actionJson)` - Apply action to state
+- `stateGet()` - Get current state as JSON
+
+### 5.2 Security (Electron)
+- **Context Isolation**: Enabled (preload script bridges IPC)
+- **Node Integration**: Disabled in renderer
+- **Sandbox**: Enabled for renderer process
 
 ---
 
-## 6. Migration Roadmap
+## 6. Implementation Roadmap
 
-### Phase 1: Foundation (Days 1-2)
-- [ ] `npm create tauri-app` (React/TS).
-- [ ] Port `rstn/domain` logic to `src-tauri`.
-- [ ] Set up `AppState` and Basic Command/Event loop.
+### Phase 1: State-First Foundation (Complete)
+- [x] Set up Electron + React + napi-rs
+- [x] Implement `AppState`, `Action`, `Reducer` in Rust
+- [x] IPC bridge (main/preload/renderer)
+- [x] React hooks (`useAppState`, `useDockersState`)
 
-### Phase 2: Core UI (Days 3-5)
-- [ ] Install `shadcn/ui`.
-- [ ] Implement Layout and Router.
-- [ ] Implement Settings View (Proof of State Sync).
+### Phase 2: Multi-Project Support (Current)
+- [ ] Update `AppState` with `projects: Vec<ProjectState>`
+- [ ] Project management actions (Open, Close, Switch)
+- [ ] Project tabs UI at top
+- [ ] Per-project justfile resolution
 
-### Phase 3: Workflows (Days 6-10)
-- [ ] Port Claude CLI integration.
-- [ ] Implement Streaming UI.
-- [ ] Implement Markdown rendering.
+### Phase 3: Enhanced Tasks
+- [ ] Parse justfile arguments `{{arg}}`
+- [ ] Argument input form
+- [ ] Task execution history
 
-### Phase 4: Dockers (Days 11-13)
-- [ ] Port Docker client logic.
-- [ ] Implement Service Grid and Logs.
+### Phase 4: Session Persistence
+- [ ] Save/restore open projects
+- [ ] Recent projects menu
 
 ---
 
@@ -182,11 +208,15 @@ Configuration management.
 
 ## 8. Development Workflow
 
-**Command**: `npm run tauri dev`
-- Starts Vite Dev Server (HMR).
-- Compiles Rust Backend.
-- Launches Native Window.
+**Commands**:
+- `pnpm dev` - Start Electron dev server (from `apps/desktop`)
+- `pnpm build` - Build for production
+- `cargo test` - Run Rust tests (from `packages/core`)
+
+**Hot Reload**:
+- React: Vite HMR (instant)
+- Rust: Requires `pnpm build` in `packages/core`, then restart Electron
 
 **Logging**:
-- Frontend: Browser Console (`F12`).
-- Backend: Terminal Stdout (`tracing` subscribers).
+- Frontend: Browser DevTools (`Cmd+Shift+I`)
+- Backend: Terminal stdout (Electron main process)

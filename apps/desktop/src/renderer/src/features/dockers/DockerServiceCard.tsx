@@ -10,6 +10,7 @@ import {
   CardContent,
   CardFooter,
 } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import type { DockerService } from '@/types/docker'
 import { statusColors, statusLabels } from '@/types/docker'
 import { AddDbDialog } from './AddDbDialog'
@@ -40,6 +41,7 @@ function getConnectionString(service: DockerService): string {
 
 interface DockerServiceCardProps {
   service: DockerService
+  isActive?: boolean
   onToggle?: (id: string) => void
   onRestart?: (id: string) => void
   onViewLogs?: (id: string) => void
@@ -49,6 +51,7 @@ interface DockerServiceCardProps {
 
 export function DockerServiceCard({
   service,
+  isActive = false,
   onToggle,
   onRestart,
   onViewLogs,
@@ -68,7 +71,7 @@ export function DockerServiceCard({
   }
 
   return (
-    <Card className="w-full">
+    <Card className={cn('w-full transition-colors', isActive && 'border-primary bg-primary/5')}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">{service.name}</CardTitle>
