@@ -7,6 +7,73 @@ This document defines what "done" means for features in rustation.
 
 ---
 
+## Layer Progression Diagram
+
+```mermaid
+flowchart LR
+    subgraph L1["Layer 1: Backend"]
+        A[Rust impl] --> B[Unit tests]
+        B --> C[No unwrap]
+    end
+
+    subgraph L2["Layer 2: Binding"]
+        D["#[napi] export"] --> E[TS types]
+    end
+
+    subgraph L3["Layer 3: Bridge"]
+        F[Preload script] --> G[window.api.*]
+    end
+
+    subgraph L4["Layer 4: Frontend"]
+        H[React components] --> I[Error handling]
+        I --> J[Loading states]
+    end
+
+    subgraph L5["Layer 5: Testing"]
+        K[Unit tests] --> L[Integration]
+        L --> M[E2E tests]
+    end
+
+    L1 --> L2 --> L3 --> L4 --> L5
+
+    style L1 fill:#FFB6C1
+    style L2 fill:#FFD700
+    style L3 fill:#98FB98
+    style L4 fill:#87CEEB
+    style L5 fill:#DDA0DD
+```
+
+### Layer Completion FSM
+
+```mermaid
+stateDiagram-v2
+    [*] --> Backend: Start feature
+
+    Backend --> Binding: Tests pass
+    Backend --> Backend: Fix issues
+
+    Binding --> Bridge: Types generated
+    Binding --> Binding: Fix exports
+
+    Bridge --> Frontend: window.api ready
+    Bridge --> Bridge: Fix preload
+
+    Frontend --> Testing: UI complete
+    Frontend --> Frontend: Remove MOCK
+
+    Testing --> Done: All tests pass
+    Testing --> Frontend: E2E fails
+    Testing --> Backend: Integration fails
+
+    Done --> [*]: Feature shipped
+
+    note right of Backend: cargo test
+    note right of Frontend: NO MOCK data
+    note right of Testing: Real backend only
+```
+
+---
+
 ## Feature Completion Checklist
 
 ### 1. Backend Layer

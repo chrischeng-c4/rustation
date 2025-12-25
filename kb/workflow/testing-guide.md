@@ -23,29 +23,80 @@ This guide explains how to write tests for rustation v2, with emphasis on **stat
 
 ### v2 Testing Hierarchy
 
+```mermaid
+flowchart TB
+    subgraph State["State Tests (70%)"]
+        direction TB
+        S1[Round-trip serialization]
+        S2[State transitions]
+        S3[State invariants]
+    end
+
+    subgraph Integration["Integration Tests (20%)"]
+        direction TB
+        I1[CLI command tests]
+        I2[Multi-step workflows]
+        I3[Error handling]
+    end
+
+    subgraph UI["UI Tests (10%)"]
+        direction TB
+        U1[Widget rendering]
+        U2[Mouse/keyboard events]
+        U3[Layout regressions]
+    end
+
+    State --> Integration --> UI
+
+    style State fill:#90EE90
+    style Integration fill:#87CEEB
+    style UI fill:#FFB6C1
 ```
-┌──────────────────────────────────────┐
-│   State Tests (Primary, 70%)         │  ← Observable, stable, fast
-│   - Round-trip serialization          │
-│   - State transitions                 │
-│   - State invariants                  │
-└──────────────────────────────────────┘
-           ▲
-           │
-┌──────────────────────────────────────┐
-│   Integration Tests (Secondary, 20%) │  ← Business logic flows
-│   - CLI command tests                 │
-│   - Multi-step workflows              │
-│   - Error handling                    │
-└──────────────────────────────────────┘
-           ▲
-           │
-┌──────────────────────────────────────┐
-│   UI Tests (Minimal, 10%)            │  ← Layout, rendering only
-│   - Widget rendering                  │
-│   - Mouse/keyboard events             │
-│   - Layout regressions                │
-└──────────────────────────────────────┘
+
+### Test Pyramid Visualization
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px'}}}%%
+graph TB
+    subgraph Pyramid["Test Pyramid"]
+        A["🔼 UI Tests (10%)
+        Slow, Fragile, Expensive"]
+        B["🔷 Integration Tests (20%)
+        Medium speed, More stable"]
+        C["🟢 State Tests (70%)
+        Fast, Stable, Cheap"]
+    end
+
+    A -.->|Minimal| D[Layout only]
+    B -.->|Moderate| E[Business flows]
+    C -.->|Primary| F[All features]
+
+    style A fill:#FFB6C1
+    style B fill:#87CEEB
+    style C fill:#90EE90
+```
+
+### State Test Flow
+
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant Test as Test Function
+    participant State as AppState
+    participant JSON as JSON/YAML
+
+    Dev->>Test: Run cargo test
+    Test->>State: Create initial state
+    State->>JSON: Serialize
+    JSON->>State: Deserialize
+    Test->>Test: Assert equality (round-trip)
+
+    Test->>State: Apply action
+    State->>State: Transition
+    Test->>Test: Assert new state (transition)
+
+    Test->>State: Check constraints
+    Test->>Test: Assert invariants hold
 ```
 
 **Key Insight**: Test **state**, not **UI**. State tests are:

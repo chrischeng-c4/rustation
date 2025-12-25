@@ -23,28 +23,30 @@ This guide helps you choose the right Specification-Driven Development (SDD) wor
 
 ## Quick Decision Tree
 
-```
-START: New work?
-│
-├─► Estimated LOC > 500?
-│   └─► YES → Full SDD
-│
-├─► Touches > 5 files?
-│   └─► YES → Full SDD
-│
-├─► Architecture change?
-│   └─► YES → Full SDD
-│
-├─► New state structs or state transitions?
-│   └─► YES → Full SDD (design state first)
-│
-├─► Complex algorithm or logic?
-│   └─► YES → Full SDD
-│
-└─► Otherwise → Lightweight SDD
+```mermaid
+flowchart TD
+    A[New work?] --> B{LOC > 500?}
+    B -->|Yes| F[Full SDD]
+    B -->|No| C{Touches > 5 files?}
+    C -->|Yes| F
+    C -->|No| D{Architecture change?}
+    D -->|Yes| F
+    D -->|No| E{New state structs?}
+    E -->|Yes| F
+    E -->|No| G{Complex algorithm?}
+    G -->|Yes| F
+    G -->|No| L[Lightweight SDD]
 
-NOTE: Regardless of workflow, state tests are MANDATORY.
+    F --> H[spec → plan → tasks → implement]
+    L --> I[spec → implement directly]
+
+    style F fill:#FFB6C1
+    style L fill:#90EE90
+    style H fill:#FFB6C1
+    style I fill:#90EE90
 ```
+
+**NOTE**: Regardless of workflow, state tests are MANDATORY.
 
 ---
 
@@ -84,55 +86,56 @@ NOTE: Regardless of workflow, state tests are MANDATORY.
 
 ### Workflow Steps
 
-```
-1. /speckit.specify
-   ↓
-   Creates specs/{NNN}-{name}/spec.md
-   - Requirements (WHAT)
-   - User stories
-   - Acceptance criteria
-   - Data models
-   - Risk analysis
+```mermaid
+flowchart TB
+    subgraph Phase1["Phase 1: Specify"]
+        A["/speckit.specify"] --> B["spec.md
+        - Requirements
+        - User stories
+        - Acceptance criteria"]
+    end
 
-2. /speckit.clarify (optional)
-   ↓
-   Refines spec.md
-   - Asks 5 targeted questions
-   - Updates spec with answers
+    subgraph Phase2["Phase 2: Clarify (optional)"]
+        C["/speckit.clarify"] --> D["Refine spec.md
+        - 5 targeted questions
+        - Update with answers"]
+    end
 
-3. /speckit.plan
-   ↓
-   Creates specs/{NNN}-{name}/plan.md
-   - Architecture (HOW)
-   - Component design
-   - File structure
-   - Dependencies
-   - Estimation
+    subgraph Phase3["Phase 3: Plan"]
+        E["/speckit.plan"] --> F["plan.md
+        - Architecture
+        - Component design
+        - File structure"]
+    end
 
-4. /speckit.tasks
-   ↓
-   Creates specs/{NNN}-{name}/tasks.md
-   - Phase breakdown
-   - Task list with IDs
-   - Dependency graph
-   - Checkpoints
+    subgraph Phase4["Phase 4: Tasks"]
+        G["/speckit.tasks"] --> H["tasks.md
+        - Phase breakdown
+        - Task list with IDs
+        - Dependencies"]
+    end
 
-5. /speckit.implement
-   ↓
-   Executes tasks from tasks.md
-   - **FIRST**: Write state tests (round-trip + transitions)
-   - Define state structs (derive Serialize + Deserialize)
-   - Implement business logic
-   - Implement UI layer (CLI/TUI)
-   - Verify all state tests pass
+    subgraph Phase5["Phase 5: Implement"]
+        I["/speckit.implement"] --> J["Execute tasks
+        1. Write state tests
+        2. Define state structs
+        3. Implement logic
+        4. Implement UI"]
+    end
 
-6. /speckit.review (for PR)
-   ↓
-   Validates implementation
-   - ✅ State tests included (MANDATORY)
-   - ✅ Checks spec alignment
-   - ✅ Verifies all tasks done
-   - ✅ Cargo clippy clean
+    subgraph Phase6["Phase 6: Review"]
+        K["/speckit.review"] --> L["Validate
+        ✅ State tests
+        ✅ Spec alignment
+        ✅ All tasks done
+        ✅ Clippy clean"]
+    end
+
+    Phase1 --> Phase2
+    Phase2 --> Phase3
+    Phase3 --> Phase4
+    Phase4 --> Phase5
+    Phase5 --> Phase6
 ```
 
 ### 🎯 v2 State-First Testing Requirements

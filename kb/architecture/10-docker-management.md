@@ -35,12 +35,128 @@ The Dockers tab in the GUI provides a visual dashboard for managing development 
 
 ---
 
-## 3. Backend Integration (Rust)
+## 3. Workflow Diagrams
 
-### 3.1 Docker Client
+### 3.1 Container Lifecycle FSM
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unknown: App starts
+
+    Unknown --> Stopped: Container exists (not running)
+    Unknown --> Running: Container exists (running)
+    Unknown --> NotFound: Container doesn't exist
+
+    NotFound --> Creating: CreateService
+    Creating --> Stopped: Created successfully
+    Creating --> Error: Creation failed
+
+    Stopped --> Starting: StartService
+    Starting --> Running: Started successfully
+    Starting --> Error: Start failed
+
+    Running --> Stopping: StopService
+    Stopping --> Stopped: Stopped successfully
+    Stopping --> Error: Stop failed
+
+    Running --> Restarting: RestartService
+    Restarting --> Running: Restarted successfully
+    Restarting --> Error: Restart failed
+
+    Stopped --> Removing: RemoveService
+    Removing --> NotFound: Removed successfully
+
+    Error --> Stopped: Retry / Clear
+
+    note right of Running: Status badge: 🟢
+    note right of Stopped: Status badge: 🔴
+    note right of Starting: Status badge: 🟡
+    note right of Error: Show error toast
+```
+
+### 3.2 Toggle Service Sequence
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant React as React (Frontend)
+    participant Rust as Rust Backend
+    participant Docker as Docker Daemon
+
+    User->>React: Click Start/Stop button
+    React->>React: Show loading spinner
+    React->>Rust: invoke("toggle_service", { service_id })
+
+    alt Start Service
+        Rust->>Docker: container.start()
+        Docker-->>Rust: Started
+        Rust->>Rust: Update DockersState { status: Running }
+    else Stop Service
+        Rust->>Docker: container.stop()
+        Docker-->>Rust: Stopped
+        Rust->>Rust: Update DockersState { status: Stopped }
+    end
+
+    Rust-->>React: emit("state:update")
+    React->>React: Update status badge
+    React->>React: Hide loading spinner
+```
+
+### 3.3 Log Streaming Sequence
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant React as React (Frontend)
+    participant Rust as Rust Backend
+    participant Docker as Docker Daemon
+
+    User->>React: Click "Logs" button
+    React->>React: Open log drawer
+    React->>Rust: invoke("get_container_logs", { name, tail: 100 })
+
+    Rust->>Docker: container.logs(tail: 100)
+    Docker-->>Rust: Log lines
+    Rust-->>React: Vec<String>
+
+    React->>React: Render log lines (virtualized)
+
+    loop Follow Mode (if enabled)
+        Docker-->>Rust: New log line (stream)
+        Rust-->>React: emit("docker:log", { line })
+        React->>React: Append + auto-scroll
+    end
+```
+
+### 3.4 Service Discovery Flow
+
+```mermaid
+flowchart TD
+    A[App Start] --> B[List Docker Containers]
+    B --> C{Filter by label?}
+    C -->|Yes| D[Filter: rstn.managed=true]
+    C -->|No| E[Show all containers]
+    D --> F[Build DockerService list]
+    E --> F
+    F --> G[Update DockersState]
+    G --> H[Render Service Grid]
+
+    H --> I{User Action?}
+    I -->|Start/Stop| J[Toggle Service]
+    I -->|View Logs| K[Open Log Drawer]
+    I -->|Copy| L[Copy Connection String]
+
+    J --> G
+```
+
+---
+
+## 4. Backend Integration (Rust)
+
+### 4.1 Docker Client
 Uses the `bollard` library for native async communication with the Docker socket (Unix) or Named Pipe (Windows).
 
-### 3.2 Command Interface
+### 4.2 Command Interface
 ```rust
 #[tauri::command]
 async fn toggle_service(service: DockerServiceType, state: State<'_, AppState>) -> Result<ServiceStatus, Error>;
@@ -49,7 +165,7 @@ async fn toggle_service(service: DockerServiceType, state: State<'_, AppState>) 
 async fn get_container_logs(name: String, tail: usize) -> Result<Vec<String>, Error>;
 ```
 
-### 3.3 Event Streaming
+### 4.3 Event Streaming
 Status changes are emitted globally.
 ```rust
 // Emitted whenever a container changes state (e.g., via external CLI)
@@ -58,9 +174,9 @@ window.emit("docker:status-change", Payload { name: "rstn-postgres", status: "ru
 
 ---
 
-## 4. State Model (Sync)
+## 5. State Model (Sync)
 
-### 4.1 Data Structure
+### 5.1 Data Structure
 ```typescript
 interface DockerService {
   id: string;
@@ -74,21 +190,21 @@ interface DockerService {
 
 ---
 
-## 5. UI Components (React)
+## 6. UI Components (React)
 
-### 5.1 `DockerServiceCard`
+### 6.1 `DockerServiceCard`
 - **Visuals**: Uses `shadcn/ui` Card component.
 - **Interactions**:
     - Hover: Show advanced actions (Add User, Add DB).
     - Click: Open log view.
 
-### 5.2 `DockerLogViewer`
+### 6.2 `DockerLogViewer`
 - **Engine**: Virtualized list.
 - **Controls**: Search/Filter logs, Clear, Follow toggle.
 
 ---
 
-## 6. Implementation Reference (GUI)
+## 7. Implementation Reference (GUI)
 
 - **Frontend**: `src/features/docker/`
     - `DockerDashboard.tsx` (Main container)

@@ -22,9 +22,86 @@ The "Prompt to Claude" workflow is the core developer interaction loop. In the G
 
 ---
 
-## 2. Architecture (Backend-Driven)
+## 2. Workflow Diagrams
 
-### 2.1 Backend State (Rust)
+### 2.1 Sequence Diagram: Send Prompt Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant React as React (Frontend)
+    participant Tauri as Tauri IPC
+    participant Rust as Rust Backend
+    participant Claude as Claude CLI
+
+    User->>React: Type prompt + Cmd+Enter
+    React->>Tauri: invoke("send_prompt", {prompt})
+    Tauri->>Rust: send_prompt command
+    Rust->>Rust: Add User message to state
+    Rust-->>React: emit("state:update")
+
+    Rust->>Claude: spawn claude -p --output-format stream-json
+
+    loop Streaming Response
+        Claude-->>Rust: JSONL chunk (content_block_delta)
+        Rust-->>React: emit("stream:delta", {delta})
+        React->>React: Append to streaming text
+        React->>React: Auto-scroll to bottom
+    end
+
+    Claude-->>Rust: JSONL (message_stop)
+    Rust->>Rust: Finalize Assistant message
+    Rust-->>React: emit("state:update")
+    React->>React: Render complete message
+```
+
+### 2.2 State Machine: Streaming State
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle: App starts
+
+    Idle --> Sending: User sends prompt
+    Sending --> Streaming: Claude CLI started
+    Streaming --> Streaming: Receive delta
+    Streaming --> Finalizing: message_stop received
+    Finalizing --> Idle: State updated
+
+    Streaming --> Error: CLI error / timeout
+    Sending --> Error: Network error
+    Error --> Idle: User dismisses / retry
+
+    note right of Idle: Ready for input
+    note right of Streaming: is_streaming = true
+    note right of Error: Show error toast
+```
+
+### 2.3 Tool Use Flow (MCP)
+
+```mermaid
+sequenceDiagram
+    participant Claude as Claude CLI
+    participant Rust as Rust Backend
+    participant MCP as MCP Server
+    participant React as React (Frontend)
+
+    Claude->>Rust: tool_use event (e.g., read_file)
+    Rust-->>React: emit("state:update") with tool status
+    React->>React: Show "🔍 Reading file..."
+
+    Rust->>MCP: Forward tool request
+    MCP-->>Rust: Tool result
+    Rust->>Claude: Send tool result
+
+    Claude->>Rust: Continue with response
+    Rust-->>React: emit("stream:delta")
+```
+
+---
+
+## 3. Architecture (Backend-Driven)
+
+### 3.1 Backend State (Rust)
 The `PromptClaudeState` remains in Rust to ensure session persistence and reliability.
 
 ```rust
@@ -46,7 +123,7 @@ pub struct Message {
 }
 ```
 
-### 2.2 Frontend State (React)
+### 3.2 Frontend State (React)
 The frontend consumes the state via a `useSyncExternalStore` or a global `Zustand` store synced via Tauri events.
 
 ```typescript
@@ -68,9 +145,9 @@ const ChatView = () => {
 
 ---
 
-## 3. Communication
+## 4. Communication
 
-### 3.1 Command: `send_prompt`
+### 4.1 Command: `send_prompt`
 Invoked when the user clicks "Send" or presses `Cmd+Enter`.
 
 ```rust
@@ -86,7 +163,7 @@ async fn send_prompt(
 }
 ```
 
-### 3.2 Event: `stream:delta`
+### 4.2 Event: `stream:delta`
 For performance, we emit high-frequency text chunks as lightweight events rather than full state updates.
 
 ```rust
@@ -104,14 +181,14 @@ useEffect(() => {
 
 ---
 
-## 4. UI Components (Feature-Specific)
+## 5. UI Components (Feature-Specific)
 
-### 4.1 Message Bubble
+### 5.1 Message Bubble
 - **Markdown**: Rendered via `react-markdown` with `remark-gfm`.
 - **Syntax Highlighting**: `react-syntax-highlighter` using `prism` or `shiki`.
 - **Copy-to-Clipboard**: Integrated into code block headers.
 
-### 4.2 Prompt Input
+### 5.2 Prompt Input
 - **Type**: `TextareaAutosize`.
 - **Hotkeys**:
     - `Enter`: New line.
@@ -120,13 +197,13 @@ useEffect(() => {
 
 ---
 
-## 5. Session & MCP
+## 6. Session & MCP
 - **Persistent Storage**: Sessions are stored in SQLite (`~/.rstn/history.db`).
 - **MCP Config**: Managed by the Backend, same as v2, but the path is handled internally by the Tauri Backend service.
 
 ---
 
-## 6. Implementation Plan (GUI)
+## 7. Implementation Plan (GUI)
 
 1.  **Backend**: Port the `claude` CLI execution logic (JSONL parsing).
 2.  **Frontend**: Create the `ChatContainer` and `MessageBubble` components using `shadcn/ui`.

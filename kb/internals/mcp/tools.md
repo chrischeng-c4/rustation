@@ -27,6 +27,71 @@ rstn exposes six MCP tools for Claude Code to interact with the TUI:
 | `rstn_complete_task` | Control | Mark a task as complete with validation |
 | `rstn_run_hook` | Control | Run project-configured hook (lint, test, format) |
 
+### Tool Architecture Diagram
+
+```mermaid
+flowchart TB
+    subgraph Claude["Claude Code"]
+        C1[MCP Client]
+    end
+
+    subgraph MCP["rstn MCP Server"]
+        M1[HTTP Endpoint /mcp]
+    end
+
+    subgraph DataPlane["Data Plane (Read-Only)"]
+        D1["rstn_get_app_state
+        → Full AppState JSON"]
+        D2["rstn_read_spec
+        → spec/plan/tasks.md"]
+        D3["rstn_get_context
+        → Feature metadata"]
+    end
+
+    subgraph ControlPlane["Control Plane (Actions)"]
+        A1["rstn_report_status
+        → needs_input/completed/error"]
+        A2["rstn_complete_task
+        → Mark task done"]
+        A3["rstn_run_hook
+        → lint/test/format"]
+    end
+
+    C1 --> M1
+    M1 --> DataPlane
+    M1 --> ControlPlane
+
+    style DataPlane fill:#90EE90
+    style ControlPlane fill:#FFB6C1
+```
+
+### Tool Request/Response Sequence
+
+```mermaid
+sequenceDiagram
+    participant Claude as Claude Code
+    participant MCP as MCP Server
+    participant Tools as Tool Handler
+    participant App as AppState
+
+    Claude->>MCP: POST /tools/call
+    Note right of Claude: { tool: "rstn_read_spec", args: { artifact: "spec" } }
+
+    MCP->>Tools: Route to handler
+    Tools->>App: Read data / Execute action
+
+    alt Data Plane Tool
+        App-->>Tools: Return data
+        Tools-->>MCP: { content: [...], isError: false }
+    else Control Plane Tool
+        App->>App: Update state / Trigger action
+        App-->>Tools: Confirmation
+        Tools-->>MCP: { content: [...], isError: false }
+    end
+
+    MCP-->>Claude: Tool result
+```
+
 ---
 
 ## rstn_get_app_state

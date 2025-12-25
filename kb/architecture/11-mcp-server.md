@@ -64,8 +64,90 @@ In the GUI version, the MCP (Model Context Protocol) server remains a critical b
 
 ---
 
-## 4. Message Flow (GUI)
+## 4. Message Flow Diagrams
 
+### 4.1 MCP Tool Invocation Sequence
+
+```mermaid
+sequenceDiagram
+    participant Claude as Claude Code
+    participant MCP as MCP Server (HTTP)
+    participant Rust as Rust Backend
+    participant Event as Tauri Event Bus
+    participant React as React Frontend
+
+    Claude->>MCP: POST /tools/call (rstn_get_app_state)
+    MCP->>Rust: Read AppState
+    Rust-->>MCP: AppState JSON
+    MCP-->>Claude: Tool result
+
+    Claude->>MCP: POST /tools/call (rstn_report_status)
+    MCP->>Rust: Dispatch action
+    Rust->>Event: emit("ui:modal:open", payload)
+    Event-->>React: Modal event
+    React->>React: Show input modal
+    MCP-->>Claude: Tool result (success)
+```
+
+### 4.2 MCP Server Lifecycle FSM
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stopped: App starts
+
+    Stopped --> Starting: StartMcpServer action
+    Starting --> Running: Server bound to port
+    Starting --> Error: Port conflict / bind error
+
+    Running --> Stopping: StopMcpServer action
+    Running --> Error: Server crash
+
+    Stopping --> Stopped: Cleanup complete
+    Error --> Stopped: Retry / Reset
+
+    note right of Running: Listening on dynamic port
+    note right of Error: Show error in UI
+```
+
+### 4.3 Tool Categories Flow
+
+```mermaid
+flowchart LR
+    subgraph Claude["Claude Code"]
+        C1[Tool request]
+    end
+
+    subgraph MCP["MCP Server"]
+        direction TB
+        M1[Receive request]
+        M2{Tool type?}
+    end
+
+    subgraph DataPlane["Data Plane (Read)"]
+        D1[rstn_get_app_state]
+        D2[rstn_read_spec]
+    end
+
+    subgraph ControlPlane["Control Plane (Write)"]
+        A1[rstn_report_status]
+        A2[rstn_complete_task]
+    end
+
+    subgraph Backend["Rust Backend"]
+        B1[Read AppState]
+        B2[Dispatch Action]
+        B3[Emit Tauri Event]
+    end
+
+    C1 --> M1 --> M2
+    M2 -->|Read| DataPlane --> B1
+    M2 -->|Write| ControlPlane --> B2 --> B3
+
+    style DataPlane fill:#90EE90
+    style ControlPlane fill:#FFB6C1
+```
+
+### Summary Flow
 1.  **Claude Code** calls an MCP tool (e.g., `rstn_report_status`).
 2.  **MCP Server** (FastAPI) receives the call.
 3.  **MCP Server** dispatches a message to the Rust core or directly emits a Tauri event.

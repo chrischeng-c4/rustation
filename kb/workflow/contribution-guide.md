@@ -71,11 +71,85 @@ fn test_transition() {
 
 ## Contribution Workflow
 
+### Development Flow Diagram
+
+```mermaid
+flowchart TB
+    subgraph Setup["1. Setup"]
+        A[Clone repo] --> B[npm install]
+        B --> C[npm run tauri dev]
+    end
+
+    subgraph Spec["2. Specification"]
+        D{Non-trivial?}
+        D -->|Yes| E[/speckit.specify]
+        D -->|No| F[Skip spec]
+        E --> G[spec.md created]
+    end
+
+    subgraph Implement["3. Implementation"]
+        H[Backend State] --> I[Backend Commands]
+        I --> J[Frontend UI]
+        J --> K[Wire with invoke/listen]
+    end
+
+    subgraph Test["4. Testing"]
+        L[cargo test] --> M{Pass?}
+        M -->|No| H
+        M -->|Yes| N[npm test]
+        N --> O{Pass?}
+        O -->|No| J
+        O -->|Yes| P[cargo clippy]
+    end
+
+    subgraph PR["5. Pull Request"]
+        Q[git commit] --> R[git push]
+        R --> S[Create PR]
+        S --> T{Review}
+        T -->|Changes requested| H
+        T -->|Approved| U[Merge]
+    end
+
+    Setup --> Spec
+    Spec --> Implement
+    Implement --> Test
+    Test --> PR
+
+    style H fill:#FFB6C1
+    style I fill:#FFB6C1
+    style J fill:#87CEEB
+    style K fill:#DDA0DD
+```
+
 ### 1. Specification (SDD)
 All non-trivial changes must have a spec in `specs/`.
 - Use `/speckit.specify` to define requirements.
 
 ### 2. Implementation Pattern
+
+```mermaid
+flowchart LR
+    subgraph Backend["Rust Backend"]
+        A["1. State
+        src-tauri/src/state/"] --> B["2. Commands
+        src-tauri/src/commands/"]
+    end
+
+    subgraph Frontend["React Frontend"]
+        C["3. Components
+        src/components/"] --> D["4. Hooks
+        src/hooks/"]
+    end
+
+    subgraph Wire["Wiring"]
+        E["invoke() → Commands"]
+        F["listen() ← Events"]
+    end
+
+    Backend --> Wire
+    Wire --> Frontend
+```
+
 1.  **Backend State**: Define the state in Rust (`src-tauri/src/state/`).
 2.  **Backend Logic**: Implement Tauri Commands (`src-tauri/src/commands/`).
 3.  **Frontend UI**: Create React components (`src/components/`) and sync state.

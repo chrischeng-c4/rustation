@@ -75,6 +75,96 @@ This means:
 
 ---
 
+## State-First Diagrams
+
+### State Mutation Cycle
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    [*] --> Idle: App initialized
+
+    Idle --> Processing: User Action / Event
+    Processing --> Rendering: reduce(state, action)
+    Rendering --> Idle: UI updated
+
+    note right of Idle: state = current AppState
+    note right of Processing: Pure function, no side effects
+    note right of Rendering: UI = render(state)
+```
+
+### Action → State → UI Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI as UI (React)
+    participant Dispatch as dispatch()
+    participant Reducer as reduce()
+    participant State as AppState
+
+    User->>UI: Click / Input
+    UI->>Dispatch: Action { type, payload }
+    Dispatch->>State: Lock for write
+    Dispatch->>Reducer: reduce(state, action)
+    Reducer->>Reducer: Pure state transformation
+    Reducer-->>State: Updated state
+    State-->>UI: emit("state:update")
+    UI->>UI: Re-render from new state
+```
+
+### State Serializability Contract
+
+```mermaid
+flowchart LR
+    subgraph Valid["✅ Valid State"]
+        A[Primitive types]
+        B[Structs with Serialize]
+        C[Enums with Serialize]
+        D["Vec, HashMap, Option"]
+    end
+
+    subgraph Invalid["❌ Invalid State"]
+        E[Closures]
+        F[Thread handles]
+        G[File handles]
+        H[Non-Send types]
+    end
+
+    Valid --> J[AppState]
+    Invalid -.->|"NEVER include"| J
+
+    J --> K[JSON/YAML]
+    K --> L[Save to disk]
+    K --> M[Send to frontend]
+    K --> N[Debug logging]
+```
+
+### State Testing Pyramid
+
+```mermaid
+flowchart TB
+    subgraph Tests["State Testing Layers"]
+        A["1. Round-trip Test
+        serialize → deserialize → assert_eq"]
+        B["2. Transition Test
+        initial_state → action → expected_state"]
+        C["3. Invariant Test
+        any state → validate constraints"]
+    end
+
+    A --> D[All state structs]
+    B --> E[All actions/reducers]
+    C --> F[Business rules]
+
+    style A fill:#90EE90
+    style B fill:#87CEEB
+    style C fill:#DDA0DD
+```
+
+---
+
 ## Why State Serializability?
 
 ### 1. **Testability**

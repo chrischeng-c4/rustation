@@ -1,254 +1,414 @@
 ---
-title: "Multi-Project Architecture"
-description: "Support for multiple projects with tabs, workspace management, and per-project state"
+title: "Multi-Project & Worktree Architecture"
+description: "Support for multiple projects and git worktrees with per-worktree MCP servers"
 category: architecture
 status: active
 last_updated: 2025-12-25
-version: 1.0.0
-tags: [architecture, workspace, multi-project, tabs]
+version: 2.0.0
+tags: [architecture, workspace, multi-project, worktree, mcp]
 weight: 4
 ---
 
-# Multi-Project Architecture
-
-This document defines how rstn supports multiple projects simultaneously.
+# Multi-Project & Worktree Architecture
 
 ## 1. Overview
 
-rstn supports opening multiple projects in tabs, similar to browser tabs or VS Code workspaces.
+rstn supports a two-level hierarchy:
+- **Project** = Git repository
+- **Worktree** = Git worktree (default: main branch)
 
-### UI Layout
+Each worktree has its own MCP server for Claude Code integration.
+
+### Hierarchy
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  [*proj-1] [proj-2] [proj-3] [+]            ← Project Tabs     │
-├──────────┬──────────────────────────────────────────────────────┤
-│ [Task]   │  cmd1  │  填空 arg                [exe]             │
-│ [Docker] │  cmd2  │─────────────────────────────────────────── │
-│[Settings]│  ...   │  log output                                │
-│          │        │                                            │
-└──────────┴────────┴────────────────────────────────────────────┘
-   Sidebar   Commands        Right Panel (Args + Log)
+Project (git repo: rustation)
+├── Worktree: main              ~/projects/rustation
+│   └── MCP Server :52341
+├── Worktree: feature/auth      ~/projects/rustation-auth
+│   └── MCP Server :52342
+└── Worktree: fix/bug-123       ~/projects/rustation-fix
+    └── MCP Server :52343
 ```
 
-### Key Concepts
+### Use Cases
 
-| Concept | Description |
-|---------|-------------|
-| **Project** | A folder with project files (justfile, docker-compose, etc.) |
-| **Project Tab** | Top-level tab representing an open project |
-| **Feature Tab** | Sidebar tab within a project (Task, Docker, Settings) |
-| **Active Project** | Currently focused project (receives keyboard input) |
+| Level | Use Case |
+|-------|----------|
+| **Project** | Copy .env between worktrees, manage worktrees |
+| **Worktree** | Independent Claude Code session, run tasks, Docker |
 
 ---
 
-## 2. State Structure
+## 2. UI Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ [rustation ▼] [other-project ▼] [+]                        <- Project Tabs  │
+│  └─ main | feature/auth | fix/bug                          <- Worktree Tabs │
+├─────────┬───────────────────────────────────────────────────────────────────┤
+│         │                                                                   │
+│  Tasks  │   Worktree: feature/auth                                         │
+│         │   Path: ~/projects/rustation-auth                                │
+│ ─────── │   MCP: 🟢 :52341  [Open Claude]                                  │
+│         │                                                                   │
+│ Docker  │   ┌──────────────────────────────────────┐                        │
+│         │   │ Copy .env from: [main ▼] [Copy]     │  <- Project-level 功能  │
+│ ─────── │   └──────────────────────────────────────┘                        │
+│         │                                                                   │
+│Settings │   (Feature content...)                                            │
+│         │                                                                   │
+└─────────┴───────────────────────────────────────────────────────────────────┘
+```
+
+### UI Components
+
+| Component | Level | Description |
+|-----------|-------|-------------|
+| **Project Tab** | Project | Dropdown shows all worktrees |
+| **Worktree Sub-Tab** | Worktree | Switch between worktrees |
+| **Feature Sidebar** | Worktree | Tasks, Docker, Settings |
+| **MCP Status Bar** | Worktree | Shows MCP server status |
+
+---
+
+## 3. State Structure
 
 ### AppState (Root)
 
 ```
 AppState
-├── projects: Vec<ProjectState>     # All open projects
-├── active_project_index: usize     # Which project is focused
-├── global_settings: GlobalSettings # App-wide settings
-└── recent_projects: Vec<RecentProject>  # For "Open Recent"
+├── projects: Vec<ProjectState>
+├── active_project_index: usize
+├── global_settings: GlobalSettings
+└── recent_projects: Vec<RecentProject>
 ```
 
-### ProjectState (Per-Project)
+### ProjectState (Git Repo)
 
 ```
 ProjectState
-├── id: String                      # Unique identifier
-├── path: PathBuf                   # "/Users/chris/my-project"
-├── name: String                    # "my-project" (folder name)
-├── is_modified: bool               # Show "*" indicator
-├── active_tab: FeatureTab          # Task | Docker | Settings
-├── tasks: TasksState               # Justfile commands & output
-└── dockers: DockersState           # Docker services for this project
+├── id: String
+├── path: PathBuf                    # Path to main worktree
+├── name: String                     # Repo name
+├── worktrees: Vec<WorktreeState>    # All worktrees
+├── active_worktree_index: usize     # Currently selected worktree
+└── repo_settings: RepoSettings      # Project-level settings
+```
+
+### WorktreeState (Git Worktree)
+
+```
+WorktreeState
+├── id: String
+├── path: PathBuf                    # Worktree path
+├── branch: String                   # "main", "feature/auth"
+├── is_main: bool                    # Is this the main worktree?
+├── mcp: McpState                    # MCP server state
+├── active_tab: FeatureTab           # Task | Docker | Settings
+├── tasks: TasksState
+└── dockers: DockersState
+```
+
+### McpState
+
+```
+McpState
+├── status: McpStatus                # Stopped | Starting | Running | Error
+├── port: Option<u16>                # Assigned port (dynamic)
+├── config_path: Option<PathBuf>     # ~/.rstn/worktrees/<hash>/mcp-session.json
+└── error: Option<String>
 ```
 
 ### Hierarchy Diagram
 
-```mermaid
-classDiagram
-    class AppState {
-        +Vec~ProjectState~ projects
-        +usize active_project_index
-        +GlobalSettings global_settings
-        +Vec~RecentProject~ recent_projects
-    }
-
-    class ProjectState {
-        +String id
-        +PathBuf path
-        +String name
-        +bool is_modified
-        +FeatureTab active_tab
-        +TasksState tasks
-        +DockersState dockers
-    }
-
-    class TasksState {
-        +Vec~JustCommand~ commands
-        +HashMap~String, TaskStatus~ task_statuses
-        +Option~String~ active_command
-        +Vec~String~ output
-        +bool is_loading
-    }
-
-    class DockersState {
-        +Option~bool~ docker_available
-        +Vec~DockerServiceInfo~ services
-        +Option~String~ selected_service_id
-        +Vec~String~ logs
-    }
-
-    AppState "1" *-- "0..*" ProjectState
-    ProjectState *-- TasksState
-    ProjectState *-- DockersState
+```
+AppState
+└── ProjectState (git repo)
+    └── WorktreeState (git worktree)
+        ├── McpState (MCP server)
+        ├── TasksState (justfile)
+        └── DockersState (docker)
 ```
 
 ---
 
-## 3. Actions
+## 4. Workflow Diagrams
 
-### Project Management Actions
+### 4.1 Project/Worktree Navigation FSM
+
+```mermaid
+stateDiagram-v2
+    [*] --> NoProject: App starts
+
+    NoProject --> HasProject: OpenProject
+    HasProject --> NoProject: CloseProject (last)
+    HasProject --> HasProject: CloseProject (not last)
+    HasProject --> HasProject: SwitchProject
+    HasProject --> HasProject: SwitchWorktree
+
+    state HasProject {
+        [*] --> ProjectActive
+        ProjectActive --> WorktreeActive: Auto-select first worktree
+
+        state WorktreeActive {
+            [*] --> TasksTab
+            TasksTab --> DockersTab: SetFeatureTab(dockers)
+            DockersTab --> TasksTab: SetFeatureTab(tasks)
+            TasksTab --> SettingsTab: SetFeatureTab(settings)
+            SettingsTab --> TasksTab: SetFeatureTab(tasks)
+            DockersTab --> SettingsTab: SetFeatureTab(settings)
+            SettingsTab --> DockersTab: SetFeatureTab(dockers)
+        }
+    }
+
+    note right of NoProject: Show "Open Project" button
+    note right of HasProject: Show project tabs
+```
+
+### 4.2 MCP Server Lifecycle FSM
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stopped: Worktree opened
+
+    Stopped --> Starting: StartMcpServer
+    Starting --> Running: Server bound to port
+    Starting --> Error: Bind failed
+
+    Running --> Stopping: StopMcpServer
+    Running --> Error: Server crash
+    Stopping --> Stopped: Cleanup complete
+
+    Error --> Stopped: ClearError / Retry
+
+    note right of Stopped: Port = None
+    note right of Running: Port = assigned
+    note right of Error: Show error message
+```
+
+### 4.3 Open Project Sequence
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant React as React (Frontend)
+    participant Rust as Rust Backend
+    participant Git
+
+    User->>React: Click [+] button
+    React->>React: Show folder picker
+    User->>React: Select folder
+    React->>Rust: dispatch(OpenProject { path })
+
+    Rust->>Git: git worktree list
+    Git-->>Rust: worktree paths + branches
+
+    Rust->>Rust: Create ProjectState
+    Rust->>Rust: Create WorktreeState for each
+    Rust->>Rust: Update recent_projects
+    Rust-->>React: emit(state:update)
+
+    React->>React: Render project tab
+    React->>React: Render worktree sub-tabs
+```
+
+### 4.4 Start MCP & Open Claude Sequence
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant React as React (Frontend)
+    participant Rust as Rust Backend
+    participant MCP as MCP Server
+    participant Claude as Claude Code
+
+    User->>React: Click [Start MCP]
+    React->>Rust: dispatch(StartMcpServer)
+
+    Rust->>MCP: Start HTTP server (port 0)
+    MCP-->>Rust: Bound to port 52341
+
+    Rust->>Rust: Write mcp-session.json
+    Rust->>Rust: Update McpState { Running, port: 52341 }
+    Rust-->>React: emit(state:update)
+    React->>React: Show 🟢 Running (:52341)
+
+    User->>React: Click [Open Claude]
+    React->>Rust: dispatch(OpenClaude)
+
+    Rust->>Claude: spawn claude --mcp-config <path>
+    Claude->>MCP: Connect via HTTP
+    MCP-->>Claude: Ready for tool calls
+```
+
+---
+
+## 5. Actions
+
+### Project-Level Actions
 
 | Action | Payload | Description |
 |--------|---------|-------------|
-| `OpenProject` | `{ path: String }` | Open a folder as project |
-| `CloseProject` | `{ index: usize }` | Close a project tab |
-| `SwitchProject` | `{ index: usize }` | Focus a different project |
-| `ScanProject` | `{ index: usize }` | Re-scan justfile, docker-compose |
+| `OpenProject` | `{ path }` | Open a git repo |
+| `CloseProject` | `{ index }` | Close project tab |
+| `SwitchProject` | `{ index }` | Focus different project |
+| `CreateWorktree` | `{ branch, path }` | Create new worktree |
+| `DeleteWorktree` | `{ worktree_index }` | Remove worktree |
+| `CopyEnvFile` | `{ from_worktree, to_worktree }` | Copy .env |
 
-### Per-Project Actions
+### Worktree-Level Actions
 
-All existing actions (e.g., `RefreshDockerServices`, `RunJustCommand`) now operate on the **active project**.
-
-```
-dispatch({ type: 'RunJustCommand', payload: { name: 'test', cwd: '.' } })
-// Runs in: projects[active_project_index].path
-```
-
----
-
-## 4. UI Behavior
-
-### Project Tabs
-
-- **Click tab**: Switch to that project
-- **Click [+]**: Open folder dialog to add project
-- **Middle-click / Click X**: Close project tab
-- **Asterisk (*)**: Indicates unsaved changes or running tasks
-
-### Opening Projects
-
-1. **Menu**: File > Open Folder
-2. **Drag & Drop**: Drag folder onto window
-3. **Recent**: File > Open Recent
-
-### Project Detection
-
-When opening a folder, rstn scans for:
-
-| File | Creates |
-|------|---------|
-| `justfile` or `Justfile` | TasksState with parsed commands |
-| `docker-compose.yml` | (Future) Project-specific Docker config |
+| Action | Payload | Description |
+|--------|---------|-------------|
+| `SwitchWorktree` | `{ index }` | Focus different worktree |
+| `StartMcpServer` | `{}` | Start MCP for active worktree |
+| `StopMcpServer` | `{}` | Stop MCP server |
+| `OpenClaude` | `{}` | Launch Claude Code with MCP config |
+| `SetFeatureTab` | `{ tab }` | Switch feature tab |
 
 ---
 
-## 5. Data Flow
+## 6. MCP Server Management
+
+### Lifecycle
+
+```
+rstn .  (open worktree)
+   │
+   ├─▶ 1. Start MCP Server (dynamic port)
+   │
+   ├─▶ 2. Write config: ~/.rstn/worktrees/<hash>/mcp-session.json
+   │       {
+   │         "mcpServers": {
+   │           "rstn": { "type": "http", "url": "http://127.0.0.1:<port>/mcp" }
+   │         }
+   │       }
+   │
+   └─▶ 3. Launch Claude Code:
+           claude --mcp-config ~/.rstn/worktrees/<hash>/mcp-session.json
+```
+
+### Port Allocation
+
+- Use port 0 (OS assigns available port)
+- Store assigned port in `McpState.port`
+- Each worktree gets independent port
+
+### Config File Location
+
+```
+~/.rstn/
+├── state.json                          # Global app state
+└── worktrees/
+    ├── <hash1>/
+    │   └── mcp-session.json           # MCP config for worktree 1
+    └── <hash2>/
+        └── mcp-session.json           # MCP config for worktree 2
+```
+
+Hash = SHA256(worktree_path)[0:8]
+
+---
+
+## 7. Data Flow
 
 ### Opening a Project
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant React
-    participant IPC
-    participant Rust
-
-    User->>React: Click [+] tab
-    React->>React: Open folder dialog
-    User->>React: Select folder
-    React->>IPC: dispatch(OpenProject { path })
-    IPC->>Rust: state_dispatch(action_json)
-    Rust->>Rust: Create ProjectState
-    Rust->>Rust: Scan for justfile
-    Rust->>Rust: Add to projects[]
-    Rust->>IPC: notify_state_update()
-    IPC->>React: state:update event
-    React->>React: Re-render with new tab
+```
+User clicks [+]
+    │
+    ▼
+Select folder (git repo root)
+    │
+    ▼
+Backend: git worktree list
+    │
+    ▼
+Create ProjectState with WorktreeStates
+    │
+    ▼
+UI: Show project tab with worktree sub-tabs
 ```
 
-### Running a Task
+### Starting MCP Server
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant React
-    participant Rust
+```
+User clicks [Start MCP] on worktree
+    │
+    ▼
+Backend: Start axum HTTP server (port 0)
+    │
+    ▼
+Write mcp-session.json
+    │
+    ▼
+Update McpState { status: Running, port: 52341 }
+    │
+    ▼
+UI: Show 🟢 Running (:52341)
+```
 
-    User->>React: Click "Run" on cmd
-    React->>Rust: dispatch(RunJustCommand { name, cwd: "." })
-    Note over Rust: cwd resolved to projects[active].path
-    Rust->>Rust: Execute: just {name} in project dir
-    Rust->>Rust: Update projects[active].tasks.output
-    Rust->>React: state:update
-    React->>React: Show output in log panel
+### Opening Claude Code
+
+```
+User clicks [Open Claude]
+    │
+    ▼
+Backend: Get mcp-session.json path
+    │
+    ▼
+Spawn: claude --mcp-config <path> -p "..."
+    │
+    ▼
+Claude Code connects to MCP server
 ```
 
 ---
 
-## 6. Persistence
+## 8. Persistence
 
-### Session State
-
-On app close, save to `~/.rstn/session.json`:
+### Global State (~/.rstn/state.json)
 
 ```json
 {
-  "open_projects": [
-    "/Users/chris/project-a",
-    "/Users/chris/project-b"
-  ],
-  "active_project_index": 0,
-  "recent_projects": [
-    { "path": "/Users/chris/old-project", "last_opened": "2025-12-20" }
-  ]
+  "version": "0.1.0",
+  "recent_projects": [...],
+  "global_settings": {...}
 }
 ```
 
-### On Startup
+### Per-Worktree State (~/.rstn/worktrees/<hash>/state.json)
 
-1. Load `session.json`
-2. Re-open previously open projects
-3. Restore active project index
+```json
+{
+  "path": "/Users/chris/projects/rustation",
+  "active_tab": "tasks",
+  "mcp_auto_start": true
+}
+```
 
 ---
 
-## 7. Implementation Phases
+## 9. Implementation Phases
 
-### Phase 1: Core Multi-Project (Current)
+### Phase 1: Worktree Support ✅ (Current)
+- [ ] Update state structure (ProjectState → WorktreeState)
+- [ ] UI: Two-level tabs (Project + Worktree)
+- [ ] Backend: `git worktree list` parsing
+- [ ] Actions: SwitchWorktree, CreateWorktree
 
-- [ ] Update `AppState` with `projects: Vec<ProjectState>`
-- [ ] Add project management actions
-- [ ] UI: Project tabs at top
-- [ ] Justfile path resolved per-project
+### Phase 2: MCP Server
+- [ ] Port MCP server to packages/core (napi-rs)
+- [ ] Dynamic port allocation
+- [ ] MCP config file management
+- [ ] UI: MCP status indicator
 
-### Phase 2: Enhanced Tasks
+### Phase 3: Claude Integration
+- [ ] [Open Claude] button
+- [ ] Spawn Claude Code with --mcp-config
+- [ ] MCP tools: rstn_get_state, rstn_report_status
 
-- [ ] Parse justfile arguments `{{arg}}`
-- [ ] Argument form before execution
-- [ ] Task history per project
-
-### Phase 3: Project-Specific Docker (Future)
-
-- [ ] Detect `docker-compose.yml` in project
-- [ ] Show project's containers vs global containers
-
-### Phase 4: Session Persistence (Future)
-
-- [ ] Save/restore open projects
-- [ ] Recent projects menu
+### Phase 4: Project-Level Features
+- [ ] Copy .env between worktrees
+- [ ] Worktree management UI (create/delete)
