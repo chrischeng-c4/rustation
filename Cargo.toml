@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["src-tauri"]
+members = ["src-tauri", "packages/core"]
 # Note: rstn/ is also available as Python (see rstn/pyproject.toml)
 # Legacy Rust TUI code in legacy-crates/ for reference
 

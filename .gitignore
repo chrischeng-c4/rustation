@@ -93,3 +93,12 @@ htmlcov/
 **/~/
 # Don't ignore root ~ files (like .gitignore), only directories
 !~/
+
+# Node.js
+node_modules/
+*.node
+out/
+test-results/
+playwright-report/
+.pnpm-store/
+
