@@ -138,6 +138,33 @@ pub async fn docker_create_vhost(service_id: String, vhost_name: String) -> napi
         .map_err(|e| napi::Error::from_reason(e))
 }
 
+/// Start a Docker service with a specific port override
+#[napi]
+pub async fn docker_start_service_with_port(service_id: String, port: u16) -> napi::Result<()> {
+    let dm = get_docker_manager().await?;
+    dm.start_service_with_port(&service_id, port)
+        .await
+        .map_err(|e| napi::Error::from_reason(e))
+}
+
+/// Stop any Docker container by ID or name
+#[napi]
+pub async fn docker_stop_container(container_id: String) -> napi::Result<()> {
+    let dm = get_docker_manager().await?;
+    dm.stop_container(&container_id)
+        .await
+        .map_err(|e| napi::Error::from_reason(e))
+}
+
+/// Check for port conflict before starting a service
+#[napi]
+pub async fn docker_check_port_conflict(service_id: String) -> napi::Result<Option<state::PortConflictInfo>> {
+    let dm = get_docker_manager().await?;
+    dm.check_port_conflict(&service_id)
+        .await
+        .map_err(|e| napi::Error::from_reason(e))
+}
+
 // ============================================================================
 // Justfile functions
 // ============================================================================
@@ -287,6 +314,8 @@ async fn refresh_docker_services_internal() {
                     status: s.status,
                     port: s.port,
                     service_type: s.service_type,
+                    project_group: s.project_group,
+                    is_rstn_managed: s.is_rstn_managed,
                 })
                 .collect();
             let mut state = get_app_state().write().await;
@@ -337,17 +366,48 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         }
 
         Action::StartDockerService { ref service_id } => {
-            match docker_start_service(service_id.clone()).await {
-                Ok(()) => {
-                    // Refresh services to get updated status
-                    refresh_docker_services_internal().await;
+            // Check for port conflict first
+            match docker_check_port_conflict(service_id.clone()).await {
+                Ok(Some(conflict_info)) => {
+                    // Port conflict detected - set pending conflict for UI to handle
+                    let conflict_data = actions::PortConflictData {
+                        requested_port: conflict_info.requested_port as u16,
+                        conflicting_container: actions::ConflictingContainerData {
+                            id: conflict_info.container_id,
+                            name: conflict_info.container_name,
+                            image: conflict_info.container_image,
+                            is_rstn_managed: conflict_info.is_rstn_managed,
+                        },
+                        suggested_port: conflict_info.suggested_port as u16,
+                    };
+                    let mut state = get_app_state().write().await;
+                    reduce(&mut state, Action::SetPortConflict {
+                        service_id: service_id.clone(),
+                        conflict: conflict_data,
+                    });
+                }
+                Ok(None) => {
+                    // No conflict, proceed with start
+                    match docker_start_service(service_id.clone()).await {
+                        Ok(()) => {
+                            refresh_docker_services_internal().await;
+                        }
+                        Err(e) => {
+                            let mut state = get_app_state().write().await;
+                            reduce(&mut state, Action::SetError {
+                                code: "DOCKER_START_ERROR".to_string(),
+                                message: e.to_string(),
+                                context: Some(format!("StartDockerService: {}", service_id)),
+                            });
+                        }
+                    }
                 }
                 Err(e) => {
                     let mut state = get_app_state().write().await;
                     reduce(&mut state, Action::SetError {
-                        code: "DOCKER_START_ERROR".to_string(),
+                        code: "DOCKER_PORT_CHECK_ERROR".to_string(),
                         message: e.to_string(),
-                        context: Some(format!("StartDockerService: {}", service_id)),
+                        context: Some(format!("CheckPortConflict: {}", service_id)),
                     });
                 }
             }
@@ -572,6 +632,53 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
             }
         }
 
+        Action::StartDockerServiceWithPort { ref service_id, port } => {
+            // Start service with custom port
+            match docker_start_service_with_port(service_id.clone(), port).await {
+                Ok(()) => {
+                    refresh_docker_services_internal().await;
+                }
+                Err(e) => {
+                    let mut state = get_app_state().write().await;
+                    reduce(&mut state, Action::SetError {
+                        code: "DOCKER_START_ERROR".to_string(),
+                        message: e.to_string(),
+                        context: Some(format!("StartDockerServiceWithPort: {} on port {}", service_id, port)),
+                    });
+                }
+            }
+        }
+
+        Action::ResolveConflictByStoppingContainer { ref conflicting_container_id, ref service_id } => {
+            // Stop the conflicting container first
+            match docker_stop_container(conflicting_container_id.clone()).await {
+                Ok(()) => {
+                    // Now start the rstn service
+                    match docker_start_service(service_id.clone()).await {
+                        Ok(()) => {
+                            refresh_docker_services_internal().await;
+                        }
+                        Err(e) => {
+                            let mut state = get_app_state().write().await;
+                            reduce(&mut state, Action::SetError {
+                                code: "DOCKER_START_ERROR".to_string(),
+                                message: e.to_string(),
+                                context: Some(format!("ResolveConflict: failed to start {}", service_id)),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    let mut state = get_app_state().write().await;
+                    reduce(&mut state, Action::SetError {
+                        code: "DOCKER_STOP_ERROR".to_string(),
+                        message: e.to_string(),
+                        context: Some(format!("ResolveConflict: failed to stop {}", conflicting_container_id)),
+                    });
+                }
+            }
+        }
+
         // Synchronous actions - already handled by reduce()
         Action::CloseProject { .. }
         | Action::SwitchProject { .. }
@@ -590,6 +697,8 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         | Action::SetDockerLogs { .. }
         | Action::SetDockerLoading { .. }
         | Action::SetDockerLogsLoading { .. }
+        | Action::SetPortConflict { .. }
+        | Action::ClearPortConflict
         | Action::SetJustfileCommands { .. }
         | Action::SetTaskStatus { .. }
         | Action::SetActiveCommand { .. }

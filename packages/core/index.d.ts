@@ -38,6 +38,25 @@ export interface DockerService {
   status: string
   port?: number
   serviceType: string
+  /** Project group (e.g., "tech-platform", "rstn", "pg-bench") */
+  projectGroup?: string
+  /** Whether this container is managed by rstn (rstn-* prefix) */
+  isRstnManaged: boolean
+}
+/** Port conflict information for napi export */
+export interface PortConflictInfo {
+  /** The port that was requested */
+  requestedPort: number
+  /** Docker container ID of the conflicting container */
+  containerId: string
+  /** Container name (e.g., "tech-platform-postgres") */
+  containerName: string
+  /** Container image */
+  containerImage: string
+  /** Whether this container is managed by rstn (rstn-* prefix) */
+  isRstnManaged: boolean
+  /** Suggested alternative port */
+  suggestedPort: number
 }
 /** Check if Docker is available */
 export declare function dockerIsAvailable(): Promise<boolean>
@@ -63,6 +82,12 @@ export declare function dockerCreateDatabase(serviceId: string, dbName: string):
  * Returns the connection string for the new vhost
  */
 export declare function dockerCreateVhost(serviceId: string, vhostName: string): Promise<string>
+/** Start a Docker service with a specific port override */
+export declare function dockerStartServiceWithPort(serviceId: string, port: number): Promise<void>
+/** Stop any Docker container by ID or name */
+export declare function dockerStopContainer(containerId: string): Promise<void>
+/** Check for port conflict before starting a service */
+export declare function dockerCheckPortConflict(serviceId: string): Promise<PortConflictInfo | null>
 /** Parse a justfile and return all commands */
 export declare function justfileParse(path: string): Array<JustCommand>
 /** Run a just command in a directory */

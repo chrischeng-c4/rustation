@@ -232,6 +232,45 @@ pub struct DockersState {
     pub is_loading: bool,
     /// Loading state for logs
     pub is_loading_logs: bool,
+    /// Pending port conflict requiring user resolution
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_conflict: Option<PendingConflict>,
+    /// Custom port overrides for services (service_id -> port)
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub port_overrides: HashMap<String, u16>,
+}
+
+/// Pending port conflict that requires user resolution
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PendingConflict {
+    /// The service that was trying to start
+    pub service_id: String,
+    /// The port conflict details
+    pub conflict: PortConflict,
+}
+
+/// Information about a port conflict
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PortConflict {
+    /// The port that was requested
+    pub requested_port: u16,
+    /// The container currently using this port
+    pub conflicting_container: ConflictingContainer,
+    /// Suggested alternative port
+    pub suggested_port: u16,
+}
+
+/// Information about the container causing a port conflict
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConflictingContainer {
+    /// Docker container ID
+    pub id: String,
+    /// Container name (e.g., "tech-platform-postgres")
+    pub name: String,
+    /// Container image (e.g., "postgres:15-alpine")
+    pub image: String,
+    /// Whether this container is managed by rstn (rstn-* prefix)
+    pub is_rstn_managed: bool,
 }
 
 /// Docker service info (matches existing DockerService but owned by state)
@@ -243,6 +282,10 @@ pub struct DockerServiceInfo {
     pub status: ServiceStatus,
     pub port: Option<u32>,
     pub service_type: ServiceType,
+    /// Project group (e.g., "tech-platform", "rstn", "pg-bench")
+    pub project_group: Option<String>,
+    /// Whether this container is managed by rstn (rstn-* prefix)
+    pub is_rstn_managed: bool,
 }
 
 /// Service status
@@ -383,6 +426,8 @@ mod tests {
                 status: ServiceStatus::Running,
                 port: Some(5432),
                 service_type: ServiceType::Database,
+                project_group: Some("rstn".to_string()),
+                is_rstn_managed: true,
             });
             worktree.tasks.commands.push(JustCommandInfo {
                 name: "test".to_string(),

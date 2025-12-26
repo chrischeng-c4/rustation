@@ -9,6 +9,10 @@ export interface DockerService {
   status: ServiceStatus
   port: number | null
   service_type: ServiceType
+  /** Project group (e.g., "tech-platform", "rstn", "pg-bench") */
+  project_group: string | null
+  /** Whether this container is managed by rstn (rstn-* prefix) */
+  is_rstn_managed: boolean
 }
 
 export interface DockersState {

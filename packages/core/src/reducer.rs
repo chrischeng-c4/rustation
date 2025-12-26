@@ -5,10 +5,14 @@
 //! - Returns nothing (mutates in place for efficiency)
 //! - No side effects (async operations handled separately)
 
-use crate::actions::{Action, DockerServiceData, JustCommandData, McpStatusData, TaskStatusData};
+use crate::actions::{
+    Action, ConflictingContainerData, DockerServiceData, JustCommandData, McpStatusData,
+    PortConflictData, TaskStatusData,
+};
 use crate::app_state::{
-    AppError, AppState, DockerServiceInfo, JustCommandInfo, McpStatus, ProjectState, RecentProject,
-    ServiceStatus, ServiceType, TaskStatus, WorktreeState,
+    AppError, AppState, ConflictingContainer, DockerServiceInfo, JustCommandInfo, McpStatus,
+    PendingConflict, PortConflict, ProjectState, RecentProject, ServiceStatus, ServiceType,
+    TaskStatus, WorktreeState,
 };
 use crate::persistence;
 use crate::worktree;
@@ -339,6 +343,63 @@ pub fn reduce(state: &mut AppState, action: Action) {
             // Async trigger - no immediate state change
         }
 
+        Action::SetPortConflict { service_id, conflict } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.dockers.pending_conflict = Some(PendingConflict {
+                        service_id,
+                        conflict: conflict.into(),
+                    });
+                }
+            }
+        }
+
+        Action::ClearPortConflict => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.dockers.pending_conflict = None;
+                }
+            }
+        }
+
+        Action::StartDockerServiceWithPort { ref service_id, port } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    // Store port override
+                    worktree.dockers.port_overrides.insert(service_id.clone(), port);
+                    // Clear pending conflict
+                    worktree.dockers.pending_conflict = None;
+                    // Set service to starting
+                    if let Some(service) = worktree
+                        .dockers
+                        .services
+                        .iter_mut()
+                        .find(|s| s.id == *service_id)
+                    {
+                        service.status = ServiceStatus::Starting;
+                    }
+                }
+            }
+        }
+
+        Action::ResolveConflictByStoppingContainer { ref service_id, .. } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    // Clear pending conflict
+                    worktree.dockers.pending_conflict = None;
+                    // Set service to starting
+                    if let Some(service) = worktree
+                        .dockers
+                        .services
+                        .iter_mut()
+                        .find(|s| s.id == *service_id)
+                    {
+                        service.status = ServiceStatus::Starting;
+                    }
+                }
+            }
+        }
+
         Action::SetDockerLoading { is_loading } => {
             if let Some(project) = state.active_project_mut() {
                 if let Some(worktree) = project.active_worktree_mut() {
@@ -538,6 +599,8 @@ impl From<DockerServiceData> for DockerServiceInfo {
                 "Cache" => ServiceType::Cache,
                 _ => ServiceType::Other,
             },
+            project_group: data.project_group,
+            is_rstn_managed: data.is_rstn_managed,
         }
     }
 }
@@ -570,6 +633,27 @@ impl From<McpStatusData> for McpStatus {
             McpStatusData::Starting => McpStatus::Starting,
             McpStatusData::Running => McpStatus::Running,
             McpStatusData::Error => McpStatus::Error,
+        }
+    }
+}
+
+impl From<PortConflictData> for PortConflict {
+    fn from(data: PortConflictData) -> Self {
+        Self {
+            requested_port: data.requested_port,
+            conflicting_container: data.conflicting_container.into(),
+            suggested_port: data.suggested_port,
+        }
+    }
+}
+
+impl From<ConflictingContainerData> for ConflictingContainer {
+    fn from(data: ConflictingContainerData) -> Self {
+        Self {
+            id: data.id,
+            name: data.name,
+            image: data.image,
+            is_rstn_managed: data.is_rstn_managed,
         }
     }
 }
@@ -790,6 +874,8 @@ mod tests {
                     status: "running".to_string(),
                     port: Some(5432),
                     service_type: "Database".to_string(),
+                    project_group: Some("rstn".to_string()),
+                    is_rstn_managed: true,
                 }],
             },
         );
@@ -813,6 +899,8 @@ mod tests {
                 status: ServiceStatus::Stopped,
                 port: Some(5432),
                 service_type: ServiceType::Database,
+                project_group: Some("rstn".to_string()),
+                is_rstn_managed: true,
             });
 
         reduce(

@@ -26,6 +26,26 @@ export interface DockerServiceInfo {
   status: ServiceStatus
   port: number | null
   service_type: ServiceType
+  project_group: string | null
+  is_rstn_managed: boolean
+}
+
+export interface ConflictingContainer {
+  id: string
+  name: string
+  image: string
+  is_rstn_managed: boolean
+}
+
+export interface PortConflict {
+  requested_port: number
+  conflicting_container: ConflictingContainer
+  suggested_port: number
+}
+
+export interface PendingConflict {
+  service_id: string
+  conflict: PortConflict
 }
 
 export interface DockersState {
@@ -35,6 +55,8 @@ export interface DockersState {
   logs: string[]
   is_loading: boolean
   is_loading_logs: boolean
+  pending_conflict: PendingConflict | null
+  port_overrides: Record<string, number>
 }
 
 // ============================================================================
@@ -292,6 +314,25 @@ export interface SetDockerLogsLoadingAction {
   payload: { is_loading: boolean }
 }
 
+export interface SetPortConflictAction {
+  type: 'SetPortConflict'
+  payload: { service_id: string; conflict: PortConflictData }
+}
+
+export interface ClearPortConflictAction {
+  type: 'ClearPortConflict'
+}
+
+export interface StartDockerServiceWithPortAction {
+  type: 'StartDockerServiceWithPort'
+  payload: { service_id: string; port: number }
+}
+
+export interface ResolveConflictByStoppingContainerAction {
+  type: 'ResolveConflictByStoppingContainer'
+  payload: { conflicting_container_id: string; service_id: string }
+}
+
 // Tasks Actions
 export interface LoadJustfileCommandsAction {
   type: 'LoadJustfileCommands'
@@ -366,6 +407,21 @@ export interface DockerServiceData {
   status: string
   port: number | null
   service_type: string
+  project_group: string | null
+  is_rstn_managed: boolean
+}
+
+export interface ConflictingContainerData {
+  id: string
+  name: string
+  image: string
+  is_rstn_managed: boolean
+}
+
+export interface PortConflictData {
+  requested_port: number
+  conflicting_container: ConflictingContainerData
+  suggested_port: number
 }
 
 export interface JustCommandData {
@@ -416,6 +472,10 @@ export type Action =
   | CreateVhostAction
   | SetDockerLoadingAction
   | SetDockerLogsLoadingAction
+  | SetPortConflictAction
+  | ClearPortConflictAction
+  | StartDockerServiceWithPortAction
+  | ResolveConflictByStoppingContainerAction
   | LoadJustfileCommandsAction
   | SetJustfileCommandsAction
   | RunJustCommandAction

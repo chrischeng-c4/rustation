@@ -1,11 +1,11 @@
 ---
 title: "Docker Container Management (GUI)"
-description: "Architecture for the Dockers tab in Tauri GUI"
+description: "Architecture for the Dockers tab in Electron GUI"
 category: architecture
-status: draft
-last_updated: 2025-12-24
-version: 2.0.0
-tags: [docker, tauri, react, gui]
+status: active
+last_updated: 2025-12-26
+version: 2.1.0
+tags: [docker, electron, react, gui, port-conflict]
 weight: 10
 ---
 
@@ -202,9 +202,98 @@ interface DockerService {
 - **Engine**: Virtualized list.
 - **Controls**: Search/Filter logs, Clear, Follow toggle.
 
+### 6.3 `PortConflictDialog`
+- **Trigger**: When starting a service whose port is already in use.
+- **Options**:
+    - Use alternative port (auto-suggested)
+    - Stop conflicting container and retry (only for rstn-* containers)
+
 ---
 
-## 7. Implementation Reference (GUI)
+## 7. Port Conflict Resolution
+
+### 7.1 Overview
+When starting an rstn service (e.g., `rstn-postgres`), if the target port (e.g., 5432) is already in use by another container, rstn detects the conflict and prompts the user for resolution.
+
+### 7.2 Container Visibility
+- **Global visibility**: rstn shows ALL running containers on the system.
+- **rstn-only management**: Only `rstn-*` prefixed containers can be started/stopped/restarted by rstn.
+- **External containers**: Other containers (e.g., `tech-platform-postgres`) are read-only.
+
+### 7.3 Conflict Resolution Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant React as React Frontend
+    participant Rust as Rust Backend
+    participant Docker as Docker Daemon
+
+    User->>React: Click "Start" on rstn-postgres
+    React->>Rust: dispatch(StartDockerService)
+    Rust->>Docker: list_containers (check port 5432)
+
+    alt Port 5432 is free
+        Rust->>Docker: create & start container
+        Docker-->>Rust: OK
+        Rust-->>React: state update (service running)
+    else Port 5432 is in use
+        Rust->>Rust: Identify conflicting container
+        Rust->>Rust: Find next available port (5433)
+        Rust-->>React: SetPortConflict { conflict info }
+        React->>React: Show PortConflictDialog
+
+        alt User chooses "Use alternative port"
+            User->>React: Select port 5433
+            React->>Rust: StartDockerServiceWithPort(5433)
+            Rust->>Docker: create & start with port 5433
+        else User chooses "Stop conflicting container"
+            User->>React: Click "Stop and retry"
+            React->>Rust: ResolveConflictByStoppingContainer
+            Rust->>Docker: stop conflicting container
+            Rust->>Docker: start rstn-postgres on 5432
+        end
+
+        Rust-->>React: state update (service running)
+    end
+```
+
+### 7.4 State Structure
+
+```typescript
+interface PendingConflict {
+  service_id: string;
+  conflict: {
+    requested_port: number;
+    conflicting_container: {
+      id: string;
+      name: string;
+      image: string;
+      is_rstn_managed: boolean;
+    };
+    suggested_port: number;
+  };
+}
+
+interface DockersState {
+  // ... existing fields ...
+  pending_conflict: PendingConflict | null;
+  port_overrides: Record<string, number>;  // service_id -> custom port
+}
+```
+
+### 7.5 Actions
+
+| Action | Description |
+|--------|-------------|
+| `SetPortConflict` | Set pending conflict for UI to display |
+| `ClearPortConflict` | User cancelled or resolved conflict |
+| `StartDockerServiceWithPort` | Start service with custom port override |
+| `ResolveConflictByStoppingContainer` | Stop conflicting container, then start rstn service |
+
+---
+
+## 8. Implementation Reference (GUI)
 
 - **Frontend**: `src/features/docker/`
     - `DockerDashboard.tsx` (Main container)

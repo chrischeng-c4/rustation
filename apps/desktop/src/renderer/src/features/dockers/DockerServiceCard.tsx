@@ -11,13 +11,13 @@ import {
   CardFooter,
 } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import type { DockerService } from '@/types/docker'
-import { statusColors, statusLabels } from '@/types/docker'
+import type { DockerServiceInfo } from '@/types/state'
+import { statusColors, statusLabels } from '@/types/state'
 import { AddDbDialog } from './AddDbDialog'
 import { AddVhostDialog } from './AddVhostDialog'
 
 // Connection string templates with default credentials
-function getConnectionString(service: DockerService): string {
+function getConnectionString(service: DockerServiceInfo): string {
   const host = 'localhost'
   const port = service.port
 
@@ -40,7 +40,7 @@ function getConnectionString(service: DockerService): string {
 }
 
 interface DockerServiceCardProps {
-  service: DockerService
+  service: DockerServiceInfo
   isActive?: boolean
   onSelect?: (id: string) => void
   onToggle?: (id: string) => void
@@ -63,7 +63,8 @@ export function DockerServiceCard({
   const [copied, setCopied] = useState(false)
   const isRunning = service.status === 'running'
   const isStarting = service.status === 'starting'
-  const canControl = !isStarting
+  const isRstnManaged = service.is_rstn_managed
+  const canControl = !isStarting && isRstnManaged
 
   const handleCopyConnectionString = async () => {
     const connectionString = getConnectionString(service)

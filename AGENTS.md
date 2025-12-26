@@ -326,6 +326,66 @@ START: rstn needs to call Claude CLI?
 
 ---
 
+<agent-orchestration>
+The main conversation thread acts as an **Orchestrator/PM/Planner**. It should:
+
+1. **NEVER read code directly** - Delegate to `reader` agent
+2. **NEVER write code directly** - Delegate to `writer` agent
+3. **Plan and coordinate** - Break down tasks, sequence agent calls
+4. **Review and approve** - Validate agent outputs before proceeding
+
+## Agent Definitions
+
+| Agent | Model | Location | Purpose |
+|-------|-------|----------|---------|
+| reader | haiku | .claude/agents/reader.md | All reading and summarization |
+| writer | sonnet | .claude/agents/writer.md | All writing and updating |
+
+## Delegation Rules
+
+| Task | Delegate To | Model |
+|------|-------------|-------|
+| Read files | reader | haiku |
+| Search codebase | reader | haiku |
+| Summarize code | reader | haiku |
+| Understand patterns | reader | haiku |
+| Find file locations | reader | haiku |
+| Write code | writer | sonnet |
+| Edit files | writer | sonnet |
+| Create files | writer | sonnet |
+| Run commands | writer | sonnet |
+| Fix bugs | writer | sonnet |
+
+## Workflow Pattern
+
+```
+User Request
+    ↓
+Orchestrator (main thread)
+    ├── Spawns reader agent(s) for understanding
+    ├── Reviews reader findings
+    ├── Creates implementation plan
+    ├── Spawns writer agent(s) for execution
+    └── Reviews writer results
+```
+
+## Example Orchestration
+
+```
+User: "Add email validation to the User document"
+
+Orchestrator:
+1. Spawn reader → "Find existing validation patterns in validation.rs"
+2. Review findings → Understands pattern
+3. Create plan → Task breakdown with file targets
+4. Spawn writer → "Add email regex validation following the existing pattern"
+5. Review result → Verify implementation matches plan
+```
+
+</agent-orchestration>
+
+---
+
 <grounding>
 
 <repository-structure>

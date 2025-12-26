@@ -1,13 +1,24 @@
-import { useEffect, useCallback } from 'react'
-import { RefreshCw, AlertCircle } from 'lucide-react'
+import { useEffect, useCallback, useState, useMemo } from 'react'
+import { RefreshCw, AlertCircle, ChevronDown, ChevronRight, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Badge } from '@/components/ui/badge'
 import { LogPanel } from '@/components/LogPanel'
 import { DockerServiceCard } from './DockerServiceCard'
+import { PortConflictDialog } from './PortConflictDialog'
 import { useDockersState } from '@/hooks/useAppState'
+import type { DockerServiceInfo } from '@/types/state'
+
+interface ServiceGroup {
+  name: string
+  services: DockerServiceInfo[]
+  isRstnManaged: boolean
+  runningCount: number
+}
 
 export function DockersPage() {
   const { dockers, dispatch, isLoading: isStateLoading } = useDockersState()
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
   // Derive values from state
   const services = dockers?.services ?? []
@@ -16,8 +27,49 @@ export function DockersPage() {
   const isRefreshing = dockers?.is_loading ?? false
   const isRefreshingLogs = dockers?.is_loading_logs ?? false
   const dockerAvailable = dockers?.docker_available ?? null
+  const pendingConflict = dockers?.pending_conflict ?? null
 
   const selectedService = services.find((s) => s.id === selectedServiceId)
+
+  // Group services by project_group
+  const serviceGroups = useMemo((): ServiceGroup[] => {
+    const groupMap = new Map<string, DockerServiceInfo[]>()
+
+    for (const service of services) {
+      const groupName = service.project_group ?? 'other'
+      const existing = groupMap.get(groupName) ?? []
+      existing.push(service)
+      groupMap.set(groupName, existing)
+    }
+
+    // Convert to array and sort: rstn first, then alphabetically
+    const groups: ServiceGroup[] = []
+    for (const [name, groupServices] of groupMap) {
+      const isRstnManaged = groupServices.some(s => s.is_rstn_managed)
+      const runningCount = groupServices.filter(s => s.status === 'running').length
+      groups.push({ name, services: groupServices, isRstnManaged, runningCount })
+    }
+
+    return groups.sort((a, b) => {
+      // rstn always first
+      if (a.name === 'rstn') return -1
+      if (b.name === 'rstn') return 1
+      // Then alphabetically
+      return a.name.localeCompare(b.name)
+    })
+  }, [services])
+
+  const toggleGroup = useCallback((groupName: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(groupName)) {
+        next.delete(groupName)
+      } else {
+        next.add(groupName)
+      }
+      return next
+    })
+  }, [])
 
   // Check Docker availability and load services on mount
   useEffect(() => {
@@ -70,6 +122,25 @@ export function DockersPage() {
     return connectionString
   }, [])
 
+  // Port conflict resolution handlers
+  const handleResolveWithPort = useCallback(async (serviceId: string, port: number) => {
+    await dispatch({
+      type: 'StartDockerServiceWithPort',
+      payload: { service_id: serviceId, port }
+    })
+  }, [dispatch])
+
+  const handleResolveByStoppingContainer = useCallback(async (containerId: string, serviceId: string) => {
+    await dispatch({
+      type: 'ResolveConflictByStoppingContainer',
+      payload: { conflicting_container_id: containerId, service_id: serviceId }
+    })
+  }, [dispatch])
+
+  const handleCancelConflict = useCallback(async () => {
+    await dispatch({ type: 'ClearPortConflict' })
+  }, [dispatch])
+
   // Initial loading state
   if (isStateLoading || dockerAvailable === null) {
     return (
@@ -98,6 +169,14 @@ export function DockersPage() {
 
   return (
     <div className="flex h-full flex-col">
+      {/* Port Conflict Dialog */}
+      <PortConflictDialog
+        pendingConflict={pendingConflict}
+        onResolveWithPort={handleResolveWithPort}
+        onResolveByStoppingContainer={handleResolveByStoppingContainer}
+        onCancel={handleCancelConflict}
+      />
+
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div>
@@ -118,21 +197,57 @@ export function DockersPage() {
             <span className="text-sm font-medium">Services</span>
           </div>
           <ScrollArea className="h-[calc(100%-40px)]">
-            <div className="space-y-3 p-4">
-              {services.map((service) => (
-                <DockerServiceCard
-                  key={service.id}
-                  service={service}
-                  isActive={selectedServiceId === service.id}
-                  onSelect={handleViewLogs}
-                  onToggle={handleToggle}
-                  onRestart={handleRestart}
-                  onViewLogs={handleViewLogs}
-                  onCreateDb={handleCreateDb}
-                  onCreateVhost={handleCreateVhost}
-                />
-              ))}
-              {services.length === 0 && !isRefreshing && (
+            <div className="space-y-2 p-4">
+              {serviceGroups.map((group) => {
+                const isCollapsed = collapsedGroups.has(group.name)
+                return (
+                  <div key={group.name} className="rounded-lg border">
+                    {/* Group Header */}
+                    <button
+                      className="flex w-full items-center justify-between px-3 py-2 hover:bg-muted/40 transition-colors"
+                      onClick={() => toggleGroup(group.name)}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isCollapsed ? (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <span className="font-medium">{group.name}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {group.runningCount}/{group.services.length}
+                        </Badge>
+                      </div>
+                      {!group.isRstnManaged && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Lock className="h-3 w-3" />
+                          read-only
+                        </div>
+                      )}
+                    </button>
+
+                    {/* Group Services */}
+                    {!isCollapsed && (
+                      <div className="space-y-2 border-t px-3 py-2">
+                        {group.services.map((service) => (
+                          <DockerServiceCard
+                            key={service.id}
+                            service={service}
+                            isActive={selectedServiceId === service.id}
+                            onSelect={handleViewLogs}
+                            onToggle={handleToggle}
+                            onRestart={handleRestart}
+                            onViewLogs={handleViewLogs}
+                            onCreateDb={handleCreateDb}
+                            onCreateVhost={handleCreateVhost}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              {serviceGroups.length === 0 && !isRefreshing && (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <p className="text-muted-foreground">No Docker services found</p>
                   <Button variant="outline" className="mt-4" onClick={handleRefreshAll}>

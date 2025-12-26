@@ -1,6 +1,6 @@
 //! Docker container management using bollard.
 
-use crate::state::{DockerService, ServiceType};
+use crate::state::{DockerService, PortConflictInfo, ServiceType};
 use bollard::container::{
     Config, CreateContainerOptions, ListContainersOptions, LogsOptions, RemoveContainerOptions,
     RestartContainerOptions, StartContainerOptions, StopContainerOptions,
@@ -99,51 +99,141 @@ impl DockerManager {
     }
 
     /// List all services with their current status
+    /// Returns ALL containers on the system, grouped by project prefix
     pub async fn list_services(&self) -> Vec<DockerService> {
         let mut services = Vec::new();
 
-        // Get running containers
-        let running_containers = self
+        // Get ALL containers (no filter)
+        let all_containers = self
             .docker
             .list_containers(Some(ListContainersOptions::<String> {
                 all: true,
-                filters: {
-                    let mut filters = HashMap::new();
-                    filters.insert("name".to_string(), vec!["rstn-".to_string()]);
-                    filters
-                },
                 ..Default::default()
             }))
             .await
             .unwrap_or_default();
 
-        // Build service list from built-in definitions
-        for config in BUILTIN_SERVICES {
-            let container = running_containers
-                .iter()
-                .find(|c| c.names.as_ref().map_or(false, |n| n.iter().any(|name| name.contains(config.id))));
+        // Track which rstn services are already running
+        let mut running_rstn_ids: Vec<String> = Vec::new();
 
-            let status = match container {
-                Some(c) => match c.state.as_deref() {
-                    Some("running") => "running".to_string(),
-                    Some("created") | Some("restarting") => "starting".to_string(),
-                    Some("exited") | Some("dead") => "stopped".to_string(),
-                    _ => "stopped".to_string(),
-                },
-                None => "stopped".to_string(),
+        // Build service list from ALL running containers
+        for container in &all_containers {
+            let container_name = container
+                .names
+                .as_ref()
+                .and_then(|n| n.first())
+                .map(|n| n.trim_start_matches('/').to_string())
+                .unwrap_or_default();
+
+            if container_name.is_empty() {
+                continue;
+            }
+
+            let is_rstn_managed = container_name.starts_with("rstn-");
+            let project_group = Self::detect_project_group(&container_name);
+
+            // Track running rstn services
+            if is_rstn_managed {
+                running_rstn_ids.push(container_name.clone());
+            }
+
+            let status = match container.state.as_deref() {
+                Some("running") => "running".to_string(),
+                Some("created") | Some("restarting") => "starting".to_string(),
+                Some("exited") | Some("dead") => "stopped".to_string(),
+                _ => "stopped".to_string(),
             };
 
+            // Get the port from container ports
+            let port = container.ports.as_ref().and_then(|ports| {
+                ports.first().and_then(|p| p.public_port.map(|pp| pp as u32))
+            });
+
+            // Determine service type (best effort for non-rstn containers)
+            let service_type = Self::detect_service_type(&container.image.clone().unwrap_or_default());
+
             services.push(DockerService {
-                id: config.id.to_string(),
-                name: config.name.to_string(),
-                image: config.image.to_string(),
+                id: container_name.clone(),
+                name: Self::extract_service_name(&container_name),
+                image: container.image.clone().unwrap_or_default(),
                 status,
-                port: Some(config.port as u32),
-                service_type: format!("{:?}", config.service_type),
+                port,
+                service_type: format!("{:?}", service_type),
+                project_group: Some(project_group),
+                is_rstn_managed,
             });
         }
 
+        // Add built-in rstn services that aren't running (for Quick Start)
+        for config in BUILTIN_SERVICES {
+            if !running_rstn_ids.contains(&config.id.to_string()) {
+                services.push(DockerService {
+                    id: config.id.to_string(),
+                    name: config.name.to_string(),
+                    image: config.image.to_string(),
+                    status: "stopped".to_string(),
+                    port: Some(config.port as u32),
+                    service_type: format!("{:?}", config.service_type),
+                    project_group: Some("rstn".to_string()),
+                    is_rstn_managed: true,
+                });
+            }
+        }
+
         services
+    }
+
+    /// Detect project group from container name
+    /// e.g., "tech-platform-postgres" -> "tech-platform"
+    /// e.g., "rstn-postgres" -> "rstn"
+    /// e.g., "pg-bench" -> "pg-bench" (single segment)
+    fn detect_project_group(container_name: &str) -> String {
+        let parts: Vec<&str> = container_name.split('-').collect();
+        if parts.len() >= 2 {
+            // Check if it looks like "prefix-service" pattern
+            // For names like "tech-platform-postgres", join first two parts
+            // For names like "rstn-postgres", use first part
+            if parts.len() >= 3 && !["rstn", "pg"].contains(&parts[0]) {
+                // Likely "project-subproject-service" -> "project-subproject"
+                parts[..parts.len() - 1].join("-")
+            } else {
+                // "prefix-service" -> "prefix"
+                parts[0].to_string()
+            }
+        } else {
+            // Single word or no hyphens - use as-is
+            container_name.to_string()
+        }
+    }
+
+    /// Extract display name from container name
+    /// e.g., "tech-platform-postgres" -> "postgres"
+    /// e.g., "rstn-postgres" -> "postgres"
+    fn extract_service_name(container_name: &str) -> String {
+        // For rstn containers, use the friendly name from config
+        if let Some(config) = BUILTIN_SERVICES.iter().find(|c| c.id == container_name) {
+            return config.name.to_string();
+        }
+        // Otherwise extract last part after hyphen
+        container_name
+            .rsplit('-')
+            .next()
+            .unwrap_or(container_name)
+            .to_string()
+    }
+
+    /// Detect service type from image name
+    fn detect_service_type(image: &str) -> ServiceType {
+        let image_lower = image.to_lowercase();
+        if image_lower.contains("postgres") || image_lower.contains("mysql") || image_lower.contains("mongo") {
+            ServiceType::Database
+        } else if image_lower.contains("redis") || image_lower.contains("dragonfly") {
+            ServiceType::Cache
+        } else if image_lower.contains("rabbit") || image_lower.contains("nats") {
+            ServiceType::MessageBroker
+        } else {
+            ServiceType::Other
+        }
     }
 
     /// Start a service
@@ -448,5 +538,171 @@ impl DockerManager {
 
         info!("Image pulled: {}", image);
         Ok(())
+    }
+
+    /// Start a service with a specific port override
+    pub async fn start_service_with_port(&self, service_id: &str, port: u16) -> Result<(), String> {
+        info!("Starting service {} with port override: {}", service_id, port);
+
+        let config = BUILTIN_SERVICES
+            .iter()
+            .find(|s| s.id == service_id)
+            .ok_or_else(|| format!("Unknown service: {}", service_id))?;
+
+        // Remove existing container if any (to apply new port)
+        let _ = self.remove_service(service_id).await;
+
+        // Ensure image exists
+        self.ensure_image(config.image).await?;
+
+        // Create container with custom port
+        let env: Vec<String> = config
+            .env
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect();
+
+        let port_binding = format!("{}/tcp", config.internal_port);
+        let host_port = format!("{}", port);
+
+        let host_config = HostConfig {
+            port_bindings: Some({
+                let mut bindings = HashMap::new();
+                bindings.insert(
+                    port_binding.clone(),
+                    Some(vec![bollard::models::PortBinding {
+                        host_ip: Some("0.0.0.0".to_string()),
+                        host_port: Some(host_port),
+                    }]),
+                );
+                bindings
+            }),
+            ..Default::default()
+        };
+
+        let container_config = Config {
+            image: Some(config.image.to_string()),
+            env: Some(env),
+            host_config: Some(host_config),
+            ..Default::default()
+        };
+
+        self.docker
+            .create_container(
+                Some(CreateContainerOptions {
+                    name: service_id,
+                    platform: None,
+                }),
+                container_config,
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+
+        self.docker
+            .start_container(service_id, None::<StartContainerOptions<String>>)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        info!("Service started with custom port: {} on port {}", service_id, port);
+        Ok(())
+    }
+
+    /// Stop any container by ID or name (not just rstn-* containers)
+    pub async fn stop_container(&self, container_id: &str) -> Result<(), String> {
+        info!("Stopping container: {}", container_id);
+
+        self.docker
+            .stop_container(container_id, Some(StopContainerOptions { t: 10 }))
+            .await
+            .map_err(|e| e.to_string())?;
+
+        info!("Container stopped: {}", container_id);
+        Ok(())
+    }
+
+    /// Check for port conflict before starting a service
+    /// Returns None if no conflict, Some(PortConflictInfo) if port is in use
+    pub async fn check_port_conflict(&self, service_id: &str) -> Result<Option<PortConflictInfo>, String> {
+        let config = BUILTIN_SERVICES
+            .iter()
+            .find(|s| s.id == service_id)
+            .ok_or_else(|| format!("Unknown service: {}", service_id))?;
+
+        let target_port = config.port;
+
+        // List all running containers
+        let containers = self
+            .docker
+            .list_containers(Some(ListContainersOptions::<String> {
+                all: false, // Only running containers
+                ..Default::default()
+            }))
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Check if any container is using this port
+        for container in containers {
+            if let Some(ports) = &container.ports {
+                for port_info in ports {
+                    if port_info.public_port == Some(target_port) {
+                        // Found a conflict!
+                        let container_id = container.id.clone().unwrap_or_default();
+                        let container_name = container
+                            .names
+                            .as_ref()
+                            .and_then(|n| n.first())
+                            .map(|n| n.trim_start_matches('/').to_string())
+                            .unwrap_or_default();
+                        let is_rstn_managed = container_name.starts_with("rstn-");
+
+                        // Find next available port
+                        let suggested_port = self.find_next_available_port(target_port).await;
+
+                        return Ok(Some(PortConflictInfo {
+                            requested_port: target_port as u32,
+                            container_id,
+                            container_name,
+                            container_image: container.image.clone().unwrap_or_default(),
+                            is_rstn_managed,
+                            suggested_port: suggested_port as u32,
+                        }));
+                    }
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Find the next available port starting from a base port
+    async fn find_next_available_port(&self, base_port: u16) -> u16 {
+        let containers = self
+            .docker
+            .list_containers(Some(ListContainersOptions::<String> {
+                all: false,
+                ..Default::default()
+            }))
+            .await
+            .unwrap_or_default();
+
+        // Collect all used ports
+        let mut used_ports: Vec<u16> = Vec::new();
+        for container in &containers {
+            if let Some(ports) = &container.ports {
+                for port_info in ports {
+                    if let Some(public_port) = port_info.public_port {
+                        used_ports.push(public_port);
+                    }
+                }
+            }
+        }
+
+        // Find next available port
+        let mut port = base_port + 1;
+        while used_ports.contains(&port) && port < 65535 {
+            port += 1;
+        }
+
+        port
     }
 }

@@ -109,6 +109,24 @@ pub enum Action {
     /// Create a vhost in RabbitMQ
     CreateVhost { service_id: String, vhost_name: String },
 
+    /// Set a port conflict that requires user resolution
+    SetPortConflict {
+        service_id: String,
+        conflict: PortConflictData,
+    },
+
+    /// Clear the pending port conflict (user cancelled or resolved)
+    ClearPortConflict,
+
+    /// Start a Docker service with a specific port override
+    StartDockerServiceWithPort { service_id: String, port: u16 },
+
+    /// Stop a conflicting container and start the rstn service
+    ResolveConflictByStoppingContainer {
+        conflicting_container_id: String,
+        service_id: String,
+    },
+
     /// Set loading state for Docker operations
     SetDockerLoading { is_loading: bool },
 
@@ -203,6 +221,8 @@ pub struct DockerServiceData {
     pub status: String,
     pub port: Option<u32>,
     pub service_type: String,
+    pub project_group: Option<String>,
+    pub is_rstn_managed: bool,
 }
 
 /// Just command data for actions
@@ -221,6 +241,23 @@ pub enum TaskStatusData {
     Running,
     Success,
     Error,
+}
+
+/// Port conflict data for actions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PortConflictData {
+    pub requested_port: u16,
+    pub conflicting_container: ConflictingContainerData,
+    pub suggested_port: u16,
+}
+
+/// Conflicting container data for actions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConflictingContainerData {
+    pub id: String,
+    pub name: String,
+    pub image: String,
+    pub is_rstn_managed: bool,
 }
 
 // ============================================================================
@@ -280,6 +317,8 @@ mod tests {
                 status: "running".to_string(),
                 port: Some(5432),
                 service_type: "Database".to_string(),
+                project_group: Some("rstn".to_string()),
+                is_rstn_managed: true,
             }],
         };
         let json = serde_json::to_string_pretty(&action).unwrap();
