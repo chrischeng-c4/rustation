@@ -70,6 +70,36 @@ pub enum Action {
     /// Set MCP error (internal)
     SetMcpError { error: String },
 
+    /// Add MCP log entry (internal, from MCP server)
+    AddMcpLogEntry { entry: McpLogEntryData },
+
+    /// Clear MCP logs
+    ClearMcpLogs,
+
+    // ========================================================================
+    // Chat Actions (worktree scope)
+    // ========================================================================
+    /// Send a chat message to Claude
+    SendChatMessage { text: String },
+
+    /// Add a chat message (user or assistant)
+    AddChatMessage { message: ChatMessageData },
+
+    /// Append content to the last assistant message (streaming)
+    AppendChatContent { content: String },
+
+    /// Set chat typing/streaming status
+    SetChatTyping { is_typing: bool },
+
+    /// Set chat error
+    SetChatError { error: String },
+
+    /// Clear chat error
+    ClearChatError,
+
+    /// Clear all chat messages
+    ClearChat,
+
     // ========================================================================
     // Docker Actions
     // ========================================================================
@@ -195,8 +225,14 @@ pub enum Action {
         notification_type: NotificationTypeData,
     },
 
-    /// Dismiss a notification
+    /// Dismiss a notification (removes from list)
     DismissNotification { id: String },
+
+    /// Mark a notification as read (keeps in history but dismisses toast)
+    MarkNotificationRead { id: String },
+
+    /// Mark all notifications as read
+    MarkAllNotificationsRead,
 
     /// Clear all notifications
     ClearNotifications,
@@ -206,6 +242,27 @@ pub enum Action {
     // ========================================================================
     /// Set the active view in the main content area
     SetActiveView { view: ActiveViewData },
+
+    // ========================================================================
+    // Terminal Actions (worktree scope)
+    // ========================================================================
+    /// Spawn a new terminal session
+    SpawnTerminal { cols: u16, rows: u16 },
+
+    /// Resize an existing terminal session
+    ResizeTerminal { session_id: String, cols: u16, rows: u16 },
+
+    /// Write data to terminal (user input)
+    WriteTerminal { session_id: String, data: String },
+
+    /// Kill a terminal session
+    KillTerminal { session_id: String },
+
+    /// Set terminal session ID (internal, after spawn completes)
+    SetTerminalSession { session_id: Option<String> },
+
+    /// Set terminal dimensions (internal)
+    SetTerminalSize { cols: u16, rows: u16 },
 
     // ========================================================================
     // Settings Actions
@@ -254,6 +311,45 @@ pub enum McpStatusData {
     Starting,
     Running,
     Error,
+}
+
+/// MCP log direction for actions
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum McpLogDirectionData {
+    In,
+    Out,
+}
+
+/// MCP log entry for actions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct McpLogEntryData {
+    pub timestamp: String,
+    pub direction: McpLogDirectionData,
+    pub method: String,
+    pub tool_name: Option<String>,
+    pub payload: String,
+    pub is_error: bool,
+}
+
+/// Chat role for actions
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ChatRoleData {
+    User,
+    Assistant,
+    System,
+}
+
+/// Chat message for actions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ChatMessageData {
+    pub id: String,
+    pub role: ChatRoleData,
+    pub content: String,
+    pub timestamp: String,
+    #[serde(default)]
+    pub is_streaming: bool,
 }
 
 /// Docker service data for actions (lightweight, serializable)
@@ -333,6 +429,9 @@ pub enum ActiveViewData {
     Settings,
     Dockers,
     Env,
+    Mcp,
+    Chat,
+    Terminal,
 }
 
 // ============================================================================

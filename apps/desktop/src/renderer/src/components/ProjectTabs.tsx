@@ -10,6 +10,7 @@ import { useState, useCallback } from 'react'
 import { X, Plus, FolderOpen, GitBranch, History, Container, FileCode } from 'lucide-react'
 import { Button } from './ui/button'
 import { useActiveProject, useActiveWorktree, useAppState } from '../hooks/useAppState'
+import { NotificationDrawer } from '@/features/notifications'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
@@ -169,7 +170,7 @@ export function ProjectTabs() {
           )}
         </div>
 
-        {/* Right side: Global features (Docker) */}
+        {/* Right side: Global features (Docker, Notifications) */}
         <div className="flex items-center gap-1">
           <Button
             variant={activeView === 'dockers' ? 'secondary' : 'ghost'}
@@ -180,6 +181,7 @@ export function ProjectTabs() {
             <Container className="h-3.5 w-3.5" />
             Docker
           </Button>
+          <NotificationDrawer />
         </div>
       </div>
 

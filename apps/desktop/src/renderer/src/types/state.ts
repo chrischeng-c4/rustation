@@ -14,11 +14,11 @@ export type FeatureTab = 'tasks' | 'dockers' | 'settings'
 /**
  * Active view in the main content area.
  * Maps to scope levels:
- * - tasks, settings: Worktree scope
+ * - tasks, settings, mcp, chat: Worktree scope
  * - dockers: Global scope
  * - env: Project scope
  */
-export type ActiveView = 'tasks' | 'settings' | 'dockers' | 'env'
+export type ActiveView = 'tasks' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal'
 
 // ============================================================================
 // Docker State
@@ -117,6 +117,7 @@ export interface Notification {
   message: string
   notification_type: NotificationType
   created_at: string
+  read: boolean
 }
 
 // ============================================================================
@@ -125,11 +126,53 @@ export interface Notification {
 
 export type McpStatus = 'stopped' | 'starting' | 'running' | 'error'
 
+export type McpLogDirection = 'in' | 'out'
+
+export interface McpLogEntry {
+  timestamp: string
+  direction: McpLogDirection
+  method: string
+  tool_name?: string
+  payload: string
+  is_error: boolean
+}
+
 export interface McpState {
   status: McpStatus
   port?: number
   config_path?: string
   error?: string
+  log_entries?: McpLogEntry[]
+}
+
+// ============================================================================
+// Chat State
+// ============================================================================
+
+export type ChatRole = 'user' | 'assistant' | 'system'
+
+export interface ChatMessage {
+  id: string
+  role: ChatRole
+  content: string
+  timestamp: string
+  is_streaming?: boolean
+}
+
+export interface ChatState {
+  messages: ChatMessage[]
+  is_typing: boolean
+  error?: string
+}
+
+// ============================================================================
+// Terminal State
+// ============================================================================
+
+export interface TerminalState {
+  session_id?: string
+  cols: number
+  rows: number
 }
 
 // ============================================================================
@@ -142,6 +185,8 @@ export interface WorktreeState {
   branch: string
   is_main: boolean
   mcp: McpState
+  chat: ChatState
+  terminal: TerminalState
   is_modified: boolean
   active_tab: FeatureTab
   tasks: TasksState
@@ -287,6 +332,49 @@ export interface SetMcpConfigPathAction {
 export interface SetMcpErrorAction {
   type: 'SetMcpError'
   payload: { error: string }
+}
+
+export interface AddMcpLogEntryAction {
+  type: 'AddMcpLogEntry'
+  payload: { entry: McpLogEntryData }
+}
+
+export interface ClearMcpLogsAction {
+  type: 'ClearMcpLogs'
+}
+
+// Chat Actions
+export interface SendChatMessageAction {
+  type: 'SendChatMessage'
+  payload: { text: string }
+}
+
+export interface AddChatMessageAction {
+  type: 'AddChatMessage'
+  payload: { message: ChatMessageData }
+}
+
+export interface AppendChatContentAction {
+  type: 'AppendChatContent'
+  payload: { content: string }
+}
+
+export interface SetChatTypingAction {
+  type: 'SetChatTyping'
+  payload: { is_typing: boolean }
+}
+
+export interface SetChatErrorAction {
+  type: 'SetChatError'
+  payload: { error: string }
+}
+
+export interface ClearChatErrorAction {
+  type: 'ClearChatError'
+}
+
+export interface ClearChatAction {
+  type: 'ClearChat'
 }
 
 // Docker Actions
@@ -474,6 +562,15 @@ export interface DismissNotificationAction {
   payload: { id: string }
 }
 
+export interface MarkNotificationReadAction {
+  type: 'MarkNotificationRead'
+  payload: { id: string }
+}
+
+export interface MarkAllNotificationsReadAction {
+  type: 'MarkAllNotificationsRead'
+}
+
 export interface ClearNotificationsAction {
   type: 'ClearNotifications'
 }
@@ -482,6 +579,37 @@ export interface ClearNotificationsAction {
 export interface SetActiveViewAction {
   type: 'SetActiveView'
   payload: { view: ActiveViewData }
+}
+
+// Terminal Actions
+export interface SpawnTerminalAction {
+  type: 'SpawnTerminal'
+  payload: { cols: number; rows: number }
+}
+
+export interface ResizeTerminalAction {
+  type: 'ResizeTerminal'
+  payload: { session_id: string; cols: number; rows: number }
+}
+
+export interface WriteTerminalAction {
+  type: 'WriteTerminal'
+  payload: { session_id: string; data: string }
+}
+
+export interface KillTerminalAction {
+  type: 'KillTerminal'
+  payload: { session_id: string }
+}
+
+export interface SetTerminalSessionAction {
+  type: 'SetTerminalSession'
+  payload: { session_id: string | null }
+}
+
+export interface SetTerminalSizeAction {
+  type: 'SetTerminalSize'
+  payload: { cols: number; rows: number }
 }
 
 // Error Actions
@@ -535,6 +663,27 @@ export interface WorktreeData {
 
 export type McpStatusData = 'stopped' | 'starting' | 'running' | 'error'
 
+export type McpLogDirectionData = 'in' | 'out'
+
+export interface McpLogEntryData {
+  timestamp: string
+  direction: McpLogDirectionData
+  method: string
+  tool_name?: string
+  payload: string
+  is_error: boolean
+}
+
+export type ChatRoleData = 'user' | 'assistant' | 'system'
+
+export interface ChatMessageData {
+  id: string
+  role: ChatRoleData
+  content: string
+  timestamp: string
+  is_streaming?: boolean
+}
+
 export interface EnvCopyResultData {
   copied_files: string[]
   failed_files: [string, string][]
@@ -543,7 +692,7 @@ export interface EnvCopyResultData {
 
 export type NotificationTypeData = 'info' | 'success' | 'warning' | 'error'
 
-export type ActiveViewData = 'tasks' | 'settings' | 'dockers' | 'env'
+export type ActiveViewData = 'tasks' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal'
 
 // Union type of all actions
 export type Action =
@@ -563,6 +712,15 @@ export type Action =
   | SetMcpPortAction
   | SetMcpConfigPathAction
   | SetMcpErrorAction
+  | AddMcpLogEntryAction
+  | ClearMcpLogsAction
+  | SendChatMessageAction
+  | AddChatMessageAction
+  | AppendChatContentAction
+  | SetChatTypingAction
+  | SetChatErrorAction
+  | ClearChatErrorAction
+  | ClearChatAction
   | CheckDockerAvailabilityAction
   | SetDockerAvailableAction
   | RefreshDockerServicesAction
@@ -599,8 +757,16 @@ export type Action =
   | SetEnvSourceWorktreeAction
   | AddNotificationAction
   | DismissNotificationAction
+  | MarkNotificationReadAction
+  | MarkAllNotificationsReadAction
   | ClearNotificationsAction
   | SetActiveViewAction
+  | SpawnTerminalAction
+  | ResizeTerminalAction
+  | WriteTerminalAction
+  | KillTerminalAction
+  | SetTerminalSessionAction
+  | SetTerminalSizeAction
   | SetErrorAction
   | ClearErrorAction
 

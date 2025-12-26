@@ -137,6 +137,11 @@ pub struct WorktreeState {
     pub is_main: bool,
     /// MCP server state
     pub mcp: McpState,
+    /// Chat state for Claude assistant
+    pub chat: ChatState,
+    /// Terminal state for integrated PTY
+    #[serde(default)]
+    pub terminal: crate::terminal::TerminalState,
     /// Whether the worktree has unsaved changes or running tasks
     pub is_modified: bool,
     /// Currently active feature tab within this worktree (legacy, use AppState.active_view)
@@ -155,6 +160,8 @@ impl WorktreeState {
             branch,
             is_main,
             mcp: McpState::default(),
+            chat: ChatState::default(),
+            terminal: crate::terminal::TerminalState::new(),
             is_modified: false,
             active_tab: FeatureTab::Tasks,
             tasks: TasksState::default(),
@@ -177,6 +184,37 @@ pub enum McpStatus {
     Error,
 }
 
+/// Direction of MCP log entry
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum McpLogDirection {
+    /// Incoming request from client
+    In,
+    /// Outgoing response to client
+    Out,
+}
+
+/// MCP log entry for traffic inspection
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct McpLogEntry {
+    /// Timestamp (ISO 8601)
+    pub timestamp: String,
+    /// Direction (in/out)
+    pub direction: McpLogDirection,
+    /// Method name (e.g., "tools/call", "tools/list")
+    pub method: String,
+    /// Tool name (for tool calls)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    /// Payload summary (truncated for large data)
+    pub payload: String,
+    /// Whether this was an error
+    pub is_error: bool,
+}
+
+/// Maximum number of log entries to keep
+const MAX_MCP_LOG_ENTRIES: usize = 100;
+
 /// MCP server state for a worktree
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct McpState {
@@ -191,6 +229,102 @@ pub struct McpState {
     /// Error message (if status is Error)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Recent log entries (limited to MAX_MCP_LOG_ENTRIES)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub log_entries: Vec<McpLogEntry>,
+}
+
+impl McpState {
+    /// Add a log entry, keeping only the most recent MAX_MCP_LOG_ENTRIES
+    pub fn add_log_entry(&mut self, entry: McpLogEntry) {
+        self.log_entries.push(entry);
+        if self.log_entries.len() > MAX_MCP_LOG_ENTRIES {
+            self.log_entries.remove(0);
+        }
+    }
+
+    /// Clear all log entries
+    pub fn clear_logs(&mut self) {
+        self.log_entries.clear();
+    }
+}
+
+// ============================================================================
+// Chat State (Worktree-level)
+// ============================================================================
+
+/// Role of a chat message participant
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChatRole {
+    User,
+    Assistant,
+    System,
+}
+
+/// A single chat message
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ChatMessage {
+    /// Unique message ID
+    pub id: String,
+    /// Role (user, assistant, system)
+    pub role: ChatRole,
+    /// Message content (may include markdown)
+    pub content: String,
+    /// Timestamp (ISO 8601)
+    pub timestamp: String,
+    /// Whether this message is still streaming
+    #[serde(default)]
+    pub is_streaming: bool,
+}
+
+/// Maximum number of chat messages to keep
+const MAX_CHAT_MESSAGES: usize = 100;
+
+/// Chat state for a worktree
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct ChatState {
+    /// Chat messages
+    #[serde(default)]
+    pub messages: Vec<ChatMessage>,
+    /// Whether the assistant is currently typing/streaming
+    #[serde(default)]
+    pub is_typing: bool,
+    /// Error message (if any)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl ChatState {
+    /// Add a message, keeping only the most recent MAX_CHAT_MESSAGES
+    pub fn add_message(&mut self, message: ChatMessage) {
+        self.messages.push(message);
+        if self.messages.len() > MAX_CHAT_MESSAGES {
+            self.messages.remove(0);
+        }
+    }
+
+    /// Append content to the last assistant message (for streaming)
+    pub fn append_to_last(&mut self, content: &str) {
+        if let Some(last) = self.messages.last_mut() {
+            if last.role == ChatRole::Assistant {
+                last.content.push_str(content);
+            }
+        }
+    }
+
+    /// Mark the last message as done streaming
+    pub fn finish_streaming(&mut self) {
+        if let Some(last) = self.messages.last_mut() {
+            last.is_streaming = false;
+        }
+    }
+
+    /// Clear all messages
+    pub fn clear(&mut self) {
+        self.messages.clear();
+        self.error = None;
+    }
 }
 
 /// Feature tabs within a project (sidebar) - legacy, prefer ActiveView
@@ -220,6 +354,12 @@ pub enum ActiveView {
     Dockers,
     /// Env management page (project scope)
     Env,
+    /// MCP Inspector page (worktree scope)
+    Mcp,
+    /// Chat assistant page (worktree scope)
+    Chat,
+    /// Terminal page (worktree scope)
+    Terminal,
 }
 
 // ============================================================================
@@ -293,6 +433,9 @@ pub struct Notification {
     pub notification_type: NotificationType,
     /// Creation timestamp (ISO 8601)
     pub created_at: String,
+    /// Whether the notification has been read/dismissed from toast
+    #[serde(default)]
+    pub read: bool,
 }
 
 impl Notification {
@@ -303,6 +446,7 @@ impl Notification {
             message: message.into(),
             notification_type,
             created_at: chrono::Utc::now().to_rfc3339(),
+            read: false,
         }
     }
 
@@ -341,6 +485,9 @@ impl From<crate::actions::ActiveViewData> for ActiveView {
             crate::actions::ActiveViewData::Settings => ActiveView::Settings,
             crate::actions::ActiveViewData::Dockers => ActiveView::Dockers,
             crate::actions::ActiveViewData::Env => ActiveView::Env,
+            crate::actions::ActiveViewData::Mcp => ActiveView::Mcp,
+            crate::actions::ActiveViewData::Chat => ActiveView::Chat,
+            crate::actions::ActiveViewData::Terminal => ActiveView::Terminal,
         }
     }
 }

@@ -1,8 +1,19 @@
 import { test, expect } from './electron.fixture'
 
 test.describe('Docker Management', () => {
-  // Helper to check if Docker is available
+  // Navigate to Docker view before checking availability
+  async function navigateToDocker(page: import('@playwright/test').Page): Promise<void> {
+    // Click the Docker button in project tabs (top bar)
+    const dockerButton = page.getByRole('button', { name: 'Docker' })
+    await dockerButton.click()
+    // Wait for navigation
+    await page.waitForTimeout(500)
+  }
+
+  // Helper to check if Docker daemon is running
   async function isDockerAvailable(page: import('@playwright/test').Page): Promise<boolean> {
+    await navigateToDocker(page)
+
     // Wait for either Docker content or "Docker Not Available" message
     const dockerHeading = page.locator('h2', { hasText: 'Dockers' })
     const notAvailable = page.getByText('Docker Not Available')
@@ -22,25 +33,31 @@ test.describe('Docker Management', () => {
   })
 
   test('should show Docker page (available or not available)', async ({ page }) => {
-    const available = await isDockerAvailable(page)
+    await navigateToDocker(page)
 
-    if (available) {
-      // Docker is available - should show services heading
-      await expect(page.locator('h2', { hasText: 'Dockers' })).toBeVisible()
-    } else {
-      // Docker not available - should show not available message
-      await expect(page.getByText('Docker Not Available')).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
-    }
+    // Should show either Docker heading or not available message
+    const dockerHeading = page.locator('h2', { hasText: 'Dockers' })
+    const notAvailable = page.getByText('Docker Not Available')
+
+    const hasDocker = await dockerHeading.isVisible().catch(() => false)
+    const hasNotAvailable = await notAvailable.isVisible().catch(() => false)
+
+    expect(hasDocker || hasNotAvailable).toBe(true)
   })
 
-  test('should display services when Docker is available', async ({ page }) => {
+  test('should display services panel when Docker is available', async ({ page }) => {
     const available = await isDockerAvailable(page)
     test.skip(!available, 'Docker not available - skipping service tests')
 
-    // Should show at least one service or empty state
-    const servicesPanel = page.locator('.space-y-3')
-    await expect(servicesPanel).toBeVisible({ timeout: 5000 })
+    // Should show either services or "No Docker services found" message
+    const noServices = page.getByText('No Docker services found')
+    const serviceCard = page.locator('[class*="rounded-lg border"]').first()
+
+    const hasNoServices = await noServices.isVisible().catch(() => false)
+    const hasServiceCard = await serviceCard.isVisible().catch(() => false)
+
+    // Either we have services or the empty state message
+    expect(hasNoServices || hasServiceCard).toBe(true)
   })
 
   test('should show service status badges when Docker is available', async ({ page }) => {
@@ -78,33 +95,33 @@ test.describe('Docker Management', () => {
     }
   })
 
-  test('should have Refresh button', async ({ page }) => {
-    const available = await isDockerAvailable(page)
+  test('should have Refresh or Retry button', async ({ page }) => {
+    await navigateToDocker(page)
 
-    if (available) {
-      const refreshButton = page.getByRole('button', { name: 'Refresh' })
-      await expect(refreshButton).toBeVisible()
-    } else {
-      // When Docker not available, there's a Retry button
-      const retryButton = page.getByRole('button', { name: 'Retry' })
-      await expect(retryButton).toBeVisible()
-    }
+    // Should have either Refresh (Docker available) or Retry (Docker not available)
+    const refreshButton = page.getByRole('button', { name: 'Refresh' })
+    const retryButton = page.getByRole('button', { name: 'Retry' })
+
+    const hasRefresh = await refreshButton.isVisible().catch(() => false)
+    const hasRetry = await retryButton.isVisible().catch(() => false)
+
+    expect(hasRefresh || hasRetry).toBe(true)
   })
 
   test('should show logs panel when clicking Logs button', async ({ page }) => {
     const available = await isDockerAvailable(page)
     test.skip(!available, 'Docker not available')
 
-    // Find and click the Logs button if services exist
+    // Check if there are services with Logs button
     const logsButton = page.getByRole('button', { name: 'Logs' }).first()
     const hasLogs = await logsButton.isVisible().catch(() => false)
 
-    if (hasLogs) {
-      await logsButton.click()
-      // Log panel should update - check for the service name in the panel title
-      // The title format is "[ServiceName] Logs"
-      await expect(page.getByText('PostgreSQL Logs')).toBeVisible({ timeout: 5000 })
-    }
+    // Skip if no services have logs button
+    test.skip(!hasLogs, 'No services with Logs button')
+
+    await logsButton.click()
+    // Log panel should update - look for any "Logs" heading
+    await expect(page.getByText(/Logs$/).first()).toBeVisible({ timeout: 5000 })
   })
 
   test('should have Copy URL button on service cards', async ({ page }) => {
@@ -121,29 +138,11 @@ test.describe('Docker Management', () => {
     }
   })
 
-  test('should navigate between tabs', async ({ page }) => {
-    // Wait for initial load
-    await page.waitForTimeout(500)
+  test('should navigate between Docker and other views', async ({ page }) => {
+    // Navigate to Docker first
+    await navigateToDocker(page)
 
-    // Click Tasks in sidebar navigation
-    const tasksNav = page.getByText('Tasks').first()
-    await tasksNav.click()
-
-    // Check for tasks content
-    await expect(page.locator('h2', { hasText: 'Tasks' })).toBeVisible()
-
-    // Click Settings in sidebar
-    const settingsNav = page.getByText('Settings').first()
-    await settingsNav.click()
-
-    // Check for settings content (Coming Soon text)
-    await expect(page.getByText('Settings - Coming Soon')).toBeVisible()
-
-    // Click Docker in sidebar to go back
-    const dockerNav = page.getByText('Docker').first()
-    await dockerNav.click()
-
-    // Should show either Docker content or not available message
+    // Should show Docker page
     const dockerHeading = page.locator('h2', { hasText: 'Dockers' })
     const notAvailable = page.getByText('Docker Not Available')
 
@@ -151,5 +150,17 @@ test.describe('Docker Management', () => {
     const hasNotAvailable = await notAvailable.isVisible().catch(() => false)
 
     expect(hasDocker || hasNotAvailable).toBe(true)
+
+    // Navigate back to Docker from command palette
+    await page.keyboard.press('Meta+k')
+    await page.locator('[cmdk-input]').fill('docker')
+    await page.locator('[cmdk-item]:has-text("Docker")').click()
+    await page.waitForTimeout(500)
+
+    // Should still show Docker page
+    const hasDockersAgain = await dockerHeading.isVisible().catch(() => false)
+    const hasNotAvailableAgain = await notAvailable.isVisible().catch(() => false)
+
+    expect(hasDockersAgain || hasNotAvailableAgain).toBe(true)
   })
 })

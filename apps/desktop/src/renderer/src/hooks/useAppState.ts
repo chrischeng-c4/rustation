@@ -14,6 +14,11 @@ import type {
   GlobalSettings,
   ProjectState,
   WorktreeState,
+  EnvConfig,
+  McpState,
+  ChatState,
+  TerminalState,
+  Notification,
 } from '../types/state'
 
 // ============================================================================
@@ -279,6 +284,256 @@ export function useSettingsState(): UseSettingsStateResult {
   const { state, dispatch, isLoading } = useAppState()
   return {
     settings: state?.global_settings ?? null,
+    dispatch,
+    isLoading,
+  }
+}
+
+// ============================================================================
+// Env Configuration Hook
+// ============================================================================
+
+interface UseEnvStateResult {
+  /** Env config from the active project */
+  envConfig: EnvConfig | null
+  /** Active project for context */
+  project: ProjectState | null
+  /** All worktrees in the active project */
+  worktrees: WorktreeState[]
+  /** Dispatch an action */
+  dispatch: (action: Action) => Promise<void>
+  /** Whether state is loading */
+  isLoading: boolean
+}
+
+/**
+ * Hook for accessing Env configuration state from the active project.
+ *
+ * @example
+ * ```tsx
+ * function EnvPage() {
+ *   const { envConfig, worktrees, dispatch } = useEnvState()
+ *
+ *   if (!envConfig) return <NoProjectOpen />
+ *
+ *   return (
+ *     <div>
+ *       <p>Patterns: {envConfig.tracked_patterns.join(', ')}</p>
+ *       <p>Auto-copy: {envConfig.auto_copy_enabled ? 'ON' : 'OFF'}</p>
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export function useEnvState(): UseEnvStateResult {
+  const { project, dispatch, isLoading } = useActiveProject()
+  return {
+    envConfig: project?.env_config ?? null,
+    project,
+    worktrees: project?.worktrees ?? [],
+    dispatch,
+    isLoading,
+  }
+}
+
+// ============================================================================
+// MCP State Hook
+// ============================================================================
+
+interface UseMcpStateResult {
+  /** MCP state from the active worktree */
+  mcp: McpState | null
+  /** Active worktree path (for context) */
+  worktreePath: string | null
+  /** Active project name (for display) */
+  projectName: string | null
+  /** Dispatch an action */
+  dispatch: (action: Action) => Promise<void>
+  /** Whether state is loading */
+  isLoading: boolean
+}
+
+/**
+ * Hook for accessing MCP state from the active worktree.
+ *
+ * @example
+ * ```tsx
+ * function McpPage() {
+ *   const { mcp, dispatch, isLoading } = useMcpState()
+ *
+ *   if (!mcp) return <NoProjectOpen />
+ *
+ *   return (
+ *     <div>
+ *       <p>Status: {mcp.status}</p>
+ *       <p>Port: {mcp.port ?? 'Not running'}</p>
+ *       <button onClick={() => dispatch({ type: 'StartMcpServer' })}>
+ *         Start Server
+ *       </button>
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export function useMcpState(): UseMcpStateResult {
+  const { worktree, dispatch, isLoading } = useActiveWorktree()
+  const { project } = useActiveProject()
+  return {
+    mcp: worktree?.mcp ?? null,
+    worktreePath: worktree?.path ?? null,
+    projectName: project?.name ?? null,
+    dispatch,
+    isLoading,
+  }
+}
+
+// ============================================================================
+// Chat State Hook
+// ============================================================================
+
+interface UseChatStateResult {
+  /** Chat state from the active worktree */
+  chat: ChatState | null
+  /** Active worktree path (for context) */
+  worktreePath: string | null
+  /** Active project name (for display) */
+  projectName: string | null
+  /** Dispatch an action */
+  dispatch: (action: Action) => Promise<void>
+  /** Whether state is loading */
+  isLoading: boolean
+}
+
+/**
+ * Hook for accessing Chat state from the active worktree.
+ *
+ * @example
+ * ```tsx
+ * function ChatPage() {
+ *   const { chat, dispatch, isLoading } = useChatState()
+ *
+ *   if (!chat) return <NoProjectOpen />
+ *
+ *   const handleSend = (text: string) => {
+ *     dispatch({ type: 'SendChatMessage', payload: { text } })
+ *   }
+ *
+ *   return (
+ *     <div>
+ *       <MessageList messages={chat.messages} />
+ *       <ChatInput onSend={handleSend} disabled={chat.is_typing} />
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export function useChatState(): UseChatStateResult {
+  const { worktree, dispatch, isLoading } = useActiveWorktree()
+  const { project } = useActiveProject()
+  return {
+    chat: worktree?.chat ?? null,
+    worktreePath: worktree?.path ?? null,
+    projectName: project?.name ?? null,
+    dispatch,
+    isLoading,
+  }
+}
+
+// ============================================================================
+// Terminal State Hook
+// ============================================================================
+
+interface UseTerminalStateResult {
+  /** Terminal state from the active worktree */
+  terminal: TerminalState | null
+  /** Active worktree path (for working directory) */
+  worktreePath: string | null
+  /** Active project name (for display) */
+  projectName: string | null
+  /** Dispatch an action */
+  dispatch: (action: Action) => Promise<void>
+  /** Whether state is loading */
+  isLoading: boolean
+}
+
+/**
+ * Hook for accessing Terminal state from the active worktree.
+ *
+ * @example
+ * ```tsx
+ * function TerminalPage() {
+ *   const { terminal, worktreePath, dispatch } = useTerminalState()
+ *
+ *   if (!terminal) return <NoProjectOpen />
+ *
+ *   const handleSpawn = () => {
+ *     dispatch({ type: 'SpawnTerminal', payload: { cols: 80, rows: 24 } })
+ *   }
+ *
+ *   return <XTerm sessionId={terminal.session_id} />
+ * }
+ * ```
+ */
+export function useTerminalState(): UseTerminalStateResult {
+  const { worktree, dispatch, isLoading } = useActiveWorktree()
+  const { project } = useActiveProject()
+  return {
+    terminal: worktree?.terminal ?? null,
+    worktreePath: worktree?.path ?? null,
+    projectName: project?.name ?? null,
+    dispatch,
+    isLoading,
+  }
+}
+
+// ============================================================================
+// Notifications State Hook
+// ============================================================================
+
+interface UseNotificationsStateResult {
+  /** All notifications */
+  notifications: Notification[]
+  /** Unread notification count */
+  unreadCount: number
+  /** Dispatch an action */
+  dispatch: (action: Action) => Promise<void>
+  /** Whether state is loading */
+  isLoading: boolean
+}
+
+/**
+ * Hook for accessing Notifications state.
+ *
+ * @example
+ * ```tsx
+ * function NotificationBell() {
+ *   const { notifications, unreadCount, dispatch } = useNotificationsState()
+ *
+ *   const handleMarkAllRead = () => {
+ *     dispatch({ type: 'MarkAllNotificationsRead' })
+ *   }
+ *
+ *   return (
+ *     <div>
+ *       <Bell />
+ *       {unreadCount > 0 && <Badge>{unreadCount}</Badge>}
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export function useNotificationsState(): UseNotificationsStateResult {
+  const { state, dispatch, isLoading } = useAppState()
+
+  const notifications = useMemo(() => state?.notifications ?? [], [state])
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.read).length,
+    [notifications]
+  )
+
+  return {
+    notifications,
+    unreadCount,
     dispatch,
     isLoading,
   }

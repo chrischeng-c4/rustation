@@ -18,6 +18,14 @@ const createMockWorktree = (overrides?: Partial<WorktreeState>): WorktreeState =
   mcp: {
     status: 'stopped',
   },
+  chat: {
+    messages: [],
+    is_typing: false,
+  },
+  terminal: {
+    cols: 80,
+    rows: 24,
+  },
   tasks: {
     commands: [],
     task_statuses: {},

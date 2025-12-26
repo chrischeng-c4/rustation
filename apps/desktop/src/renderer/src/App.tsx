@@ -1,8 +1,15 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ListTodo, Settings, RefreshCw, FolderOpen, FileCode } from 'lucide-react'
+import { ListTodo, Settings, RefreshCw, FolderOpen, Server, MessageSquare, TerminalSquare } from 'lucide-react'
 import { DockersPage } from '@/features/dockers/DockersPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
+import { EnvPage } from '@/features/env'
+import { SettingsPage } from '@/features/settings'
+import { McpPage } from '@/features/mcp'
+import { ChatPage } from '@/features/chat'
+import { TerminalPage } from '@/features/terminal'
+import { Toaster } from '@/features/notifications'
+import { CommandPalette } from '@/components/command-palette'
 import { useActiveWorktree, useAppState } from '@/hooks/useAppState'
 import { ProjectTabs } from '@/components/ProjectTabs'
 import { Button } from '@/components/ui/button'
@@ -31,24 +38,23 @@ function NoProjectView() {
   )
 }
 
-/**
- * Placeholder EnvPage component.
- * TODO: Move to features/env/EnvPage.tsx
- */
-function EnvPagePlaceholder() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
-      <FileCode className="h-16 w-16" />
-      <h2 className="text-xl font-medium">Environment Files</h2>
-      <p className="text-sm">Manage dotfiles across worktrees</p>
-      <p className="text-xs text-muted-foreground/60">Coming Soon</p>
-    </div>
-  )
-}
-
 function App() {
   const { state, isLoading, dispatch } = useAppState()
   const { worktree } = useActiveWorktree()
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+
+  // Global keyboard shortcut: Cmd+K / Ctrl+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setCommandPaletteOpen((open) => !open)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   // Use global active_view from state
   const activeView = state?.active_view ?? 'tasks'
@@ -75,24 +81,26 @@ function App() {
       case 'tasks':
         return <TasksPage />
       case 'settings':
-        return (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            Settings - Coming Soon
-          </div>
-        )
+        return <SettingsPage />
       case 'dockers':
         return <DockersPage />
       case 'env':
-        return <EnvPagePlaceholder />
+        return <EnvPage />
+      case 'mcp':
+        return <McpPage />
+      case 'chat':
+        return <ChatPage />
+      case 'terminal':
+        return <TerminalPage />
       default:
         return <TasksPage />
     }
   }
 
   // Determine if sidebar items should be highlighted
-  // Only highlight for worktree-scope views (tasks, settings)
+  // Only highlight for worktree-scope views (tasks, settings, mcp, chat, terminal)
   const getSidebarValue = () => {
-    if (activeView === 'tasks' || activeView === 'settings') {
+    if (activeView === 'tasks' || activeView === 'settings' || activeView === 'mcp' || activeView === 'chat' || activeView === 'terminal') {
       return activeView
     }
     // For global/project scope views (dockers, env), don't highlight sidebar
@@ -101,12 +109,23 @@ function App() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
+      {/* Command Palette (Cmd+K / Ctrl+K) */}
+      <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+
+      {/* Toast Notifications (fixed overlay) */}
+      <Toaster />
+
       {/* Project Tabs (Top) */}
       <ProjectTabs />
 
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        {worktree ? (
+        {/* Global scope views (Docker) work without a project */}
+        {activeView === 'dockers' ? (
+          <div className="flex-1 overflow-auto p-6">
+            <DockersPage />
+          </div>
+        ) : worktree ? (
           /* Sidebar + Content when project is open */
           <Tabs
             value={getSidebarValue()}
@@ -124,6 +143,27 @@ function App() {
                 <span className="text-[10px]">Tasks</span>
               </TabsTrigger>
               <TabsTrigger
+                value="mcp"
+                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
+              >
+                <Server className="h-5 w-5" />
+                <span className="text-[10px]">MCP</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="chat"
+                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
+              >
+                <MessageSquare className="h-5 w-5" />
+                <span className="text-[10px]">Chat</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="terminal"
+                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
+              >
+                <TerminalSquare className="h-5 w-5" />
+                <span className="text-[10px]">Term</span>
+              </TabsTrigger>
+              <TabsTrigger
                 value="settings"
                 className="mt-auto flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
               >
@@ -136,7 +176,7 @@ function App() {
             <div className="flex-1 overflow-auto p-6">{renderContent()}</div>
           </Tabs>
         ) : (
-          /* No project open */
+          /* No project open - show NoProjectView for worktree-scope views */
           <NoProjectView />
         )}
       </div>

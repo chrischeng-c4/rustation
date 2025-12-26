@@ -7,25 +7,33 @@ extern crate napi_derive;
 
 pub mod actions;
 pub mod app_state;
+pub mod context_engine;
 pub mod docker;
 pub mod env;
 pub mod justfile;
+pub mod mcp_server;
+pub mod migration;
 pub mod persistence;
 pub mod reducer;
 pub mod state;
+pub mod terminal;
 pub mod worktree;
 
 use actions::Action;
 use app_state::AppState;
 use docker::DockerManager;
+use mcp_server::McpServerManager;
 use napi::threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use reducer::reduce;
 use state::DockerService;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::{OnceCell, RwLock};
 
 // Global Docker manager instance
 static DOCKER_MANAGER: OnceCell<Arc<DockerManager>> = OnceCell::const_new();
+
+// Global MCP server manager instance (sync init, doesn't need tokio::OnceCell)
+static MCP_SERVER_MANAGER: OnceLock<Arc<McpServerManager>> = OnceLock::new();
 
 // Global application state
 static APP_STATE: OnceCell<Arc<RwLock<AppState>>> = OnceCell::const_new();
@@ -56,6 +64,11 @@ async fn get_docker_manager() -> napi::Result<&'static Arc<DockerManager>> {
         })
         .await
 }
+
+fn get_mcp_server_manager() -> &'static Arc<McpServerManager> {
+    MCP_SERVER_MANAGER.get_or_init(|| Arc::new(McpServerManager::new()))
+}
+
 
 /// Check if Docker is available
 #[napi]
@@ -211,6 +224,113 @@ pub fn worktree_list_branches(repo_path: String) -> napi::Result<Vec<NapiBranchI
                 .collect()
         })
         .map_err(napi::Error::from_reason)
+}
+
+// ============================================================================
+// Env functions
+// ============================================================================
+
+/// List env files matching patterns in a directory
+#[napi]
+pub fn env_list_files(dir: String, patterns: Vec<String>) -> Vec<String> {
+    env::list_env_files(&dir, &patterns)
+}
+
+/// Get default env patterns
+#[napi]
+pub fn env_default_patterns() -> Vec<String> {
+    env::default_patterns()
+}
+
+// ============================================================================
+// Context Engine functions
+// ============================================================================
+
+/// AI Context for napi export
+#[napi(object)]
+pub struct NapiAIContext {
+    /// Open files with content
+    pub open_files: Vec<NapiFileContext>,
+    /// Last terminal output
+    pub terminal_last_output: Option<String>,
+    /// Git status summary
+    pub git_status: String,
+    /// Active errors
+    pub active_errors: Vec<String>,
+    /// Directory tree
+    pub directory_tree: Option<String>,
+    /// Git diff
+    pub git_diff: Option<String>,
+}
+
+/// File context for napi export
+#[napi(object)]
+pub struct NapiFileContext {
+    /// File path
+    pub path: String,
+    /// File content (may be truncated)
+    pub content: String,
+    /// Cursor line if available
+    pub cursor_line: Option<u32>,
+}
+
+/// Build AI context for a project path
+///
+/// Gathers context from git, files, and other sources within a token budget.
+#[napi]
+pub fn context_build(
+    project_path: String,
+    active_files: Vec<String>,
+    task_output: Option<String>,
+    docker_errors: Vec<String>,
+    token_budget: Option<u32>,
+) -> NapiAIContext {
+    let budget = token_budget.unwrap_or(20000) as usize;
+    let path = std::path::Path::new(&project_path);
+
+    let context = context_engine::build_context(
+        path,
+        active_files,
+        task_output,
+        docker_errors,
+        budget,
+    );
+
+    NapiAIContext {
+        open_files: context.open_files.into_iter().map(|f| NapiFileContext {
+            path: f.path,
+            content: f.content,
+            cursor_line: f.cursor_line.map(|l| l as u32),
+        }).collect(),
+        terminal_last_output: context.terminal_last_output,
+        git_status: context.git_status,
+        active_errors: context.active_errors,
+        directory_tree: context.directory_tree,
+        git_diff: context.git_diff,
+    }
+}
+
+/// Build AI context and format as a system prompt string
+#[napi]
+pub fn context_build_system_prompt(
+    project_path: String,
+    active_files: Vec<String>,
+    task_output: Option<String>,
+    docker_errors: Vec<String>,
+    token_budget: Option<u32>,
+) -> String {
+    let budget = token_budget.unwrap_or(20000) as usize;
+    let path = std::path::Path::new(&project_path);
+
+    let context = context_engine::build_context(
+        path,
+        active_files,
+        task_output,
+        docker_errors,
+        budget,
+    );
+
+    context.to_system_prompt()
 }
 
 // ============================================================================
@@ -494,6 +614,69 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                         message: e.to_string(),
                         context: Some(format!("CreateVhost: {} in {}", vhost_name, service_id)),
                     });
+                }
+            }
+        }
+
+        // ====================================================================
+        // MCP Server Actions
+        // ====================================================================
+        Action::StartMcpServer => {
+            // Get worktree info from state
+            let (worktree_id, worktree_path, project_name) = {
+                let state = get_app_state().read().await;
+                if let Some(project) = state.active_project() {
+                    if let Some(worktree) = project.active_worktree() {
+                        (worktree.id.clone(), worktree.path.clone(), project.name.clone())
+                    } else {
+                        return Ok(());
+                    }
+                } else {
+                    return Ok(());
+                }
+            };
+
+            let manager = get_mcp_server_manager();
+            match manager.start_server(
+                worktree_id.clone(),
+                std::path::PathBuf::from(&worktree_path),
+                project_name,
+                None, // Use default port
+            ).await {
+                Ok(port) => {
+                    let mut state = get_app_state().write().await;
+                    reduce(&mut state, Action::SetMcpPort { port });
+                }
+                Err(e) => {
+                    let mut state = get_app_state().write().await;
+                    reduce(&mut state, Action::SetMcpError { error: e });
+                }
+            }
+        }
+
+        Action::StopMcpServer => {
+            // Get worktree info from state
+            let worktree_id = {
+                let state = get_app_state().read().await;
+                if let Some(project) = state.active_project() {
+                    if let Some(worktree) = project.active_worktree() {
+                        worktree.id.clone()
+                    } else {
+                        return Ok(());
+                    }
+                } else {
+                    return Ok(());
+                }
+            };
+
+            let manager = get_mcp_server_manager();
+            match manager.stop_server(&worktree_id).await {
+                Ok(()) => {
+                    // Status is already set to Stopped by the reducer
+                }
+                Err(e) => {
+                    let mut state = get_app_state().write().await;
+                    reduce(&mut state, Action::SetMcpError { error: e });
                 }
             }
         }
@@ -815,13 +998,12 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         }
 
         // Synchronous actions - already handled by reduce()
+        // Note: StartMcpServer and StopMcpServer are handled async above
         Action::CloseProject { .. }
         | Action::SwitchProject { .. }
         | Action::SetFeatureTab { .. }
         | Action::SwitchWorktree { .. }
         | Action::SetWorktrees { .. }
-        | Action::StartMcpServer
-        | Action::StopMcpServer
         | Action::SetMcpStatus { .. }
         | Action::SetMcpPort { .. }
         | Action::SetMcpConfigPath { .. }
@@ -853,10 +1035,35 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         // Notification actions (sync)
         | Action::AddNotification { .. }
         | Action::DismissNotification { .. }
+        | Action::MarkNotificationRead { .. }
+        | Action::MarkAllNotificationsRead
         | Action::ClearNotifications
+        // MCP log actions (sync)
+        | Action::AddMcpLogEntry { .. }
+        | Action::ClearMcpLogs
+        // Chat actions (sync - except SendChatMessage which needs async)
+        | Action::SendChatMessage { .. } // TODO: Add async handling for Claude API
+        | Action::AddChatMessage { .. }
+        | Action::AppendChatContent { .. }
+        | Action::SetChatTyping { .. }
+        | Action::SetChatError { .. }
+        | Action::ClearChatError
+        | Action::ClearChat
+        // Terminal actions (sync - state updates only)
+        | Action::SetTerminalSession { .. }
+        | Action::SetTerminalSize { .. }
         // View actions (sync)
         | Action::SetActiveView { .. } => {
             // Already handled synchronously
+        }
+
+        // Terminal actions (async - PTY operations)
+        Action::SpawnTerminal { .. }
+        | Action::ResizeTerminal { .. }
+        | Action::WriteTerminal { .. }
+        | Action::KillTerminal { .. } => {
+            // TODO: Add terminal manager handling
+            // These will be handled by a global terminal manager
         }
     }
 

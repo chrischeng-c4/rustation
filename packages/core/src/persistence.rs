@@ -3,8 +3,10 @@
 //! Handles:
 //! - Global state (recent_projects, global_settings)
 //! - Per-project state (active_tab, etc.)
+//! - Schema versioning and migration
 
 use crate::app_state::{AppState, FeatureTab, GlobalSettings, ProjectState, RecentProject};
+use crate::migration::{MigrationManager, CURRENT_SCHEMA_VERSION};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -13,15 +15,25 @@ use std::path::PathBuf;
 /// Global persisted state - saved to ~/.rstn/state.json
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GlobalPersistedState {
+    /// Schema version for migration support
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
+    /// App version string (informational)
     pub version: String,
     pub recent_projects: Vec<RecentProject>,
     pub global_settings: GlobalSettings,
+}
+
+/// Default schema version for legacy data
+fn default_schema_version() -> u32 {
+    1
 }
 
 impl GlobalPersistedState {
     /// Extract persistable fields from AppState
     pub fn from_app_state(state: &AppState) -> Self {
         Self {
+            schema_version: CURRENT_SCHEMA_VERSION,
             version: state.version.clone(),
             recent_projects: state.recent_projects.clone(),
             global_settings: state.global_settings.clone(),
@@ -130,8 +142,44 @@ pub fn save_global(state: &AppState) -> Result<(), String> {
     Ok(())
 }
 
-/// Load global state from disk
+/// Load global state from disk with migration support.
+///
+/// This function:
+/// 1. Reads the state file
+/// 2. Checks schema version
+/// 3. Applies any necessary migrations
+/// 4. Creates a backup before migrating
+/// 5. Saves the migrated state back to disk
 pub fn load_global() -> Result<Option<GlobalPersistedState>, String> {
+    let path = get_global_state_path();
+
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    // Use migration manager to load and migrate
+    let manager = MigrationManager::new();
+
+    match manager.load_and_migrate(&path, true) {
+        Ok(Some(value)) => {
+            // Parse the (possibly migrated) JSON into our struct
+            let persisted: GlobalPersistedState = serde_json::from_value(value)
+                .map_err(|e| format!("Failed to deserialize state after migration: {}", e))?;
+            Ok(Some(persisted))
+        }
+        Ok(None) => Ok(None),
+        Err(e) => {
+            // Migration failed - log error and return None (app will use default state)
+            tracing::error!("Migration failed: {}. Using default state.", e);
+            // Optionally notify user through notification system
+            Err(format!("State migration failed: {}", e))
+        }
+    }
+}
+
+/// Load global state from disk without migration (for testing).
+#[cfg(test)]
+pub fn load_global_raw() -> Result<Option<GlobalPersistedState>, String> {
     let path = get_global_state_path();
 
     if !path.exists() {
@@ -220,6 +268,7 @@ mod tests {
     #[test]
     fn test_global_persisted_state_roundtrip() {
         let state = GlobalPersistedState {
+            schema_version: CURRENT_SCHEMA_VERSION,
             version: "0.1.0".to_string(),
             recent_projects: vec![RecentProject {
                 path: "/test/project".to_string(),
@@ -235,6 +284,22 @@ mod tests {
         let json = serde_json::to_string(&state).unwrap();
         let loaded: GlobalPersistedState = serde_json::from_str(&json).unwrap();
         assert_eq!(state, loaded);
+    }
+
+    #[test]
+    fn test_global_persisted_state_legacy_without_schema_version() {
+        // Test that legacy JSON without schema_version field defaults to 1
+        let json = r#"{
+            "version": "0.1.0",
+            "recent_projects": [],
+            "global_settings": {
+                "theme": "system",
+                "default_project_path": null
+            }
+        }"#;
+
+        let loaded: GlobalPersistedState = serde_json::from_str(json).unwrap();
+        assert_eq!(loaded.schema_version, 1); // Defaults to 1
     }
 
     #[test]
@@ -267,6 +332,7 @@ mod tests {
     #[test]
     fn test_global_persisted_apply_to() {
         let persisted = GlobalPersistedState {
+            schema_version: CURRENT_SCHEMA_VERSION,
             version: "0.1.0".to_string(),
             recent_projects: vec![RecentProject {
                 path: "/restored".to_string(),
@@ -349,6 +415,7 @@ mod tests {
         fs::create_dir_all(&temp_dir).unwrap();
 
         let persisted = GlobalPersistedState {
+            schema_version: CURRENT_SCHEMA_VERSION,
             version: "0.1.0".to_string(),
             recent_projects: vec![],
             global_settings: GlobalSettings::default(),
@@ -374,6 +441,7 @@ mod tests {
     fn test_apply_to_preserves_recent_projects_order() {
         // Ensures apply_to correctly restores recent_projects in the same order
         let persisted = GlobalPersistedState {
+            schema_version: CURRENT_SCHEMA_VERSION,
             version: "0.1.0".to_string(),
             recent_projects: vec![
                 RecentProject {
@@ -410,6 +478,7 @@ mod tests {
         // apply_to only sets recent_projects, does NOT open projects
         // (project opening is done separately in state_init)
         let persisted = GlobalPersistedState {
+            schema_version: CURRENT_SCHEMA_VERSION,
             version: "0.1.0".to_string(),
             recent_projects: vec![RecentProject {
                 path: "/my/project".to_string(),
@@ -464,6 +533,7 @@ mod tests {
 
         // Create state with recent projects
         let persisted = GlobalPersistedState {
+            schema_version: CURRENT_SCHEMA_VERSION,
             version: "0.1.0".to_string(),
             recent_projects: vec![
                 RecentProject {

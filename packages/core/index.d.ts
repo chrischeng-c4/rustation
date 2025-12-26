@@ -100,6 +100,42 @@ export interface NapiBranchInfo {
 }
 /** List all branches in a repository */
 export declare function worktreeListBranches(repoPath: string): Array<NapiBranchInfo>
+/** List env files matching patterns in a directory */
+export declare function envListFiles(dir: string, patterns: Array<string>): Array<string>
+/** Get default env patterns */
+export declare function envDefaultPatterns(): Array<string>
+/** AI Context for napi export */
+export interface NapiAiContext {
+  /** Open files with content */
+  openFiles: Array<NapiFileContext>
+  /** Last terminal output */
+  terminalLastOutput?: string
+  /** Git status summary */
+  gitStatus: string
+  /** Active errors */
+  activeErrors: Array<string>
+  /** Directory tree */
+  directoryTree?: string
+  /** Git diff */
+  gitDiff?: string
+}
+/** File context for napi export */
+export interface NapiFileContext {
+  /** File path */
+  path: string
+  /** File content (may be truncated) */
+  content: string
+  /** Cursor line if available */
+  cursorLine?: number
+}
+/**
+ * Build AI context for a project path
+ *
+ * Gathers context from git, files, and other sources within a token budget.
+ */
+export declare function contextBuild(projectPath: string, activeFiles: Array<string>, taskOutput: string | undefined | null, dockerErrors: Array<string>, tokenBudget?: number | undefined | null): NapiAiContext
+/** Build AI context and format as a system prompt string */
+export declare function contextBuildSystemPrompt(projectPath: string, activeFiles: Array<string>, taskOutput: string | undefined | null, dockerErrors: Array<string>, tokenBudget?: number | undefined | null): string
 /**
  * Initialize the application state and register a listener for state updates.
  *

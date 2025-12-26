@@ -6,8 +6,8 @@
 //! - No side effects (async operations handled separately)
 
 use crate::actions::{
-    Action, ConflictingContainerData, DockerServiceData, JustCommandData, McpStatusData,
-    PortConflictData, TaskStatusData,
+    Action, ChatRoleData, ConflictingContainerData, DockerServiceData, JustCommandData,
+    McpLogDirectionData, McpStatusData, PortConflictData, TaskStatusData,
 };
 use crate::app_state::{
     AppError, AppState, ConflictingContainer, DockerServiceInfo, EnvCopyResult, JustCommandInfo,
@@ -223,6 +223,110 @@ pub fn reduce(state: &mut AppState, action: Action) {
                 if let Some(worktree) = project.active_worktree_mut() {
                     worktree.mcp.status = McpStatus::Error;
                     worktree.mcp.error = Some(error);
+                }
+            }
+        }
+
+        Action::AddMcpLogEntry { entry } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    let log_entry = crate::app_state::McpLogEntry {
+                        timestamp: entry.timestamp,
+                        direction: match entry.direction {
+                            McpLogDirectionData::In => crate::app_state::McpLogDirection::In,
+                            McpLogDirectionData::Out => crate::app_state::McpLogDirection::Out,
+                        },
+                        method: entry.method,
+                        tool_name: entry.tool_name,
+                        payload: entry.payload,
+                        is_error: entry.is_error,
+                    };
+                    worktree.mcp.add_log_entry(log_entry);
+                }
+            }
+        }
+
+        Action::ClearMcpLogs => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.mcp.clear_logs();
+                }
+            }
+        }
+
+        // ====================================================================
+        // Chat Actions (worktree scope)
+        // ====================================================================
+        Action::SendChatMessage { .. } => {
+            // Async action - handled in lib.rs
+            // Just set typing state here
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.chat.is_typing = true;
+                    worktree.chat.error = None;
+                }
+            }
+        }
+
+        Action::AddChatMessage { message } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    let chat_message = crate::app_state::ChatMessage {
+                        id: message.id,
+                        role: match message.role {
+                            ChatRoleData::User => crate::app_state::ChatRole::User,
+                            ChatRoleData::Assistant => crate::app_state::ChatRole::Assistant,
+                            ChatRoleData::System => crate::app_state::ChatRole::System,
+                        },
+                        content: message.content,
+                        timestamp: message.timestamp,
+                        is_streaming: message.is_streaming,
+                    };
+                    worktree.chat.add_message(chat_message);
+                }
+            }
+        }
+
+        Action::AppendChatContent { content } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.chat.append_to_last(&content);
+                }
+            }
+        }
+
+        Action::SetChatTyping { is_typing } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.chat.is_typing = is_typing;
+                    if !is_typing {
+                        worktree.chat.finish_streaming();
+                    }
+                }
+            }
+        }
+
+        Action::SetChatError { error } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.chat.error = Some(error);
+                    worktree.chat.is_typing = false;
+                }
+            }
+        }
+
+        Action::ClearChatError => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.chat.error = None;
+                }
+            }
+        }
+
+        Action::ClearChat => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.chat.clear();
                 }
             }
         }
@@ -519,6 +623,18 @@ pub fn reduce(state: &mut AppState, action: Action) {
             state.notifications.retain(|n| n.id != id);
         }
 
+        Action::MarkNotificationRead { id } => {
+            if let Some(notification) = state.notifications.iter_mut().find(|n| n.id == id) {
+                notification.read = true;
+            }
+        }
+
+        Action::MarkAllNotificationsRead => {
+            for notification in &mut state.notifications {
+                notification.read = true;
+            }
+        }
+
         Action::ClearNotifications => {
             state.notifications.clear();
         }
@@ -528,6 +644,49 @@ pub fn reduce(state: &mut AppState, action: Action) {
         // ====================================================================
         Action::SetActiveView { view } => {
             state.active_view = view.into();
+        }
+
+        // ====================================================================
+        // Terminal Actions
+        // ====================================================================
+        Action::SpawnTerminal { cols, rows } => {
+            // Async trigger - terminal manager will spawn PTY
+            // Store dimensions in state
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.terminal.cols = cols;
+                    worktree.terminal.rows = rows;
+                }
+            }
+        }
+
+        Action::ResizeTerminal { .. } => {
+            // Async trigger - handled by terminal manager
+        }
+
+        Action::WriteTerminal { .. } => {
+            // Async trigger - handled by terminal manager
+        }
+
+        Action::KillTerminal { .. } => {
+            // Async trigger - after completion, SetTerminalSession(None) will be dispatched
+        }
+
+        Action::SetTerminalSession { session_id } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.terminal.session_id = session_id;
+                }
+            }
+        }
+
+        Action::SetTerminalSize { cols, rows } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.terminal.cols = cols;
+                    worktree.terminal.rows = rows;
+                }
+            }
         }
 
         // ====================================================================
@@ -1057,6 +1216,195 @@ mod tests {
     }
 
     // ========================================================================
+    // View Actions Tests (Feature 02/03: Settings & Command Palette)
+    // ========================================================================
+
+    #[test]
+    fn test_reduce_set_active_view() {
+        use crate::app_state::ActiveView;
+
+        let mut state = AppState::default();
+
+        // Default is tasks
+        assert_eq!(state.active_view, ActiveView::Tasks);
+
+        // Switch to dockers
+        reduce(
+            &mut state,
+            Action::SetActiveView {
+                view: crate::actions::ActiveViewData::Dockers,
+            },
+        );
+        assert_eq!(state.active_view, ActiveView::Dockers);
+
+        // Switch to env
+        reduce(
+            &mut state,
+            Action::SetActiveView {
+                view: crate::actions::ActiveViewData::Env,
+            },
+        );
+        assert_eq!(state.active_view, ActiveView::Env);
+
+        // Switch to settings
+        reduce(
+            &mut state,
+            Action::SetActiveView {
+                view: crate::actions::ActiveViewData::Settings,
+            },
+        );
+        assert_eq!(state.active_view, ActiveView::Settings);
+
+        // Switch back to tasks
+        reduce(
+            &mut state,
+            Action::SetActiveView {
+                view: crate::actions::ActiveViewData::Tasks,
+            },
+        );
+        assert_eq!(state.active_view, ActiveView::Tasks);
+    }
+
+    // ========================================================================
+    // Env Actions Tests (Feature 01: Env Management)
+    // ========================================================================
+
+    #[test]
+    fn test_reduce_set_env_tracked_patterns() {
+        let mut state = state_with_project();
+
+        // Initially should have default patterns
+        let project = state.active_project().unwrap();
+        assert!(!project.env_config.tracked_patterns.is_empty());
+
+        // Set custom patterns
+        let new_patterns = vec![".env".to_string(), ".env.local".to_string()];
+        reduce(
+            &mut state,
+            Action::SetEnvTrackedPatterns {
+                patterns: new_patterns.clone(),
+            },
+        );
+
+        let project = state.active_project().unwrap();
+        assert_eq!(project.env_config.tracked_patterns, new_patterns);
+    }
+
+    #[test]
+    fn test_reduce_set_env_auto_copy() {
+        let mut state = state_with_project();
+
+        // Initially enabled (default is true)
+        let project = state.active_project().unwrap();
+        assert!(project.env_config.auto_copy_enabled);
+
+        // Disable auto-copy
+        reduce(
+            &mut state,
+            Action::SetEnvAutoCopy { enabled: false },
+        );
+
+        let project = state.active_project().unwrap();
+        assert!(!project.env_config.auto_copy_enabled);
+
+        // Enable auto-copy
+        reduce(
+            &mut state,
+            Action::SetEnvAutoCopy { enabled: true },
+        );
+
+        let project = state.active_project().unwrap();
+        assert!(project.env_config.auto_copy_enabled);
+    }
+
+    #[test]
+    fn test_reduce_set_env_copy_result() {
+        let mut state = state_with_project();
+
+        // Initially no result
+        let project = state.active_project().unwrap();
+        assert!(project.env_config.last_copy_result.is_none());
+
+        // Set copy result
+        reduce(
+            &mut state,
+            Action::SetEnvCopyResult {
+                result: crate::actions::EnvCopyResultData {
+                    copied_files: vec![".env".to_string()],
+                    failed_files: vec![],
+                    timestamp: "2024-12-26T10:00:00Z".to_string(),
+                },
+            },
+        );
+
+        let project = state.active_project().unwrap();
+        let result = project.env_config.last_copy_result.as_ref().unwrap();
+        assert_eq!(result.copied_files, vec![".env"]);
+        assert!(result.failed_files.is_empty());
+        assert_eq!(result.timestamp, "2024-12-26T10:00:00Z");
+    }
+
+    #[test]
+    fn test_reduce_set_env_source_worktree() {
+        let mut state = state_with_project();
+
+        // Initially set to project path (ProjectState::new uses with_source)
+        let project = state.active_project().unwrap();
+        assert_eq!(
+            project.env_config.source_worktree,
+            Some("/test/project".to_string())
+        );
+
+        // Change source worktree to different path
+        reduce(
+            &mut state,
+            Action::SetEnvSourceWorktree {
+                worktree_path: Some("/test/other".to_string()),
+            },
+        );
+
+        let project = state.active_project().unwrap();
+        assert_eq!(
+            project.env_config.source_worktree,
+            Some("/test/other".to_string())
+        );
+
+        // Clear source worktree
+        reduce(
+            &mut state,
+            Action::SetEnvSourceWorktree {
+                worktree_path: None,
+            },
+        );
+
+        let project = state.active_project().unwrap();
+        assert!(project.env_config.source_worktree.is_none());
+    }
+
+    #[test]
+    fn test_env_actions_noop_without_project() {
+        let mut state = AppState::default();
+
+        // These should not crash when no project exists
+        reduce(
+            &mut state,
+            Action::SetEnvTrackedPatterns {
+                patterns: vec![".env".to_string()],
+            },
+        );
+        reduce(&mut state, Action::SetEnvAutoCopy { enabled: true });
+        reduce(
+            &mut state,
+            Action::SetEnvSourceWorktree {
+                worktree_path: Some("/test".to_string()),
+            },
+        );
+
+        // State unchanged
+        assert!(state.projects.is_empty());
+    }
+
+    // ========================================================================
     // Recent Projects Tests (Startup Flow Protection)
     // ========================================================================
 
@@ -1112,6 +1460,7 @@ mod tests {
 
         // Step 1: Create persisted state with recent projects
         let persisted = GlobalPersistedState {
+            schema_version: crate::migration::CURRENT_SCHEMA_VERSION,
             version: "0.1.0".to_string(),
             recent_projects: vec![
                 RecentProject {
@@ -1162,6 +1511,7 @@ mod tests {
         use crate::persistence::GlobalPersistedState;
 
         let persisted = GlobalPersistedState {
+            schema_version: crate::migration::CURRENT_SCHEMA_VERSION,
             version: "0.1.0".to_string(),
             recent_projects: vec![],
             global_settings: crate::app_state::GlobalSettings::default(),
@@ -1191,6 +1541,7 @@ mod tests {
         use crate::persistence::GlobalPersistedState;
 
         let original = GlobalPersistedState {
+            schema_version: crate::migration::CURRENT_SCHEMA_VERSION,
             version: "0.1.0".to_string(),
             recent_projects: vec![
                 RecentProject {
@@ -1234,6 +1585,7 @@ mod tests {
 
         // 2. Load persisted state (simulated)
         let persisted = GlobalPersistedState {
+            schema_version: crate::migration::CURRENT_SCHEMA_VERSION,
             version: "0.1.0".to_string(),
             recent_projects: vec![RecentProject {
                 path: "/Users/test/myproject".to_string(),

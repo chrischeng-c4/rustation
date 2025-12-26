@@ -28,6 +28,10 @@ futures-util = "0.3"
 axum = "0.7"
 tower-http = { version = "0.5", features = ["cors"] }
 
+# MCP Server dependencies (using axum directly)
+tokio-util = "0.7"
+async-stream = "0.3"
+
 # Error handling
 anyhow = "1.0"
 thiserror = "1.0"
@@ -42,6 +46,9 @@ chrono = { version = "0.4", features = ["serde"] }
 dirs = "5.0"
 sha2 = "0.10"
 hex = "0.4"
+
+# PTY for terminal emulation
+portable-pty = "0.8"
 
 [build-dependencies]
 napi-build = "2.1"
