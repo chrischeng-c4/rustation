@@ -15,14 +15,8 @@ const createMockWorktree = (overrides?: Partial<WorktreeState>): WorktreeState =
   is_main: true,
   is_modified: false,
   active_tab: 'tasks',
-  dockers: {
-    services: [],
-    selected_service_id: null,
-    logs: [],
-    is_loading: false,
-    is_loading_logs: false,
-    docker_available: null,
-    error: null,
+  mcp: {
+    status: 'stopped',
   },
   tasks: {
     commands: [],
@@ -32,6 +26,7 @@ const createMockWorktree = (overrides?: Partial<WorktreeState>): WorktreeState =
     is_loading: false,
     error: null,
   },
+  // NOTE: dockers moved to AppState.docker (global scope)
   ...overrides,
 })
 
@@ -41,16 +36,36 @@ const createMockProject = (overrides?: Partial<ProjectState>): ProjectState => (
   path: '/path/to/project',
   worktrees: [createMockWorktree()],
   active_worktree_index: 0,
+  env_config: {
+    tracked_patterns: ['.env', '.envrc', '.claude/', '.vscode/'],
+    auto_copy_enabled: true,
+    source_worktree: null,
+    last_copy_result: null,
+  },
   ...overrides,
 })
 
 const createMockState = (overrides?: Partial<AppState>): AppState => ({
+  version: '0.1.0',
   projects: [],
   active_project_index: 0,
   recent_projects: [],
   global_settings: {
     theme: 'system',
+    default_project_path: null,
   },
+  docker: {
+    docker_available: null,
+    services: [],
+    selected_service_id: null,
+    logs: [],
+    is_loading: false,
+    is_loading_logs: false,
+    pending_conflict: null,
+    port_overrides: {},
+  },
+  notifications: [],
+  active_view: 'tasks',
   ...overrides,
 })
 
@@ -246,36 +261,19 @@ describe('useDockersState', () => {
     mockDispatch.mockResolvedValue(undefined)
   })
 
-  it('returns null dockers when no worktree', async () => {
-    mockGetState.mockResolvedValue(JSON.stringify(createMockState({ projects: [] })))
-    window.stateApi = {
-      onStateUpdate: mockOnStateUpdate,
-      getState: mockGetState,
-      dispatch: mockDispatch,
-    }
-
-    const { result } = renderHook(() => useDockersState())
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false)
-    })
-
-    expect(result.current.dockers).toBeNull()
-  })
-
-  it('returns dockers state from active worktree', async () => {
-    const dockers = {
-      services: [{ id: 'svc-1', name: 'postgres', image: 'postgres:16', status: 'running' as const, port: 5432, service_type: 'Database' as const }],
+  it('returns docker state from global state', async () => {
+    // Docker is now at global scope (AppState.docker)
+    const docker = {
+      services: [{ id: 'svc-1', name: 'postgres', image: 'postgres:16', status: 'running' as const, port: 5432, service_type: 'Database' as const, project_group: null, is_rstn_managed: true }],
       selected_service_id: null,
       logs: [],
       is_loading: false,
       is_loading_logs: false,
       docker_available: true,
-      error: null,
+      pending_conflict: null,
+      port_overrides: {},
     }
-    const worktree = createMockWorktree({ dockers })
-    const project = createMockProject({ worktrees: [worktree] })
-    mockGetState.mockResolvedValue(JSON.stringify(createMockState({ projects: [project] })))
+    mockGetState.mockResolvedValue(JSON.stringify(createMockState({ docker })))
     window.stateApi = {
       onStateUpdate: mockOnStateUpdate,
       getState: mockGetState,
@@ -288,7 +286,7 @@ describe('useDockersState', () => {
       expect(result.current.isLoading).toBe(false)
     })
 
-    expect(result.current.dockers).toEqual(dockers)
+    expect(result.current.dockers).toEqual(docker)
     expect(result.current.dockers?.services).toHaveLength(1)
   })
 })
@@ -320,7 +318,7 @@ describe('useTasksState', () => {
 
   it('returns tasks state and project path', async () => {
     const tasks = {
-      commands: [{ name: 'build', description: 'Build project' }],
+      commands: [{ name: 'build', description: 'Build project', recipe: 'cargo build' }],
       task_statuses: {},
       output: [],
       active_command: null,
@@ -355,7 +353,7 @@ describe('useSettingsState', () => {
   })
 
   it('returns global settings', async () => {
-    const settings = { theme: 'dark' as const }
+    const settings = { theme: 'dark' as const, default_project_path: null }
     mockGetState.mockResolvedValue(JSON.stringify(createMockState({ global_settings: settings })))
     window.stateApi = {
       onStateUpdate: mockOnStateUpdate,

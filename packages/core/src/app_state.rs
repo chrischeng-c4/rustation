@@ -26,6 +26,15 @@ pub struct AppState {
     /// Global error (if any)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<AppError>,
+    /// Global Docker state (shared across all projects)
+    #[serde(default)]
+    pub docker: DockersState,
+    /// App-wide notifications (toasts)
+    #[serde(default)]
+    pub notifications: Vec<Notification>,
+    /// Currently active view
+    #[serde(default)]
+    pub active_view: ActiveView,
 }
 
 impl Default for AppState {
@@ -37,6 +46,9 @@ impl Default for AppState {
             global_settings: GlobalSettings::default(),
             recent_projects: Vec::new(),
             error: None,
+            docker: DockersState::default(),
+            notifications: Vec::new(),
+            active_view: ActiveView::default(),
         }
     }
 }
@@ -70,6 +82,9 @@ pub struct ProjectState {
     pub worktrees: Vec<WorktreeState>,
     /// Index of the currently active worktree
     pub active_worktree_index: usize,
+    /// Environment file configuration (project-level)
+    #[serde(default)]
+    pub env_config: EnvConfig,
 }
 
 impl ProjectState {
@@ -86,10 +101,11 @@ impl ProjectState {
 
         Self {
             id: Uuid::new_v4().to_string(),
-            path,
+            path: path.clone(),
             name,
             worktrees: vec![main_worktree],
             active_worktree_index: 0,
+            env_config: EnvConfig::with_source(path),
         }
     }
 
@@ -123,12 +139,11 @@ pub struct WorktreeState {
     pub mcp: McpState,
     /// Whether the worktree has unsaved changes or running tasks
     pub is_modified: bool,
-    /// Currently active feature tab within this worktree
+    /// Currently active feature tab within this worktree (legacy, use AppState.active_view)
     pub active_tab: FeatureTab,
     /// Tasks state for this worktree
     pub tasks: TasksState,
-    /// Docker state for this worktree
-    pub dockers: DockersState,
+    // Note: Docker state moved to AppState.docker (global scope)
 }
 
 impl WorktreeState {
@@ -143,7 +158,6 @@ impl WorktreeState {
             is_modified: false,
             active_tab: FeatureTab::Tasks,
             tasks: TasksState::default(),
-            dockers: DockersState::default(),
         }
     }
 }
@@ -179,7 +193,7 @@ pub struct McpState {
     pub error: Option<String>,
 }
 
-/// Feature tabs within a project (sidebar)
+/// Feature tabs within a project (sidebar) - legacy, prefer ActiveView
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum FeatureTab {
@@ -187,6 +201,159 @@ pub enum FeatureTab {
     Tasks,
     Dockers,
     Settings,
+}
+
+// ============================================================================
+// Active View (Three-Scope Model)
+// ============================================================================
+
+/// Currently active view in the main content area
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ActiveView {
+    /// Tasks page (worktree scope)
+    #[default]
+    Tasks,
+    /// Settings page (worktree scope)
+    Settings,
+    /// Docker page (global scope)
+    Dockers,
+    /// Env management page (project scope)
+    Env,
+}
+
+// ============================================================================
+// Environment Configuration (Project-level)
+// ============================================================================
+
+/// Environment file configuration for a project
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EnvConfig {
+    /// Patterns of files/folders to track for env copying
+    pub tracked_patterns: Vec<String>,
+    /// Automatically copy env files when creating new worktree
+    pub auto_copy_enabled: bool,
+    /// Default source worktree path for copying (usually main worktree)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_worktree: Option<String>,
+    /// Result of the last copy operation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_copy_result: Option<EnvCopyResult>,
+}
+
+impl Default for EnvConfig {
+    fn default() -> Self {
+        Self {
+            tracked_patterns: vec![
+                ".env".to_string(),
+                ".envrc".to_string(),
+                ".claude/".to_string(),
+                ".vscode/".to_string(),
+            ],
+            auto_copy_enabled: true,
+            source_worktree: None,
+            last_copy_result: None,
+        }
+    }
+}
+
+impl EnvConfig {
+    /// Create with a specific source worktree
+    pub fn with_source(source_path: String) -> Self {
+        Self {
+            source_worktree: Some(source_path),
+            ..Self::default()
+        }
+    }
+}
+
+/// Result of an env file copy operation
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EnvCopyResult {
+    /// Files that were successfully copied
+    pub copied_files: Vec<String>,
+    /// Files that failed to copy (path, error message)
+    pub failed_files: Vec<(String, String)>,
+    /// Timestamp of the operation (ISO 8601)
+    pub timestamp: String,
+}
+
+// ============================================================================
+// Notifications (Toasts)
+// ============================================================================
+
+/// App notification (toast message)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Notification {
+    /// Unique identifier
+    pub id: String,
+    /// Notification message
+    pub message: String,
+    /// Type of notification
+    pub notification_type: NotificationType,
+    /// Creation timestamp (ISO 8601)
+    pub created_at: String,
+}
+
+impl Notification {
+    /// Create a new notification
+    pub fn new(message: impl Into<String>, notification_type: NotificationType) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            message: message.into(),
+            notification_type,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    pub fn success(message: impl Into<String>) -> Self {
+        Self::new(message, NotificationType::Success)
+    }
+
+    pub fn error(message: impl Into<String>) -> Self {
+        Self::new(message, NotificationType::Error)
+    }
+
+    pub fn info(message: impl Into<String>) -> Self {
+        Self::new(message, NotificationType::Info)
+    }
+}
+
+/// Notification type
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum NotificationType {
+    #[default]
+    Info,
+    Success,
+    Warning,
+    Error,
+}
+
+// ============================================================================
+// From Implementations (Actions -> State)
+// ============================================================================
+
+impl From<crate::actions::ActiveViewData> for ActiveView {
+    fn from(data: crate::actions::ActiveViewData) -> Self {
+        match data {
+            crate::actions::ActiveViewData::Tasks => ActiveView::Tasks,
+            crate::actions::ActiveViewData::Settings => ActiveView::Settings,
+            crate::actions::ActiveViewData::Dockers => ActiveView::Dockers,
+            crate::actions::ActiveViewData::Env => ActiveView::Env,
+        }
+    }
+}
+
+impl From<crate::actions::NotificationTypeData> for NotificationType {
+    fn from(data: crate::actions::NotificationTypeData) -> Self {
+        match data {
+            crate::actions::NotificationTypeData::Info => NotificationType::Info,
+            crate::actions::NotificationTypeData::Success => NotificationType::Success,
+            crate::actions::NotificationTypeData::Warning => NotificationType::Warning,
+            crate::actions::NotificationTypeData::Error => NotificationType::Error,
+        }
+    }
 }
 
 /// Recent project entry
@@ -417,18 +584,8 @@ mod tests {
 
         // Add a project
         let mut project = ProjectState::new("/test/project".to_string());
-        // Access through worktree
+        // Access through worktree for tasks
         if let Some(worktree) = project.active_worktree_mut() {
-            worktree.dockers.services.push(DockerServiceInfo {
-                id: "test-id".to_string(),
-                name: "PostgreSQL".to_string(),
-                image: "postgres:16".to_string(),
-                status: ServiceStatus::Running,
-                port: Some(5432),
-                service_type: ServiceType::Database,
-                project_group: Some("rstn".to_string()),
-                is_rstn_managed: true,
-            });
             worktree.tasks.commands.push(JustCommandInfo {
                 name: "test".to_string(),
                 description: Some("Run tests".to_string()),
@@ -437,12 +594,25 @@ mod tests {
         }
         state.projects.push(project);
 
+        // Docker services are now global (on state.docker)
+        state.docker.services.push(DockerServiceInfo {
+            id: "test-id".to_string(),
+            name: "PostgreSQL".to_string(),
+            image: "postgres:16".to_string(),
+            status: ServiceStatus::Running,
+            port: Some(5432),
+            service_type: ServiceType::Database,
+            project_group: Some("rstn".to_string()),
+            is_rstn_managed: true,
+        });
+
         let json = serde_json::to_string_pretty(&state).unwrap();
         println!("Serialized state:\n{}", json);
 
         let loaded: AppState = serde_json::from_str(&json).unwrap();
         assert_eq!(state.projects.len(), loaded.projects.len());
         assert_eq!(state.projects[0].name, loaded.projects[0].name);
+        assert_eq!(state.docker.services.len(), loaded.docker.services.len());
     }
 
     #[test]

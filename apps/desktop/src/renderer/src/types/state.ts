@@ -6,10 +6,19 @@
  */
 
 // ============================================================================
-// Navigation
+// Navigation & Views (Three-Scope Model)
 // ============================================================================
 
 export type FeatureTab = 'tasks' | 'dockers' | 'settings'
+
+/**
+ * Active view in the main content area.
+ * Maps to scope levels:
+ * - tasks, settings: Worktree scope
+ * - dockers: Global scope
+ * - env: Project scope
+ */
+export type ActiveView = 'tasks' | 'settings' | 'dockers' | 'env'
 
 // ============================================================================
 // Docker State
@@ -81,6 +90,36 @@ export interface TasksState {
 }
 
 // ============================================================================
+// Environment Configuration (Project-level)
+// ============================================================================
+
+export interface EnvCopyResult {
+  copied_files: string[]
+  failed_files: [string, string][]
+  timestamp: string
+}
+
+export interface EnvConfig {
+  tracked_patterns: string[]
+  auto_copy_enabled: boolean
+  source_worktree: string | null
+  last_copy_result: EnvCopyResult | null
+}
+
+// ============================================================================
+// Notifications
+// ============================================================================
+
+export type NotificationType = 'info' | 'success' | 'warning' | 'error'
+
+export interface Notification {
+  id: string
+  message: string
+  notification_type: NotificationType
+  created_at: string
+}
+
+// ============================================================================
 // MCP State
 // ============================================================================
 
@@ -106,7 +145,7 @@ export interface WorktreeState {
   is_modified: boolean
   active_tab: FeatureTab
   tasks: TasksState
-  dockers: DockersState
+  // NOTE: dockers moved to AppState.docker (global scope)
 }
 
 // ============================================================================
@@ -119,6 +158,7 @@ export interface ProjectState {
   name: string
   worktrees: WorktreeState[]
   active_worktree_index: number
+  env_config: EnvConfig
 }
 
 // ============================================================================
@@ -159,6 +199,10 @@ export interface AppState {
   global_settings: GlobalSettings
   recent_projects: RecentProject[]
   error?: AppError
+  // Three-Scope Model additions
+  docker: DockersState
+  notifications: Notification[]
+  active_view: ActiveView
 }
 
 // ============================================================================
@@ -389,6 +433,57 @@ export interface SetProjectPathAction {
   payload: { path: string | null }
 }
 
+// Env Actions (Project scope)
+export interface CopyEnvFilesAction {
+  type: 'CopyEnvFiles'
+  payload: {
+    from_worktree_path: string
+    to_worktree_path: string
+    patterns?: string[]
+  }
+}
+
+export interface SetEnvCopyResultAction {
+  type: 'SetEnvCopyResult'
+  payload: { result: EnvCopyResultData }
+}
+
+export interface SetEnvTrackedPatternsAction {
+  type: 'SetEnvTrackedPatterns'
+  payload: { patterns: string[] }
+}
+
+export interface SetEnvAutoCopyAction {
+  type: 'SetEnvAutoCopy'
+  payload: { enabled: boolean }
+}
+
+export interface SetEnvSourceWorktreeAction {
+  type: 'SetEnvSourceWorktree'
+  payload: { worktree_path: string | null }
+}
+
+// Notification Actions
+export interface AddNotificationAction {
+  type: 'AddNotification'
+  payload: { message: string; notification_type: NotificationTypeData }
+}
+
+export interface DismissNotificationAction {
+  type: 'DismissNotification'
+  payload: { id: string }
+}
+
+export interface ClearNotificationsAction {
+  type: 'ClearNotifications'
+}
+
+// View Actions
+export interface SetActiveViewAction {
+  type: 'SetActiveView'
+  payload: { view: ActiveViewData }
+}
+
 // Error Actions
 export interface SetErrorAction {
   type: 'SetError'
@@ -440,6 +535,16 @@ export interface WorktreeData {
 
 export type McpStatusData = 'stopped' | 'starting' | 'running' | 'error'
 
+export interface EnvCopyResultData {
+  copied_files: string[]
+  failed_files: [string, string][]
+  timestamp: string
+}
+
+export type NotificationTypeData = 'info' | 'success' | 'warning' | 'error'
+
+export type ActiveViewData = 'tasks' | 'settings' | 'dockers' | 'env'
+
 // Union type of all actions
 export type Action =
   | OpenProjectAction
@@ -487,6 +592,15 @@ export type Action =
   | SetTasksErrorAction
   | SetThemeAction
   | SetProjectPathAction
+  | CopyEnvFilesAction
+  | SetEnvCopyResultAction
+  | SetEnvTrackedPatternsAction
+  | SetEnvAutoCopyAction
+  | SetEnvSourceWorktreeAction
+  | AddNotificationAction
+  | DismissNotificationAction
+  | ClearNotificationsAction
+  | SetActiveViewAction
   | SetErrorAction
   | ClearErrorAction
 

@@ -164,6 +164,50 @@ pub enum Action {
     SetTasksError { error: Option<String> },
 
     // ========================================================================
+    // Env Actions (Project scope)
+    // ========================================================================
+    /// Copy env files from one worktree to another
+    CopyEnvFiles {
+        from_worktree_path: String,
+        to_worktree_path: String,
+        /// Optional patterns to copy (None = use tracked_patterns)
+        patterns: Option<Vec<String>>,
+    },
+
+    /// Set the result of an env copy operation (internal)
+    SetEnvCopyResult { result: EnvCopyResultData },
+
+    /// Update tracked patterns for the active project
+    SetEnvTrackedPatterns { patterns: Vec<String> },
+
+    /// Toggle auto-copy on worktree creation
+    SetEnvAutoCopy { enabled: bool },
+
+    /// Set source worktree for env copying
+    SetEnvSourceWorktree { worktree_path: Option<String> },
+
+    // ========================================================================
+    // Notification Actions
+    // ========================================================================
+    /// Add a notification (toast)
+    AddNotification {
+        message: String,
+        notification_type: NotificationTypeData,
+    },
+
+    /// Dismiss a notification
+    DismissNotification { id: String },
+
+    /// Clear all notifications
+    ClearNotifications,
+
+    // ========================================================================
+    // View Actions
+    // ========================================================================
+    /// Set the active view in the main content area
+    SetActiveView { view: ActiveViewData },
+
+    // ========================================================================
     // Settings Actions
     // ========================================================================
     /// Set UI theme
@@ -258,6 +302,37 @@ pub struct ConflictingContainerData {
     pub name: String,
     pub image: String,
     pub is_rstn_managed: bool,
+}
+
+/// Env copy result data for actions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EnvCopyResultData {
+    /// Files that were successfully copied
+    pub copied_files: Vec<String>,
+    /// Files that failed to copy (path, error)
+    pub failed_files: Vec<(String, String)>,
+    /// Timestamp of the operation (ISO 8601)
+    pub timestamp: String,
+}
+
+/// Notification type for actions
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum NotificationTypeData {
+    Info,
+    Success,
+    Warning,
+    Error,
+}
+
+/// Active view for actions
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ActiveViewData {
+    Tasks,
+    Settings,
+    Dockers,
+    Env,
 }
 
 // ============================================================================

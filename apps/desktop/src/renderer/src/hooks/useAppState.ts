@@ -230,9 +230,10 @@ interface UseDockersStateResult {
  * ```
  */
 export function useDockersState(): UseDockersStateResult {
-  const { worktree, dispatch, isLoading } = useActiveWorktree()
+  // Docker is now at global scope (AppState.docker)
+  const { state, dispatch, isLoading } = useAppState()
   return {
-    dockers: worktree?.dockers ?? null,
+    dockers: state?.docker ?? null,
     dispatch,
     isLoading,
   }

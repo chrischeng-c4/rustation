@@ -8,6 +8,7 @@ extern crate napi_derive;
 pub mod actions;
 pub mod app_state;
 pub mod docker;
+pub mod env;
 pub mod justfile;
 pub mod persistence;
 pub mod reducer;
@@ -78,7 +79,7 @@ pub async fn docker_start_service(service_id: String) -> napi::Result<()> {
     let dm = get_docker_manager().await?;
     dm.start_service(&service_id)
         .await
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 /// Stop a Docker service
@@ -87,7 +88,7 @@ pub async fn docker_stop_service(service_id: String) -> napi::Result<()> {
     let dm = get_docker_manager().await?;
     dm.stop_service(&service_id)
         .await
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 /// Restart a Docker service
@@ -96,7 +97,7 @@ pub async fn docker_restart_service(service_id: String) -> napi::Result<()> {
     let dm = get_docker_manager().await?;
     dm.restart_service(&service_id)
         .await
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 /// Get container logs
@@ -106,7 +107,7 @@ pub async fn docker_get_logs(service_id: String, tail: Option<u32>) -> napi::Res
     let tail = tail.unwrap_or(100) as usize;
     dm.get_logs(&service_id, tail)
         .await
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 /// Remove a Docker service
@@ -115,7 +116,7 @@ pub async fn docker_remove_service(service_id: String) -> napi::Result<()> {
     let dm = get_docker_manager().await?;
     dm.remove_service(&service_id)
         .await
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 /// Create a database in a database container
@@ -125,7 +126,7 @@ pub async fn docker_create_database(service_id: String, db_name: String) -> napi
     let dm = get_docker_manager().await?;
     dm.create_database(&service_id, &db_name)
         .await
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 /// Create a vhost in RabbitMQ
@@ -135,7 +136,7 @@ pub async fn docker_create_vhost(service_id: String, vhost_name: String) -> napi
     let dm = get_docker_manager().await?;
     dm.create_vhost(&service_id, &vhost_name)
         .await
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 /// Start a Docker service with a specific port override
@@ -144,7 +145,7 @@ pub async fn docker_start_service_with_port(service_id: String, port: u16) -> na
     let dm = get_docker_manager().await?;
     dm.start_service_with_port(&service_id, port)
         .await
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 /// Stop any Docker container by ID or name
@@ -153,7 +154,7 @@ pub async fn docker_stop_container(container_id: String) -> napi::Result<()> {
     let dm = get_docker_manager().await?;
     dm.stop_container(&container_id)
         .await
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 /// Check for port conflict before starting a service
@@ -162,7 +163,7 @@ pub async fn docker_check_port_conflict(service_id: String) -> napi::Result<Opti
     let dm = get_docker_manager().await?;
     dm.check_port_conflict(&service_id)
         .await
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 // ============================================================================
@@ -173,14 +174,14 @@ pub async fn docker_check_port_conflict(service_id: String) -> napi::Result<Opti
 #[napi]
 pub fn justfile_parse(path: String) -> napi::Result<Vec<justfile::JustCommand>> {
     justfile::parse_justfile(&path)
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 /// Run a just command in a directory
 #[napi]
 pub fn justfile_run(command: String, cwd: String) -> napi::Result<String> {
     justfile::run_just_command(&command, &cwd)
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 // ============================================================================
@@ -209,7 +210,7 @@ pub fn worktree_list_branches(repo_path: String) -> napi::Result<Vec<NapiBranchI
                 })
                 .collect()
         })
-        .map_err(|e| napi::Error::from_reason(e))
+        .map_err(napi::Error::from_reason)
 }
 
 // ============================================================================
@@ -558,50 +559,108 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         }
 
         Action::AddWorktree { ref branch } => {
-            // Get the active project path
-            let project_path = {
+            // Get the active project info
+            let (project_path, env_config, source_worktree) = {
                 let state = get_app_state().read().await;
-                state.active_project().map(|p| p.path.clone())
+                if let Some(project) = state.active_project() {
+                    let source = project
+                        .env_config
+                        .source_worktree
+                        .clone()
+                        .or_else(|| project.worktrees.first().map(|w| w.path.clone()));
+                    (
+                        Some(project.path.clone()),
+                        Some(project.env_config.clone()),
+                        source,
+                    )
+                } else {
+                    (None, None, None)
+                }
             };
 
             if let Some(path) = project_path {
                 match worktree::add_worktree(&path, branch) {
-                    Ok(_new_worktree) => {
+                    Ok(new_worktree) => {
                         // Refresh worktrees to get the updated list
                         refresh_worktrees_for_path(&path).await;
+
+                        // Auto-copy env files if enabled
+                        if let (Some(config), Some(source)) = (env_config, source_worktree) {
+                            if config.auto_copy_enabled {
+                                let copy_action = Action::CopyEnvFiles {
+                                    from_worktree_path: source,
+                                    to_worktree_path: new_worktree.path,
+                                    patterns: Some(config.tracked_patterns),
+                                };
+                                // Handle env copy (will add notification)
+                                Box::pin(handle_async_action(copy_action)).await.ok();
+                            }
+                        }
                     }
                     Err(e) => {
                         let mut state = get_app_state().write().await;
-                        reduce(&mut state, Action::SetError {
-                            code: "WORKTREE_ADD_ERROR".to_string(),
-                            message: e,
-                            context: Some(format!("AddWorktree: {}", branch)),
-                        });
+                        reduce(
+                            &mut state,
+                            Action::SetError {
+                                code: "WORKTREE_ADD_ERROR".to_string(),
+                                message: e,
+                                context: Some(format!("AddWorktree: {}", branch)),
+                            },
+                        );
                     }
                 }
             }
         }
 
         Action::AddWorktreeNewBranch { ref branch } => {
-            // Get the active project path
-            let project_path = {
+            // Get the active project info
+            let (project_path, env_config, source_worktree) = {
                 let state = get_app_state().read().await;
-                state.active_project().map(|p| p.path.clone())
+                if let Some(project) = state.active_project() {
+                    let source = project
+                        .env_config
+                        .source_worktree
+                        .clone()
+                        .or_else(|| project.worktrees.first().map(|w| w.path.clone()));
+                    (
+                        Some(project.path.clone()),
+                        Some(project.env_config.clone()),
+                        source,
+                    )
+                } else {
+                    (None, None, None)
+                }
             };
 
             if let Some(path) = project_path {
                 match worktree::add_worktree_new_branch(&path, branch) {
-                    Ok(_new_worktree) => {
+                    Ok(new_worktree) => {
                         // Refresh worktrees to get the updated list
                         refresh_worktrees_for_path(&path).await;
+
+                        // Auto-copy env files if enabled
+                        if let (Some(config), Some(source)) = (env_config, source_worktree) {
+                            if config.auto_copy_enabled {
+                                let copy_action = Action::CopyEnvFiles {
+                                    from_worktree_path: source,
+                                    to_worktree_path: new_worktree.path,
+                                    patterns: Some(config.tracked_patterns),
+                                };
+                                // Handle env copy (will add notification)
+                                Box::pin(handle_async_action(copy_action)).await.ok();
+                            }
+                        }
                     }
                     Err(e) => {
                         let mut state = get_app_state().write().await;
-                        reduce(&mut state, Action::SetError {
-                            code: "WORKTREE_ADD_ERROR".to_string(),
-                            message: e,
-                            context: Some(format!("AddWorktreeNewBranch: {}", branch)),
-                        });
+                        reduce(
+                            &mut state,
+                            Action::SetError {
+                                code: "WORKTREE_ADD_ERROR".to_string(),
+                                message: e,
+                                context: Some(format!("AddWorktreeNewBranch: {}", branch)),
+                            },
+                        );
                     }
                 }
             }
@@ -679,6 +738,82 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
             }
         }
 
+        Action::CopyEnvFiles {
+            ref from_worktree_path,
+            ref to_worktree_path,
+            ref patterns,
+        } => {
+            let from = from_worktree_path.clone();
+            let to = to_worktree_path.clone();
+
+            // Get patterns from action or fall back to project's tracked_patterns
+            let copy_patterns = if let Some(p) = patterns {
+                p.clone()
+            } else {
+                let state = get_app_state().read().await;
+                if let Some(project) = state.active_project() {
+                    project.env_config.tracked_patterns.clone()
+                } else {
+                    env::default_patterns()
+                }
+            };
+
+            match env::copy_env_files(&from, &to, &copy_patterns) {
+                Ok(result) => {
+                    // Convert to action data type
+                    let result_data = actions::EnvCopyResultData {
+                        copied_files: result.copied.clone(),
+                        failed_files: result.failed.clone(),
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                    };
+
+                    let mut state = get_app_state().write().await;
+                    reduce(&mut state, Action::SetEnvCopyResult { result: result_data });
+
+                    // Add notification based on result
+                    let message = if result.is_success() {
+                        format!("Copied {} env file(s)", result.copied.len())
+                    } else if result.is_partial() {
+                        format!(
+                            "Copied {} file(s), {} failed",
+                            result.copied.len(),
+                            result.failed.len()
+                        )
+                    } else if result.copied.is_empty() && result.failed.is_empty() {
+                        "No env files to copy".to_string()
+                    } else {
+                        format!("Failed to copy {} file(s)", result.failed.len())
+                    };
+
+                    let notif_type = if result.is_success() {
+                        actions::NotificationTypeData::Success
+                    } else if result.is_partial() {
+                        actions::NotificationTypeData::Warning
+                    } else {
+                        actions::NotificationTypeData::Info
+                    };
+
+                    reduce(
+                        &mut state,
+                        Action::AddNotification {
+                            message,
+                            notification_type: notif_type,
+                        },
+                    );
+                }
+                Err(e) => {
+                    let mut state = get_app_state().write().await;
+                    reduce(
+                        &mut state,
+                        Action::AddNotification {
+                            message: format!("Env copy failed: {}", e),
+                            notification_type: actions::NotificationTypeData::Error,
+                        },
+                    );
+                }
+            }
+        }
+
         // Synchronous actions - already handled by reduce()
         Action::CloseProject { .. }
         | Action::SwitchProject { .. }
@@ -709,7 +844,18 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         | Action::SetTheme { .. }
         | Action::SetProjectPath { .. }
         | Action::SetError { .. }
-        | Action::ClearError => {
+        | Action::ClearError
+        // Env actions (sync)
+        | Action::SetEnvCopyResult { .. }
+        | Action::SetEnvTrackedPatterns { .. }
+        | Action::SetEnvAutoCopy { .. }
+        | Action::SetEnvSourceWorktree { .. }
+        // Notification actions (sync)
+        | Action::AddNotification { .. }
+        | Action::DismissNotification { .. }
+        | Action::ClearNotifications
+        // View actions (sync)
+        | Action::SetActiveView { .. } => {
             // Already handled synchronously
         }
     }

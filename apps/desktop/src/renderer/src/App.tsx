@@ -1,12 +1,12 @@
 import { useCallback } from 'react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ListTodo, Container, Settings, RefreshCw, FolderOpen } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ListTodo, Settings, RefreshCw, FolderOpen, FileCode } from 'lucide-react'
 import { DockersPage } from '@/features/dockers/DockersPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { useActiveWorktree, useAppState } from '@/hooks/useAppState'
 import { ProjectTabs } from '@/components/ProjectTabs'
 import { Button } from '@/components/ui/button'
-import type { FeatureTab } from '@/types/state'
+import type { ActiveView } from '@/types/state'
 
 function NoProjectView() {
   const { dispatch } = useAppState()
@@ -31,15 +31,31 @@ function NoProjectView() {
   )
 }
 
-function App(): JSX.Element {
-  const { state, isLoading } = useAppState()
-  const { worktree, project, dispatch } = useActiveWorktree()
+/**
+ * Placeholder EnvPage component.
+ * TODO: Move to features/env/EnvPage.tsx
+ */
+function EnvPagePlaceholder() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
+      <FileCode className="h-16 w-16" />
+      <h2 className="text-xl font-medium">Environment Files</h2>
+      <p className="text-sm">Manage dotfiles across worktrees</p>
+      <p className="text-xs text-muted-foreground/60">Coming Soon</p>
+    </div>
+  )
+}
 
-  const activeTab = worktree?.active_tab ?? 'tasks'
+function App() {
+  const { state, isLoading, dispatch } = useAppState()
+  const { worktree } = useActiveWorktree()
 
-  const handleTabChange = useCallback(
-    (tab: string) => {
-      dispatch({ type: 'SetFeatureTab', payload: { tab: tab as FeatureTab } })
+  // Use global active_view from state
+  const activeView = state?.active_view ?? 'tasks'
+
+  const handleSidebarChange = useCallback(
+    (view: string) => {
+      dispatch({ type: 'SetActiveView', payload: { view: view as ActiveView } })
     },
     [dispatch]
   )
@@ -53,6 +69,36 @@ function App(): JSX.Element {
     )
   }
 
+  // Render content based on active view
+  const renderContent = () => {
+    switch (activeView) {
+      case 'tasks':
+        return <TasksPage />
+      case 'settings':
+        return (
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            Settings - Coming Soon
+          </div>
+        )
+      case 'dockers':
+        return <DockersPage />
+      case 'env':
+        return <EnvPagePlaceholder />
+      default:
+        return <TasksPage />
+    }
+  }
+
+  // Determine if sidebar items should be highlighted
+  // Only highlight for worktree-scope views (tasks, settings)
+  const getSidebarValue = () => {
+    if (activeView === 'tasks' || activeView === 'settings') {
+      return activeView
+    }
+    // For global/project scope views (dockers, env), don't highlight sidebar
+    return ''
+  }
+
   return (
     <div className="flex h-screen flex-col bg-background">
       {/* Project Tabs (Top) */}
@@ -63,11 +109,12 @@ function App(): JSX.Element {
         {worktree ? (
           /* Sidebar + Content when project is open */
           <Tabs
-            value={activeTab}
-            onValueChange={handleTabChange}
+            value={getSidebarValue()}
+            onValueChange={handleSidebarChange}
             orientation="vertical"
             className="flex h-full w-full"
           >
+            {/* Sidebar: Only worktree-scope features */}
             <TabsList className="flex h-full w-16 flex-col items-center gap-2 rounded-none border-r bg-muted/40 p-2">
               <TabsTrigger
                 value="tasks"
@@ -75,13 +122,6 @@ function App(): JSX.Element {
               >
                 <ListTodo className="h-5 w-5" />
                 <span className="text-[10px]">Tasks</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="dockers"
-                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
-              >
-                <Container className="h-5 w-5" />
-                <span className="text-[10px]">Docker</span>
               </TabsTrigger>
               <TabsTrigger
                 value="settings"
@@ -92,20 +132,8 @@ function App(): JSX.Element {
               </TabsTrigger>
             </TabsList>
 
-            {/* Main Content */}
-            <div className="flex-1 overflow-auto p-6">
-              <TabsContent value="tasks" className="m-0 h-full">
-                <TasksPage />
-              </TabsContent>
-              <TabsContent value="dockers" className="m-0 h-full">
-                <DockersPage />
-              </TabsContent>
-              <TabsContent value="settings" className="m-0 h-full">
-                <div className="flex h-full items-center justify-center text-muted-foreground">
-                  Settings - Coming Soon
-                </div>
-              </TabsContent>
-            </div>
+            {/* Main Content - renders based on activeView */}
+            <div className="flex-1 overflow-auto p-6">{renderContent()}</div>
           </Tabs>
         ) : (
           /* No project open */
