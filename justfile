@@ -1,7 +1,14 @@
 # rustation - Electron Desktop App
 
+# Install all dependencies and build core
+setup:
+    pnpm install --recursive
+    cd apps/desktop && node node_modules/electron/install.js
+    cd packages/core && pnpm build
+
 # Run Electron dev server
 dev:
+    @test -d apps/desktop/node_modules || (echo "Missing dependencies. Run: just setup" && exit 1)
     cd apps/desktop && pnpm dev
 
 # Build Electron app
