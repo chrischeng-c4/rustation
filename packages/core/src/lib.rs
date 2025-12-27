@@ -7,6 +7,7 @@ extern crate napi_derive;
 
 pub mod actions;
 pub mod app_state;
+pub mod claude_cli;
 pub mod context_engine;
 pub mod docker;
 pub mod env;
@@ -27,6 +28,7 @@ use napi::threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunction, Threa
 use reducer::reduce;
 use state::DockerService;
 use std::sync::{Arc, OnceLock};
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::{OnceCell, RwLock};
 
 // Global Docker manager instance
@@ -1041,8 +1043,7 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         // MCP log actions (sync)
         | Action::AddMcpLogEntry { .. }
         | Action::ClearMcpLogs
-        // Chat actions (sync - except SendChatMessage which needs async)
-        | Action::SendChatMessage { .. } // TODO: Add async handling for Claude API
+        // Chat actions (sync state updates only)
         | Action::AddChatMessage { .. }
         | Action::AppendChatContent { .. }
         | Action::SetChatTyping { .. }
@@ -1055,6 +1056,424 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         // View actions (sync)
         | Action::SetActiveView { .. } => {
             // Already handled synchronously
+        }
+
+        // Claude Code CLI chat (async - spawns external process)
+        Action::SendChatMessage { ref text } => {
+            // Get the working directory from active worktree
+            let cwd = {
+                let state = get_app_state().read().await;
+                state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .map(|w| std::path::PathBuf::from(&w.path))
+            };
+
+            let cwd = match cwd {
+                Some(path) => path,
+                None => {
+                    {
+                        let mut state = get_app_state().write().await;
+                        reduce(
+                            &mut state,
+                            Action::SetChatError {
+                                error: "No active project".to_string(),
+                            },
+                        );
+                        reduce(&mut state, Action::SetChatTyping { is_typing: false });
+                    } // Write lock released here
+                    notify_state_update().await;
+                    return Ok(());
+                }
+            };
+
+            // Create assistant message placeholder (streaming)
+            let msg_id = format!("assistant-{}", chrono::Utc::now().timestamp_millis());
+            {
+                let mut state = get_app_state().write().await;
+                reduce(
+                    &mut state,
+                    Action::AddChatMessage {
+                        message: actions::ChatMessageData {
+                            id: msg_id.clone(),
+                            role: actions::ChatRoleData::Assistant,
+                            content: String::new(),
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            is_streaming: true,
+                        },
+                    },
+                );
+            } // Write lock released here
+            notify_state_update().await;
+
+            // Clone values for async task
+            let prompt = text.clone();
+            let cwd_for_task = cwd.clone();
+
+            // Log spawn attempt (debug mode)
+            {
+                let mut state = get_app_state().write().await;
+                reduce(
+                    &mut state,
+                    Action::AddDebugLog {
+                        log: actions::ClaudeDebugLogData {
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            level: "info".to_string(),
+                            event_type: "spawn_attempt".to_string(),
+                            message: format!(
+                                "Spawning Claude CLI: claude -p --verbose --output-format stream-json \"{}...\"",
+                                &prompt[..prompt.len().min(50)]
+                            ),
+                            details: Some(serde_json::json!({
+                                "cwd": cwd.display().to_string(),
+                                "prompt_length": prompt.len(),
+                            })),
+                        },
+                    },
+                );
+            } // Write lock released here
+            notify_state_update().await;
+
+            // Spawn async task to handle CLI interaction without blocking
+
+            tokio::spawn(async move {
+    // Validate Claude CLI exists before attempting spawn
+    if let Err(e) = claude_cli::validate_claude_cli().await {
+        let error = e.to_string();
+        {
+            let mut state = get_app_state().write().await;
+            reduce(
+                &mut state,
+                Action::AddDebugLog {
+                    log: actions::ClaudeDebugLogData {
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        level: "error".to_string(),
+                        event_type: "spawn_error".to_string(),
+                        message: format!("Claude CLI validation failed: {}", error),
+                        details: None,
+                    },
+                },
+            );
+            reduce(&mut state, Action::SetChatError { error });
+            reduce(&mut state, Action::SetChatTyping { is_typing: false });
+        }
+        notify_state_update().await;
+        return;
+    }
+
+    // Spawn Claude CLI process
+    match claude_cli::spawn_claude(&prompt, &cwd_for_task) {
+        Ok(mut child) => {
+            // Log spawn success
+            {
+                let mut state = get_app_state().write().await;
+                reduce(
+                    &mut state,
+                    Action::AddDebugLog {
+                        log: actions::ClaudeDebugLogData {
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            level: "info".to_string(),
+                            event_type: "spawn_success".to_string(),
+                            message: format!(
+                                "Claude CLI spawned successfully (PID: {:?})",
+                                child.id()
+                            ),
+                            details: None,
+                        },
+                    },
+                );
+            }
+            notify_state_update().await;
+
+            // Monitor stderr for diagnostic information
+            if let Some(stderr) = child.stderr.take() {
+                tokio::spawn(async move {
+                    let reader = BufReader::new(stderr);
+                    let mut lines = reader.lines();
+
+                    while let Ok(Some(line)) = lines.next_line().await {
+                        let trimmed = line.trim();
+                        if !trimmed.is_empty() {
+                            // Log each stderr line to debug logs
+                            {
+                                let mut state = get_app_state().write().await;
+                                reduce(
+                                    &mut state,
+                                    Action::AddDebugLog {
+                                        log: actions::ClaudeDebugLogData {
+                                            timestamp: chrono::Utc::now().to_rfc3339(),
+                                            level: "error".to_string(),
+                                            event_type: "stderr".to_string(),
+                                            message: trimmed.to_string(),
+                                            details: None,
+                                        },
+                                    },
+                                );
+                            }
+                            notify_state_update().await;
+                        }
+                    }
+                });
+            }
+
+            // Create event stream
+            match claude_cli::ClaudeEventStream::new(&mut child) {
+                Ok(mut stream) => {
+                    use std::time::Instant;
+                    let start_time = Instant::now();
+                    let mut consecutive_other_events = 0;
+                    const MAX_CONSECUTIVE_OTHER: u32 = 10;
+
+                    // Event loop with timeout
+                    loop {
+                        // Check total timeout (5 minutes)
+                        if start_time.elapsed() > claude_cli::TOTAL_TIMEOUT {
+                            let error = "Request exceeded 5 minute timeout".to_string();
+                            {
+                                let mut state = get_app_state().write().await;
+                                reduce(
+                                    &mut state,
+                                    Action::AddDebugLog {
+                                        log: actions::ClaudeDebugLogData {
+                                            timestamp: chrono::Utc::now().to_rfc3339(),
+                                            level: "error".to_string(),
+                                            event_type: "total_timeout".to_string(),
+                                            message: "Total timeout: Request exceeded 5 minutes".to_string(),
+                                            details: None,
+                                        },
+                                    },
+                                );
+                                reduce(&mut state, Action::SetChatError { error });
+                                reduce(&mut state, Action::SetChatTyping { is_typing: false });
+                            }
+                            notify_state_update().await;
+                            break;
+                        }
+
+                        // Read next event with timeout (30s)
+                        match tokio::time::timeout(
+                            claude_cli::EVENT_TIMEOUT,
+                            stream.next_event()
+                        ).await {
+                            Ok(Some(Ok(event))) => {
+                                // Log unsupported events for debugging
+                                if matches!(event, claude_cli::ClaudeStreamEvent::Other) {
+                                    {
+                                        let mut state = get_app_state().write().await;
+                                        reduce(
+                                            &mut state,
+                                            Action::AddDebugLog {
+                                                log: actions::ClaudeDebugLogData {
+                                                    timestamp: chrono::Utc::now().to_rfc3339(),
+                                                    level: "warn".to_string(),
+                                                    event_type: "unsupported_event".to_string(),
+                                                    message: format!("Received unsupported event type: {:?}", event),
+                                                    details: None,
+                                                },
+                                            },
+                                        );
+                                    }
+                                    notify_state_update().await;
+                                    consecutive_other_events += 1;
+                                    if consecutive_other_events >= MAX_CONSECUTIVE_OTHER {
+                                        let error = format!("Received {} consecutive unsupported events from Claude CLI", consecutive_other_events);
+                                        {
+                                            let mut state = get_app_state().write().await;
+                                            reduce(
+                                                &mut state,
+                                                Action::AddDebugLog {
+                                                    log: actions::ClaudeDebugLogData {
+                                                        timestamp: chrono::Utc::now().to_rfc3339(),
+                                                        level: "error".to_string(),
+                                                        event_type: "too_many_unsupported".to_string(),
+                                                        message: "Too many unsupported events, likely incompatible format".to_string(),
+                                                        details: None,
+                                                    },
+                                                },
+                                            );
+                                            reduce(&mut state, Action::SetChatError { error });
+                                            reduce(&mut state, Action::SetChatTyping { is_typing: false });
+                                        }
+                                        notify_state_update().await;
+                                        break;
+                                    }
+                                    continue;
+                                }
+
+                                // System events are informational, don't count as errors
+                                if matches!(event, claude_cli::ClaudeStreamEvent::System { .. }) {
+                                    consecutive_other_events = 0;
+                                    continue;
+                                }
+
+                                // Reset counter when we get a useful event
+                                consecutive_other_events = 0;
+
+                                // Process streaming text deltas (Anthropic API format)
+                                if let Some(text_chunk) = claude_cli::extract_text_delta(&event) {
+                                    let content = text_chunk.to_string();
+                                    {
+                                        let mut state = get_app_state().write().await;
+                                        reduce(&mut state, Action::AppendChatContent { content });
+                                    }
+                                    notify_state_update().await;
+                                }
+
+                                // Process Claude CLI assistant messages (complete message format)
+                                if let Some(text_content) = claude_cli::extract_assistant_text(&event) {
+                                    {
+                                        let mut state = get_app_state().write().await;
+                                        reduce(&mut state, Action::AppendChatContent { content: text_content });
+                                    }
+                                    notify_state_update().await;
+                                }
+
+                                // Check for message_stop
+                                if claude_cli::is_message_stop(&event) {
+                                    {
+                                        let mut state = get_app_state().write().await;
+                                        reduce(
+                                            &mut state,
+                                            Action::AddDebugLog {
+                                                log: actions::ClaudeDebugLogData {
+                                                    timestamp: chrono::Utc::now().to_rfc3339(),
+                                                    level: "info".to_string(),
+                                                    event_type: "message_complete".to_string(),
+                                                    message: "Claude response complete".to_string(),
+                                                    details: None,
+                                                },
+                                            },
+                                        );
+                                        reduce(&mut state, Action::SetChatTyping { is_typing: false });
+                                    }
+                                    notify_state_update().await;
+                                    break;
+                                }
+                            }
+                            Ok(Some(Err(e))) => {
+                                // Parse error
+                                let error = e.to_string();
+                                {
+                                    let mut state = get_app_state().write().await;
+                                    reduce(
+                                        &mut state,
+                                        Action::AddDebugLog {
+                                            log: actions::ClaudeDebugLogData {
+                                                timestamp: chrono::Utc::now().to_rfc3339(),
+                                                level: "error".to_string(),
+                                                event_type: "parse_error".to_string(),
+                                                message: format!("JSONL parse error: {}", error),
+                                                details: None,
+                                            },
+                                        },
+                                    );
+                                    reduce(&mut state, Action::SetChatError { error });
+                                    reduce(&mut state, Action::SetChatTyping { is_typing: false });
+                                }
+                                notify_state_update().await;
+                                break;
+                            }
+                            Ok(None) => {
+                                // Stream ended without message_stop - this is an error
+                                let error = "Claude CLI ended unexpectedly. Check if you have valid API credentials.".to_string();
+                                {
+                                    let mut state = get_app_state().write().await;
+                                    reduce(
+                                        &mut state,
+                                        Action::AddDebugLog {
+                                            log: actions::ClaudeDebugLogData {
+                                                timestamp: chrono::Utc::now().to_rfc3339(),
+                                                level: "error".to_string(),
+                                                event_type: "stream_end".to_string(),
+                                                message: "Stream ended (EOF) without message_stop - likely authentication or CLI error".to_string(),
+                                                details: None,
+                                            },
+                                        },
+                                    );
+                                    reduce(&mut state, Action::SetChatError { error });
+                                    reduce(&mut state, Action::SetChatTyping { is_typing: false });
+                                }
+                                notify_state_update().await;
+                                break;
+                            }
+                            Err(_) => {
+                                // Timeout - no event received for 30s
+                                let error = "No response from Claude CLI for 30 seconds".to_string();
+                                {
+                                    let mut state = get_app_state().write().await;
+                                    reduce(
+                                        &mut state,
+                                        Action::AddDebugLog {
+                                            log: actions::ClaudeDebugLogData {
+                                                timestamp: chrono::Utc::now().to_rfc3339(),
+                                                level: "error".to_string(),
+                                                event_type: "event_timeout".to_string(),
+                                                message: "Event timeout: No response for 30 seconds".to_string(),
+                                                details: None,
+                                            },
+                                        },
+                                    );
+                                    reduce(&mut state, Action::SetChatError { error });
+                                    reduce(&mut state, Action::SetChatTyping { is_typing: false });
+                                }
+                                notify_state_update().await;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Ensure typing flag is cleared after loop exits
+                    {
+                        let mut state = get_app_state().write().await;
+                        reduce(&mut state, Action::SetChatTyping { is_typing: false });
+                    }
+                    notify_state_update().await;
+
+                    // Wait for process to finish
+                    let _ = child.wait().await;
+                }
+                Err(e) => {
+                    let error = e.to_string();
+                    {
+                        let mut state = get_app_state().write().await;
+                        reduce(&mut state, Action::SetChatError { error });
+                        reduce(&mut state, Action::SetChatTyping { is_typing: false });
+                    }
+                    notify_state_update().await;
+                }
+            }
+        }
+        Err(e) => {
+            let error = e.to_string();
+            {
+                let mut state = get_app_state().write().await;
+                reduce(
+                    &mut state,
+                    Action::AddDebugLog {
+                        log: actions::ClaudeDebugLogData {
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            level: "error".to_string(),
+                            event_type: "spawn_error".to_string(),
+                            message: format!("Failed to spawn Claude CLI: {}", error),
+                            details: None,
+                        },
+                    },
+                );
+                reduce(&mut state, Action::SetChatError { error });
+                reduce(&mut state, Action::SetChatTyping { is_typing: false });
+            }
+            notify_state_update().await;
+        }
+    }
+});
+
+            // Return immediately - background thread handles streaming
+        }
+
+        // Debug log actions (sync - handled in reducer)
+        Action::AddDebugLog { .. } | Action::ClearDebugLogs => {
+            // These are pure state mutations, handled synchronously in reducer
+            // No async operations needed
         }
 
         // Terminal actions (async - PTY operations)
