@@ -748,7 +748,7 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                                                 Some(actions::McpToolData {
                                                     name: tool.get("name")?.as_str()?.to_string(),
                                                     description: tool.get("description")?.as_str()?.to_string(),
-                                                    input_schema: tool.get("inputSchema")?.clone(),
+                                                    input_schema: tool.get("input_schema")?.clone(),
                                                 })
                                             })
                                             .collect();
