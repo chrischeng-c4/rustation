@@ -729,6 +729,43 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                             eprintln!("Warning: Failed to generate MCP config: {}", e);
                         }
                     }
+
+                    // Release the write lock before fetching tools
+                    drop(state);
+
+                    // Fetch and store available tools
+                    match fetch_mcp_tools().await {
+                        Ok(json_str) => {
+                            match serde_json::from_str::<serde_json::Value>(&json_str) {
+                                Ok(data) => {
+                                    if let Some(tools_array) = data.get("result")
+                                        .and_then(|r| r.get("tools"))
+                                        .and_then(|t| t.as_array())
+                                    {
+                                        let tools: Vec<actions::McpToolData> = tools_array
+                                            .iter()
+                                            .filter_map(|tool| {
+                                                Some(actions::McpToolData {
+                                                    name: tool.get("name")?.as_str()?.to_string(),
+                                                    description: tool.get("description")?.as_str()?.to_string(),
+                                                    input_schema: tool.get("inputSchema")?.clone(),
+                                                })
+                                            })
+                                            .collect();
+
+                                        let mut state = get_app_state().write().await;
+                                        reduce(&mut state, Action::UpdateMcpTools { tools });
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("Warning: Failed to parse MCP tools response: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Warning: Failed to fetch MCP tools: {}", e);
+                        }
+                    }
                 }
                 Err(e) => {
                     let mut state = get_app_state().write().await;

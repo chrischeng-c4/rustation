@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback } from 'react'
 import { Server, Play, Square, RefreshCw, Trash2, AlertCircle, CheckCircle2, Terminal, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -13,7 +13,6 @@ import type { McpLogEntry, McpTool } from '@/types/state'
  */
 export function McpPage() {
   const { mcp, projectName, dispatch, isLoading } = useMcpState()
-  const [tools, setTools] = useState<McpTool[]>([])
 
   const handleStart = useCallback(async () => {
     await dispatch({ type: 'StartMcpServer' })
@@ -33,39 +32,8 @@ export function McpPage() {
     navigator.clipboard.writeText(command)
   }, [mcp?.config_path])
 
-  // Fetch tools when MCP server is running
-  useEffect(() => {
-    if (mcp?.status === 'running') {
-      const fetchTools = async () => {
-        try {
-          const json = await window.api.mcp.fetchTools()
-          console.log('[MCP] Raw response:', json)
-          const data = JSON.parse(json)
-          console.log('[MCP] Parsed data:', data)
-          console.log('[MCP] data.result:', data.result)
-          console.log('[MCP] data.result?.tools:', data.result?.tools)
-
-          if (data.result?.tools) {
-            console.log('[MCP] Setting tools:', data.result.tools)
-            setTools(data.result.tools)
-            // Also dispatch to update state
-            await dispatch({
-              type: 'UpdateMcpTools',
-              payload: { tools: data.result.tools }
-            })
-          } else {
-            console.warn('[MCP] No tools found in response. Full data:', JSON.stringify(data, null, 2))
-          }
-        } catch (err) {
-          console.error('[MCP] Failed to fetch MCP tools:', err)
-        }
-      }
-      fetchTools()
-    } else {
-      // Clear tools when server is not running
-      setTools([])
-    }
-  }, [mcp?.status, dispatch])
+  // Get tools from state (populated automatically when server starts)
+  const tools = mcp?.available_tools ?? []
 
   // Loading state
   if (isLoading) {
