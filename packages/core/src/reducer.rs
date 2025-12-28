@@ -392,6 +392,77 @@ pub fn reduce(state: &mut AppState, action: Action) {
         }
 
         // ====================================================================
+        // Constitution Workflow Actions (worktree scope)
+        // ====================================================================
+        Action::StartConstitutionWorkflow => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.tasks.constitution_workflow =
+                        Some(crate::app_state::ConstitutionWorkflow {
+                            current_question: 0,
+                            answers: std::collections::HashMap::new(),
+                            output: String::new(),
+                            status: crate::app_state::WorkflowStatus::Collecting,
+                        });
+                }
+            }
+        }
+
+        Action::AnswerConstitutionQuestion { answer } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(workflow) = &mut worktree.tasks.constitution_workflow {
+                        // Question keys (hardcoded for Phase 1)
+                        const QUESTIONS: &[&str] =
+                            &["tech_stack", "security", "code_quality", "architecture"];
+
+                        // Save answer to current question
+                        if workflow.current_question < QUESTIONS.len() {
+                            let key = QUESTIONS[workflow.current_question];
+                            workflow.answers.insert(key.to_string(), answer);
+                            workflow.current_question += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        Action::GenerateConstitution => {
+            // Async action - actual Claude call handled in lib.rs
+            // Just update status to Generating
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(workflow) = &mut worktree.tasks.constitution_workflow {
+                        workflow.status = crate::app_state::WorkflowStatus::Generating;
+                        workflow.output.clear(); // Reset output before generation
+                    }
+                }
+            }
+        }
+
+        Action::AppendConstitutionOutput { content } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(workflow) = &mut worktree.tasks.constitution_workflow {
+                        workflow.output.push_str(&content);
+                    }
+                }
+            }
+        }
+
+        Action::SaveConstitution => {
+            // Async action - actual file write handled in lib.rs
+            // Just update status to Complete
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(workflow) = &mut worktree.tasks.constitution_workflow {
+                        workflow.status = crate::app_state::WorkflowStatus::Complete;
+                    }
+                }
+            }
+        }
+
+        // ====================================================================
         // Docker Actions (global scope - operate on state.docker)
         // ====================================================================
         Action::CheckDockerAvailability => {
@@ -2459,5 +2530,221 @@ mod tests {
         assert_eq!(reviewer.name, "Code Reviewer");
         assert!(reviewer.is_builtin);
         assert!(reviewer.prompt.contains("code reviewer"));
+    }
+
+    // ========================================================================
+    // Constitution Workflow Tests (CESDD Phase 1)
+    // ========================================================================
+
+    #[test]
+    fn test_start_constitution_workflow() {
+        let mut state = state_with_project();
+
+        // Initially no workflow
+        let worktree = active_worktree(&state);
+        assert!(worktree.tasks.constitution_workflow.is_none());
+
+        // Start workflow
+        reduce(&mut state, Action::StartConstitutionWorkflow);
+
+        // Workflow should be initialized
+        let worktree = active_worktree(&state);
+        let workflow = worktree.tasks.constitution_workflow.as_ref().unwrap();
+        assert_eq!(workflow.current_question, 0);
+        assert_eq!(workflow.answers.len(), 0);
+        assert_eq!(workflow.output, "");
+        assert_eq!(workflow.status, crate::app_state::WorkflowStatus::Collecting);
+    }
+
+    #[test]
+    fn test_answer_constitution_questions() {
+        let mut state = state_with_project();
+
+        // Start workflow
+        reduce(&mut state, Action::StartConstitutionWorkflow);
+
+        // Answer first question (tech_stack)
+        reduce(
+            &mut state,
+            Action::AnswerConstitutionQuestion {
+                answer: "React + Rust".to_string(),
+            },
+        );
+
+        let worktree = active_worktree(&state);
+        let workflow = worktree.tasks.constitution_workflow.as_ref().unwrap();
+        assert_eq!(workflow.current_question, 1);
+        assert_eq!(workflow.answers.get("tech_stack").unwrap(), "React + Rust");
+
+        // Answer second question (security)
+        reduce(
+            &mut state,
+            Action::AnswerConstitutionQuestion {
+                answer: "JWT auth required".to_string(),
+            },
+        );
+
+        let worktree = active_worktree(&state);
+        let workflow = worktree.tasks.constitution_workflow.as_ref().unwrap();
+        assert_eq!(workflow.current_question, 2);
+        assert_eq!(workflow.answers.get("security").unwrap(), "JWT auth required");
+
+        // Answer third question (code_quality)
+        reduce(
+            &mut state,
+            Action::AnswerConstitutionQuestion {
+                answer: "80% test coverage".to_string(),
+            },
+        );
+
+        let worktree = active_worktree(&state);
+        let workflow = worktree.tasks.constitution_workflow.as_ref().unwrap();
+        assert_eq!(workflow.current_question, 3);
+        assert_eq!(
+            workflow.answers.get("code_quality").unwrap(),
+            "80% test coverage"
+        );
+
+        // Answer fourth question (architecture)
+        reduce(
+            &mut state,
+            Action::AnswerConstitutionQuestion {
+                answer: "State-first principle".to_string(),
+            },
+        );
+
+        let worktree = active_worktree(&state);
+        let workflow = worktree.tasks.constitution_workflow.as_ref().unwrap();
+        assert_eq!(workflow.current_question, 4); // All questions answered
+        assert_eq!(
+            workflow.answers.get("architecture").unwrap(),
+            "State-first principle"
+        );
+    }
+
+    #[test]
+    fn test_generate_constitution_updates_status() {
+        let mut state = state_with_project();
+
+        // Start workflow and answer all questions
+        reduce(&mut state, Action::StartConstitutionWorkflow);
+        reduce(
+            &mut state,
+            Action::AnswerConstitutionQuestion {
+                answer: "React + Rust".to_string(),
+            },
+        );
+        reduce(
+            &mut state,
+            Action::AnswerConstitutionQuestion {
+                answer: "JWT auth".to_string(),
+            },
+        );
+        reduce(
+            &mut state,
+            Action::AnswerConstitutionQuestion {
+                answer: "80% coverage".to_string(),
+            },
+        );
+        reduce(
+            &mut state,
+            Action::AnswerConstitutionQuestion {
+                answer: "State-first".to_string(),
+            },
+        );
+
+        // Generate constitution
+        reduce(&mut state, Action::GenerateConstitution);
+
+        let worktree = active_worktree(&state);
+        let workflow = worktree.tasks.constitution_workflow.as_ref().unwrap();
+        assert_eq!(
+            workflow.status,
+            crate::app_state::WorkflowStatus::Generating
+        );
+        assert_eq!(workflow.output, ""); // Output cleared before generation
+    }
+
+    #[test]
+    fn test_append_constitution_output() {
+        let mut state = state_with_project();
+
+        // Start workflow and set to generating
+        reduce(&mut state, Action::StartConstitutionWorkflow);
+        reduce(&mut state, Action::GenerateConstitution);
+
+        // Append output chunks (simulating streaming)
+        reduce(
+            &mut state,
+            Action::AppendConstitutionOutput {
+                content: "# Project Constitution\n\n".to_string(),
+            },
+        );
+
+        let worktree = active_worktree(&state);
+        let workflow = worktree.tasks.constitution_workflow.as_ref().unwrap();
+        assert_eq!(workflow.output, "# Project Constitution\n\n");
+
+        reduce(
+            &mut state,
+            Action::AppendConstitutionOutput {
+                content: "## Technology Stack\n".to_string(),
+            },
+        );
+
+        let worktree = active_worktree(&state);
+        let workflow = worktree.tasks.constitution_workflow.as_ref().unwrap();
+        assert_eq!(
+            workflow.output,
+            "# Project Constitution\n\n## Technology Stack\n"
+        );
+    }
+
+    #[test]
+    fn test_save_constitution_marks_complete() {
+        let mut state = state_with_project();
+
+        // Start workflow, generate, and append output
+        reduce(&mut state, Action::StartConstitutionWorkflow);
+        reduce(&mut state, Action::GenerateConstitution);
+        reduce(
+            &mut state,
+            Action::AppendConstitutionOutput {
+                content: "# Constitution content".to_string(),
+            },
+        );
+
+        // Save constitution
+        reduce(&mut state, Action::SaveConstitution);
+
+        let worktree = active_worktree(&state);
+        let workflow = worktree.tasks.constitution_workflow.as_ref().unwrap();
+        assert_eq!(workflow.status, crate::app_state::WorkflowStatus::Complete);
+    }
+
+    #[test]
+    fn test_constitution_workflow_serialization() {
+        let mut state = state_with_project();
+
+        // Start workflow and answer questions
+        reduce(&mut state, Action::StartConstitutionWorkflow);
+        reduce(
+            &mut state,
+            Action::AnswerConstitutionQuestion {
+                answer: "React + Rust".to_string(),
+            },
+        );
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&state).unwrap();
+        assert!(json.contains("constitution_workflow"));
+        assert!(json.contains("React + Rust"));
+
+        // Deserialize back
+        let loaded: AppState = serde_json::from_str(&json).unwrap();
+        let worktree = loaded.active_project().unwrap().active_worktree().unwrap();
+        let workflow = worktree.tasks.constitution_workflow.as_ref().unwrap();
+        assert_eq!(workflow.current_question, 1);
+        assert_eq!(workflow.answers.get("tech_stack").unwrap(), "React + Rust");
     }
 }

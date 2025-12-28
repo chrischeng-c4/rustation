@@ -1665,6 +1665,224 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
             // No async operations needed
         }
 
+        // Constitution Workflow actions (CESDD Phase 1)
+        Action::StartConstitutionWorkflow
+        | Action::AnswerConstitutionQuestion { .. }
+        | Action::AppendConstitutionOutput { .. } => {
+            // Sync actions - handled in reducer
+        }
+
+        Action::GenerateConstitution => {
+            // Get workflow state and build prompt
+            let (cwd, answers) = {
+                let state = get_app_state().read().await;
+                let cwd = state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .map(|w| std::path::PathBuf::from(&w.path));
+                let answers = state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .and_then(|w| w.tasks.constitution_workflow.as_ref())
+                    .map(|wf| wf.answers.clone());
+                (cwd, answers)
+            };
+
+            let cwd = match cwd {
+                Some(path) => path,
+                None => return Ok(()),
+            };
+
+            let answers = match answers {
+                Some(ans) => ans,
+                None => return Ok(()),
+            };
+
+            // Build constitution generation prompt
+            let tech_stack = answers.get("tech_stack").cloned().unwrap_or_default();
+            let security = answers.get("security").cloned().unwrap_or_default();
+            let code_quality = answers.get("code_quality").cloned().unwrap_or_default();
+            let architecture = answers.get("architecture").cloned().unwrap_or_default();
+
+            let prompt = format!(
+                r#"You are helping create a project Constitution - governance rules for AI development.
+
+User provided the following information:
+- Technology Stack: {}
+- Security Requirements: {}
+- Code Quality Standards: {}
+- Architectural Constraints: {}
+
+Generate a comprehensive constitution.md file in Markdown format with these sections:
+
+# Project Constitution
+
+## Technology Stack
+{{detailed rules based on tech_stack}}
+
+## Security Requirements
+{{detailed rules based on security}}
+
+## Code Quality Standards
+{{detailed rules based on code_quality}}
+
+## Architectural Constraints
+{{detailed rules based on architecture}}
+
+Be specific, actionable, and authoritative. Use "MUST", "MUST NOT" language."#,
+                tech_stack, security, code_quality, architecture
+            );
+
+            // Spawn Claude CLI to generate constitution
+            let cwd_for_task = cwd.clone();
+            tokio::spawn(async move {
+                // Validate Claude CLI
+                if let Err(e) = claude_cli::validate_claude_cli().await {
+                    eprintln!("Claude CLI validation failed: {}", e);
+                    return;
+                }
+
+                // Build Claude CLI command
+                let mut cmd = tokio::process::Command::new("claude");
+                cmd.arg("-p")
+                    .arg("--verbose")
+                    .arg("--output-format")
+                    .arg("stream-json")
+                    .arg("--include-partial-messages")
+                    .arg(&prompt)
+                    .current_dir(&cwd_for_task)
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped());
+
+                match cmd.spawn() {
+                    Ok(mut child) => {
+                        let stdout = child.stdout.take().expect("Failed to get stdout");
+                        let mut reader = tokio::io::BufReader::new(stdout).lines();
+
+                        // Stream output
+                        while let Ok(Some(line)) = reader.next_line().await {
+                            if let Ok(event) = serde_json::from_str::<serde_json::Value>(&line) {
+                                // Extract content from Claude streaming events
+                                if let Some(content_block) = event["content_block"].as_object() {
+                                    if let Some(text) = content_block["text"].as_str() {
+                                        let mut state = get_app_state().write().await;
+                                        reduce(
+                                            &mut state,
+                                            Action::AppendConstitutionOutput {
+                                                content: text.to_string(),
+                                            },
+                                        );
+                                        drop(state);
+                                        notify_state_update().await;
+                                    }
+                                } else if let Some(delta) = event["delta"].as_object() {
+                                    if let Some(text) = delta["text"].as_str() {
+                                        let mut state = get_app_state().write().await;
+                                        reduce(
+                                            &mut state,
+                                            Action::AppendConstitutionOutput {
+                                                content: text.to_string(),
+                                            },
+                                        );
+                                        drop(state);
+                                        notify_state_update().await;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Wait for process to complete
+                        let _ = child.wait().await;
+
+                        // After completion, save the constitution file
+                        let (output, worktree_path) = {
+                            let state = get_app_state().read().await;
+                            let output = state
+                                .active_project()
+                                .and_then(|p| p.active_worktree())
+                                .and_then(|w| w.tasks.constitution_workflow.as_ref())
+                                .map(|wf| wf.output.clone());
+                            let path = state
+                                .active_project()
+                                .and_then(|p| p.active_worktree())
+                                .map(|w| w.path.clone());
+                            (output, path)
+                        };
+
+                        if let (Some(content), Some(wt_path)) = (output, worktree_path) {
+                            let rstn_dir = std::path::PathBuf::from(&wt_path).join(".rstn");
+                            let constitution_file = rstn_dir.join("constitution.md");
+
+                            // Create .rstn directory if it doesn't exist
+                            if let Err(e) = tokio::fs::create_dir_all(&rstn_dir).await {
+                                eprintln!("Failed to create .rstn directory: {}", e);
+                                return;
+                            }
+
+                            // Write constitution file
+                            if let Err(e) = tokio::fs::write(&constitution_file, content).await {
+                                eprintln!("Failed to write constitution.md: {}", e);
+                                return;
+                            }
+
+                            // Mark workflow as complete
+                            {
+                                let mut state = get_app_state().write().await;
+                                if let Some(project) = state.active_project_mut() {
+                                    if let Some(worktree) = project.active_worktree_mut() {
+                                        if let Some(workflow) = &mut worktree.tasks.constitution_workflow {
+                                            workflow.status = crate::app_state::WorkflowStatus::Complete;
+                                        }
+                                    }
+                                }
+                            }
+                            notify_state_update().await;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to spawn Claude CLI: {}", e);
+                    }
+                }
+            });
+        }
+
+        Action::SaveConstitution => {
+            // Get output and worktree path
+            let (output, worktree_path) = {
+                let state = get_app_state().read().await;
+                let output = state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .and_then(|w| w.tasks.constitution_workflow.as_ref())
+                    .map(|wf| wf.output.clone());
+                let path = state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .map(|w| w.path.clone());
+                (output, path)
+            };
+
+            if let (Some(content), Some(wt_path)) = (output, worktree_path) {
+                let rstn_dir = std::path::PathBuf::from(&wt_path).join(".rstn");
+                let constitution_file = rstn_dir.join("constitution.md");
+
+                // Create .rstn directory if it doesn't exist
+                if let Err(e) = tokio::fs::create_dir_all(&rstn_dir).await {
+                    eprintln!("Failed to create .rstn directory: {}", e);
+                    return Ok(());
+                }
+
+                // Write constitution file
+                if let Err(e) = tokio::fs::write(&constitution_file, content).await {
+                    eprintln!("Failed to write constitution.md: {}", e);
+                    return Ok(());
+                }
+
+                // Update state to Complete (already done in reducer)
+                notify_state_update().await;
+            }
+        }
+
         // Terminal actions (async - PTY operations)
         Action::SpawnTerminal { .. }
         | Action::ResizeTerminal { .. }

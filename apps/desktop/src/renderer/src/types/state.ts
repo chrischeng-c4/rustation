@@ -80,6 +80,25 @@ export interface JustCommandInfo {
   recipe: string
 }
 
+/**
+ * Constitution workflow status (CESDD Phase 1)
+ */
+export type WorkflowStatus = 'collecting' | 'generating' | 'complete'
+
+/**
+ * Constitution initialization workflow state
+ */
+export interface ConstitutionWorkflow {
+  /** Current question index (0-based) */
+  current_question: number
+  /** User answers so far (question_key -> answer) */
+  answers: Record<string, string>
+  /** Generated constitution content (streamed from Claude) */
+  output: string
+  /** Current workflow status */
+  status: WorkflowStatus
+}
+
 export interface TasksState {
   commands: JustCommandInfo[]
   task_statuses: Record<string, TaskStatus>
@@ -87,6 +106,8 @@ export interface TasksState {
   output: string[]
   is_loading: boolean
   error: string | null
+  /** Constitution workflow state (CESDD Phase 1) */
+  constitution_workflow: ConstitutionWorkflow | null
 }
 
 // ============================================================================

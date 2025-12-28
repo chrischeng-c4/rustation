@@ -866,6 +866,34 @@ pub struct TasksState {
     pub is_loading: bool,
     /// Error message
     pub error: Option<String>,
+    /// Constitution workflow state (CESDD Phase 1)
+    #[serde(default)]
+    pub constitution_workflow: Option<ConstitutionWorkflow>,
+}
+
+/// Constitution workflow status
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkflowStatus {
+    /// Collecting user answers to guided questions
+    Collecting,
+    /// Claude is generating the constitution
+    Generating,
+    /// Generation complete, showing result
+    Complete,
+}
+
+/// Constitution initialization workflow state (CESDD Phase 1)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConstitutionWorkflow {
+    /// Current question index (0-based)
+    pub current_question: usize,
+    /// User answers so far (question_key -> answer)
+    pub answers: std::collections::HashMap<String, String>,
+    /// Generated constitution content (streamed from Claude)
+    pub output: String,
+    /// Current workflow status
+    pub status: WorkflowStatus,
 }
 
 /// Justfile command info

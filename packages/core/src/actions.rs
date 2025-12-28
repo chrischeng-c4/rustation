@@ -110,6 +110,24 @@ pub enum Action {
     ClearDebugLogs,
 
     // ========================================================================
+    // Constitution Workflow Actions (CESDD Phase 1)
+    // ========================================================================
+    /// Start the Constitution initialization workflow
+    StartConstitutionWorkflow,
+
+    /// Submit an answer to the current question and advance
+    AnswerConstitutionQuestion { answer: String },
+
+    /// Generate constitution using Claude (after all questions answered)
+    GenerateConstitution,
+
+    /// Append content to constitution output (streaming from Claude)
+    AppendConstitutionOutput { content: String },
+
+    /// Save the generated constitution to .rstn/constitution.md
+    SaveConstitution,
+
+    // ========================================================================
     // Docker Actions
     // ========================================================================
     /// Check if Docker is available on this system
