@@ -22,9 +22,11 @@ export async function openProject(page: Page, projectPath: string): Promise<void
     async () => {
       const json = await (window as any).stateApi.getState()
       const state = JSON.parse(json)
+      // Note: active_project is not serialized, use projects[active_project_index]
+      const activeProject = state?.projects?.[state?.active_project_index]
       return (
-        state?.active_project?.worktrees &&
-        state.active_project.worktrees.length > 0
+        activeProject?.worktrees &&
+        activeProject.worktrees.length > 0
       )
     },
     { timeout: 10000 }
@@ -43,7 +45,9 @@ export async function openProject(page: Page, projectPath: string): Promise<void
     return JSON.parse(json)
   })
 
-  if (!stateAfterWait?.active_project?.worktrees || stateAfterWait.active_project.worktrees.length === 0) {
+  // Note: active_project is not serialized, use projects[active_project_index]
+  const activeProject = stateAfterWait?.projects?.[stateAfterWait?.active_project_index]
+  if (!activeProject?.worktrees || activeProject.worktrees.length === 0) {
     throw new Error('Project closed after initial load - state validation failed')
   }
 }

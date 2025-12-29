@@ -22,6 +22,7 @@ export function TaskCard({
 
   return (
     <div
+      data-testid={`task-card-${command.name}`}
       className={cn(
         'flex items-center justify-between rounded-lg border p-3 transition-colors',
         // Claude Code special styling

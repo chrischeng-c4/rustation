@@ -20,6 +20,14 @@ export const test = base.extend<{
       },
     })
 
+    // Capture main process stdout/stderr for debugging
+    electronApp.process().stdout?.on('data', (data: Buffer) => {
+      console.log(`[MAIN stdout]`, data.toString().trim())
+    })
+    electronApp.process().stderr?.on('data', (data: Buffer) => {
+      console.error(`[MAIN stderr]`, data.toString().trim())
+    })
+
     // Use the app in tests
     await use(electronApp)
 
