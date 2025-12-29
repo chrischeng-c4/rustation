@@ -35,6 +35,9 @@ pub struct AppState {
     /// Currently active view
     #[serde(default)]
     pub active_view: ActiveView,
+    /// Dev logs for debugging (dev mode only, right panel)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dev_logs: Vec<DevLog>,
 }
 
 impl Default for AppState {
@@ -49,9 +52,13 @@ impl Default for AppState {
             docker: DockersState::default(),
             notifications: Vec::new(),
             active_view: ActiveView::default(),
+            dev_logs: Vec::new(),
         }
     }
 }
+
+/// Maximum number of dev log entries to keep
+const MAX_DEV_LOGS: usize = 200;
 
 impl AppState {
     /// Get the active project (if any)
@@ -62,6 +69,129 @@ impl AppState {
     /// Get the active project mutably (if any)
     pub fn active_project_mut(&mut self) -> Option<&mut ProjectState> {
         self.projects.get_mut(self.active_project_index)
+    }
+
+    /// Add a dev log entry, keeping only the most recent MAX_DEV_LOGS
+    pub fn add_dev_log(&mut self, log: DevLog) {
+        self.dev_logs.push(log);
+        if self.dev_logs.len() > MAX_DEV_LOGS {
+            self.dev_logs.remove(0);
+        }
+    }
+
+    /// Clear all dev logs
+    pub fn clear_dev_logs(&mut self) {
+        self.dev_logs.clear();
+    }
+}
+
+// ============================================================================
+// Dev Logs (Development Mode Only)
+// ============================================================================
+
+/// Source of the log entry
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DevLogSource {
+    /// From Rust backend (reducer, async handlers)
+    Rust,
+    /// From React frontend
+    Frontend,
+    /// From Claude CLI
+    Claude,
+    /// From IPC layer
+    Ipc,
+}
+
+/// Type/category of the log entry
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DevLogType {
+    /// State action dispatched
+    Action,
+    /// State change
+    State,
+    /// Claude CLI output
+    Claude,
+    /// Error occurred
+    Error,
+    /// Informational
+    Info,
+}
+
+/// Development log entry for debugging
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DevLog {
+    /// Unique identifier
+    pub id: String,
+    /// Timestamp (ISO 8601)
+    pub timestamp: String,
+    /// Source of the log
+    pub source: DevLogSource,
+    /// Type/category
+    pub log_type: DevLogType,
+    /// Short summary for collapsed view (most important info)
+    pub summary: String,
+    /// Full structured data (JSON, shown when expanded)
+    pub data: serde_json::Value,
+}
+
+impl DevLog {
+    /// Create a new dev log entry
+    pub fn new(
+        source: DevLogSource,
+        log_type: DevLogType,
+        summary: impl Into<String>,
+        data: serde_json::Value,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            source,
+            log_type,
+            summary: summary.into(),
+            data,
+        }
+    }
+
+    /// Create an action log
+    pub fn action(action_name: &str, payload: serde_json::Value) -> Self {
+        Self::new(
+            DevLogSource::Rust,
+            DevLogType::Action,
+            format!("Action: {}", action_name),
+            payload,
+        )
+    }
+
+    /// Create a state change log
+    pub fn state_change(description: &str, details: serde_json::Value) -> Self {
+        Self::new(
+            DevLogSource::Rust,
+            DevLogType::State,
+            description.to_string(),
+            details,
+        )
+    }
+
+    /// Create an error log
+    pub fn error(message: &str, details: serde_json::Value) -> Self {
+        Self::new(
+            DevLogSource::Rust,
+            DevLogType::Error,
+            format!("Error: {}", message),
+            details,
+        )
+    }
+
+    /// Create a Claude output log
+    pub fn claude(summary: &str, output: serde_json::Value) -> Self {
+        Self::new(
+            DevLogSource::Claude,
+            DevLogType::Claude,
+            summary.to_string(),
+            output,
+        )
     }
 }
 

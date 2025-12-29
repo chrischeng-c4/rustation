@@ -6,13 +6,14 @@
 //! - No side effects (async operations handled separately)
 
 use crate::actions::{
-    Action, ChatRoleData, ConflictingContainerData, DockerServiceData, JustCommandData,
-    McpLogDirectionData, McpStatusData, PortConflictData, TaskStatusData,
+    Action, ChatRoleData, ConflictingContainerData, DevLogSourceData, DevLogTypeData,
+    DockerServiceData, JustCommandData, McpLogDirectionData, McpStatusData, PortConflictData,
+    TaskStatusData,
 };
 use crate::app_state::{
-    AppError, AppState, ConflictingContainer, DockerServiceInfo, EnvCopyResult, JustCommandInfo,
-    McpStatus, Notification, PendingConflict, PortConflict, ProjectState, RecentProject,
-    ServiceStatus, ServiceType, TaskStatus, WorktreeState,
+    AppError, AppState, ConflictingContainer, DevLog, DevLogSource, DevLogType, DockerServiceInfo,
+    EnvCopyResult, JustCommandInfo, McpStatus, Notification, PendingConflict, PortConflict,
+    ProjectState, RecentProject, ServiceStatus, ServiceType, TaskStatus, WorktreeState,
 };
 use crate::persistence;
 use crate::worktree;
@@ -23,6 +24,9 @@ use crate::worktree;
 /// Async operations (Docker calls, etc.) are handled by the dispatcher
 /// which calls this reducer after async operations complete.
 pub fn reduce(state: &mut AppState, action: Action) {
+    // Auto-log actions for dev debugging (only key actions to avoid noise)
+    log_action_if_interesting(state, &action);
+
     match action {
         // ====================================================================
         // Project Management
@@ -924,6 +928,34 @@ pub fn reduce(state: &mut AppState, action: Action) {
         }
 
         // ====================================================================
+        // Dev Log Actions (global scope, dev mode only)
+        // ====================================================================
+        Action::AddDevLog { log } => {
+            let dev_log = DevLog::new(
+                match log.source {
+                    DevLogSourceData::Rust => DevLogSource::Rust,
+                    DevLogSourceData::Frontend => DevLogSource::Frontend,
+                    DevLogSourceData::Claude => DevLogSource::Claude,
+                    DevLogSourceData::Ipc => DevLogSource::Ipc,
+                },
+                match log.log_type {
+                    DevLogTypeData::Action => DevLogType::Action,
+                    DevLogTypeData::State => DevLogType::State,
+                    DevLogTypeData::Claude => DevLogType::Claude,
+                    DevLogTypeData::Error => DevLogType::Error,
+                    DevLogTypeData::Info => DevLogType::Info,
+                },
+                log.summary,
+                log.data,
+            );
+            state.add_dev_log(dev_log);
+        }
+
+        Action::ClearDevLogs => {
+            state.clear_dev_logs();
+        }
+
+        // ====================================================================
         // Async-only Actions (no synchronous state change)
         // ====================================================================
         // These are handled by handle_async_action() in lib.rs
@@ -965,6 +997,74 @@ fn update_recent_projects(state: &mut AppState, path: &str) {
     // Keep only last 10 recent projects
     const MAX_RECENT: usize = 10;
     state.recent_projects.truncate(MAX_RECENT);
+}
+
+/// Log key actions for dev debugging.
+/// Only logs "interesting" actions to avoid noise from high-frequency actions.
+fn log_action_if_interesting(state: &mut AppState, action: &Action) {
+    // Get action name and determine if it's interesting
+    let (action_name, is_interesting) = match action {
+        // Project management - always interesting
+        Action::OpenProject { .. } => ("OpenProject", true),
+        Action::CloseProject { .. } => ("CloseProject", true),
+        Action::SwitchProject { .. } => ("SwitchProject", true),
+
+        // Worktree changes - always interesting
+        Action::AddWorktree { .. } => ("AddWorktree", true),
+        Action::AddWorktreeNewBranch { .. } => ("AddWorktreeNewBranch", true),
+        Action::RemoveWorktree { .. } => ("RemoveWorktree", true),
+        Action::SwitchWorktree { .. } => ("SwitchWorktree", true),
+        Action::RefreshWorktrees => ("RefreshWorktrees", true),
+
+        // MCP lifecycle - interesting
+        Action::StartMcpServer => ("StartMcpServer", true),
+        Action::StopMcpServer => ("StopMcpServer", true),
+        Action::SetMcpStatus { .. } => ("SetMcpStatus", true),
+        Action::SetMcpError { .. } => ("SetMcpError", true),
+
+        // Docker operations - interesting
+        Action::StartDockerService { .. } => ("StartDockerService", true),
+        Action::StopDockerService { .. } => ("StopDockerService", true),
+        Action::RestartDockerService { .. } => ("RestartDockerService", true),
+        Action::SetPortConflict { .. } => ("SetPortConflict", true),
+
+        // Constitution workflow - interesting
+        Action::StartConstitutionWorkflow => ("StartConstitutionWorkflow", true),
+        Action::AnswerConstitutionQuestion { .. } => ("AnswerConstitutionQuestion", true),
+        Action::GenerateConstitution => ("GenerateConstitution", true),
+        Action::SaveConstitution => ("SaveConstitution", true),
+
+        // Task execution - interesting
+        Action::RunJustCommand { .. } => ("RunJustCommand", true),
+        Action::SetTaskStatus { .. } => ("SetTaskStatus", true),
+
+        // Errors - always interesting
+        Action::SetError { .. } => ("SetError", true),
+        Action::SetChatError { .. } => ("SetChatError", true),
+        Action::SetTasksError { .. } => ("SetTasksError", true),
+
+        // Chat sending - interesting (but not content appending)
+        Action::SendChatMessage { .. } => ("SendChatMessage", true),
+        Action::AddChatMessage { .. } => ("AddChatMessage", true),
+
+        // High-frequency actions - not interesting (skip to reduce noise)
+        Action::AppendChatContent { .. } => ("AppendChatContent", false),
+        Action::AppendTaskOutput { .. } => ("AppendTaskOutput", false),
+        Action::AppendConstitutionOutput { .. } => ("AppendConstitutionOutput", false),
+        Action::AddMcpLogEntry { .. } => ("AddMcpLogEntry", false),
+        Action::AddDebugLog { .. } => ("AddDebugLog", false),
+        Action::AddDevLog { .. } => ("AddDevLog", false), // Avoid infinite loop!
+        Action::ClearDevLogs => ("ClearDevLogs", false),
+
+        // Other actions - log for completeness but with lower priority
+        _ => ("OtherAction", false),
+    };
+
+    if is_interesting {
+        // Create the log entry
+        let log = DevLog::action(action_name, serde_json::to_value(action).unwrap_or_default());
+        state.add_dev_log(log);
+    }
 }
 
 // ============================================================================

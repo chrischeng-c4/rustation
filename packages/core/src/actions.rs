@@ -340,6 +340,15 @@ pub enum Action {
 
     /// Clear the global error
     ClearError,
+
+    // ========================================================================
+    // Dev Log Actions (global scope, dev mode only)
+    // ========================================================================
+    /// Add a dev log entry (for debugging)
+    AddDevLog { log: DevLogData },
+
+    /// Clear all dev logs
+    ClearDevLogs,
 }
 
 /// Worktree data for actions (from `git worktree list`)
@@ -507,6 +516,40 @@ pub enum ActiveViewData {
     Terminal,
     #[serde(rename = "agent_rules")]
     AgentRules,
+}
+
+/// Source of the dev log for actions
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum DevLogSourceData {
+    Rust,
+    Frontend,
+    Claude,
+    Ipc,
+}
+
+/// Type/category of the dev log for actions
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum DevLogTypeData {
+    Action,
+    State,
+    Claude,
+    Error,
+    Info,
+}
+
+/// Dev log entry for actions (dev mode debugging)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DevLogData {
+    /// Source of the log (rust, frontend, claude, ipc)
+    pub source: DevLogSourceData,
+    /// Type/category of the log
+    pub log_type: DevLogTypeData,
+    /// Short summary for collapsed view
+    pub summary: String,
+    /// Full structured data (JSON, shown when expanded)
+    pub data: serde_json::Value,
 }
 
 // ============================================================================

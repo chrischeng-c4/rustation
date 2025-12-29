@@ -11,10 +11,14 @@ import { ChatPage } from '@/features/chat'
 import { TerminalPage } from '@/features/terminal'
 import { Toaster } from '@/features/notifications'
 import { CommandPalette } from '@/components/command-palette'
+import { DevLogPanel } from '@/components/DevLogPanel'
 import { useActiveWorktree, useAppState } from '@/hooks/useAppState'
 import { ProjectTabs } from '@/components/ProjectTabs'
 import { Button } from '@/components/ui/button'
 import type { ActiveView } from '@/types/state'
+
+// Dev mode check - only show DevLogPanel in development
+const IS_DEV = import.meta.env.DEV
 
 function NoProjectView() {
   const { dispatch } = useAppState()
@@ -182,6 +186,9 @@ function App() {
           /* No project open - show NoProjectView for worktree-scope views */
           <NoProjectView />
         )}
+
+        {/* Dev Log Panel (right side, dev mode only) */}
+        {IS_DEV && <DevLogPanel />}
       </div>
     </div>
   )

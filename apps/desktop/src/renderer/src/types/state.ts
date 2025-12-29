@@ -303,6 +303,23 @@ export interface AppError {
 }
 
 // ============================================================================
+// Dev Logs (Development Mode Only)
+// ============================================================================
+
+export type DevLogSource = 'rust' | 'frontend' | 'claude' | 'ipc'
+
+export type DevLogType = 'action' | 'state' | 'claude' | 'error' | 'info'
+
+export interface DevLog {
+  id: string
+  timestamp: string
+  source: DevLogSource
+  log_type: DevLogType
+  summary: string
+  data: unknown
+}
+
+// ============================================================================
 // Main AppState
 // ============================================================================
 
@@ -317,6 +334,8 @@ export interface AppState {
   docker: DockersState
   notifications: Notification[]
   active_view: ActiveView
+  // Dev logs (development mode only)
+  dev_logs?: DevLog[]
 }
 
 // ============================================================================
@@ -458,6 +477,29 @@ export interface AddDebugLogAction {
 
 export interface ClearDebugLogsAction {
   type: 'ClearDebugLogs'
+}
+
+// Constitution Workflow Actions
+export interface StartConstitutionWorkflowAction {
+  type: 'StartConstitutionWorkflow'
+}
+
+export interface AnswerConstitutionQuestionAction {
+  type: 'AnswerConstitutionQuestion'
+  payload: { answer: string }
+}
+
+export interface GenerateConstitutionAction {
+  type: 'GenerateConstitution'
+}
+
+export interface AppendConstitutionOutputAction {
+  type: 'AppendConstitutionOutput'
+  payload: { content: string }
+}
+
+export interface SaveConstitutionAction {
+  type: 'SaveConstitution'
 }
 
 // Docker Actions
@@ -827,6 +869,27 @@ export type NotificationTypeData = 'info' | 'success' | 'warning' | 'error'
 
 export type ActiveViewData = 'tasks' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal' | 'agent_rules'
 
+export type DevLogSourceData = 'rust' | 'frontend' | 'claude' | 'ipc'
+
+export type DevLogTypeData = 'action' | 'state' | 'claude' | 'error' | 'info'
+
+export interface DevLogData {
+  source: DevLogSourceData
+  log_type: DevLogTypeData
+  summary: string
+  data: unknown
+}
+
+// Dev Log Actions
+export interface AddDevLogAction {
+  type: 'AddDevLog'
+  payload: { log: DevLogData }
+}
+
+export interface ClearDevLogsAction {
+  type: 'ClearDevLogs'
+}
+
 // Union type of all actions
 export type Action =
   | OpenProjectAction
@@ -857,6 +920,11 @@ export type Action =
   | ClearChatAction
   | AddDebugLogAction
   | ClearDebugLogsAction
+  | StartConstitutionWorkflowAction
+  | AnswerConstitutionQuestionAction
+  | GenerateConstitutionAction
+  | AppendConstitutionOutputAction
+  | SaveConstitutionAction
   | CheckDockerAvailabilityAction
   | SetDockerAvailableAction
   | RefreshDockerServicesAction
@@ -912,6 +980,8 @@ export type Action =
   | SetTerminalSizeAction
   | SetErrorAction
   | ClearErrorAction
+  | AddDevLogAction
+  | ClearDevLogsAction
 
 // ============================================================================
 // UI Helpers

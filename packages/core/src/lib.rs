@@ -1179,7 +1179,10 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         | Action::SetTerminalSession { .. }
         | Action::SetTerminalSize { .. }
         // View actions (sync)
-        | Action::SetActiveView { .. } => {
+        | Action::SetActiveView { .. }
+        // Dev log actions (sync)
+        | Action::AddDevLog { .. }
+        | Action::ClearDevLogs => {
             // Already handled synchronously
         }
 
