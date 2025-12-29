@@ -1,6 +1,6 @@
 # Constitution System
 
-**Status**: Implemented (Phase 1 - CESDD)
+**Status**: Redesign (Phase 2)
 **Last Updated**: 2025-12-29
 **Related**: `09-workflow-prompt-claude.md`, `01-system-specification.md`
 
@@ -20,20 +20,28 @@ In a monorepo with multiple languages (Rust, TypeScript, Python), frameworks (Re
 
 ### Philosophy
 
-**Global Rules + Per-Component Rules, with Smart Selection**
+**Optimized Templates > User Customization**
 
-- **Modular**: Split rules into focused, single-responsibility documents
-- **Composable**: Combine rules dynamically based on context
-- **Budget-Aware**: Respect token limits through intelligent selection
-- **Deterministic**: No LLM required for core selection (optional enhancement)
+Key insight: Constitution effectiveness depends on **structure and patterns**, not user creativity.
 
-### Design Goals
+- **Battle-tested templates**: Pre-optimized rules that work well with LLMs
+- **Standardized format**: Consistent structure improves LLM adherence
+- **Minimal customization**: User input may reduce effectiveness
+- **CLAUDE.md integration**: Leverage existing project documentation
 
-1. **Context Relevance**: Only load rules relevant to current work context
+### Design Principles
+
+1. **Optimized by Default**: Templates are researched and battle-tested
 2. **Token Efficiency**: Stay within 4000 token budget for constitution
-3. **Maintainability**: Each rule file is small, focused, and independently editable
-4. **Discoverability**: Clear naming and metadata make rules easy to find
-5. **Extensibility**: Easy to add new language/component rules without touching existing files
+3. **CLAUDE.md Aware**: Detect and integrate existing project documentation
+4. **Deterministic**: No LLM required for rule selection
+5. **Extensibility**: Easy to add new language/component rules
+
+### What NOT to Do
+
+- ❌ Q&A workflow for custom constitution (deprecated)
+- ❌ Free-form user input for rules
+- ❌ Complex customization UI
 
 ---
 
@@ -553,33 +561,86 @@ packages/core/src/
 
 ---
 
-## 10. Migration and Rollout
+## 10. CLAUDE.md Integration
 
-### Phase 1: Backward Compatibility (Current)
+### Overview
 
-- If `.rstn/constitutions/` exists → Use modular system
-- Else → Fall back to `.rstn/constitution.md` (legacy)
+Many projects already have a `CLAUDE.md` file with project-specific instructions. The Constitution system should detect and integrate this existing documentation rather than duplicating it.
 
-### Phase 2: Default Templates
+### Detection Flow
 
-- `rstn constitution init` creates default templates:
-  - `global.md` - Project principles
-  - `rust.md`, `typescript.md`, `python.md` - Language conventions
-- Users can customize templates
+```mermaid
+flowchart TD
+    Start([Init Constitution]) --> CheckClaude{CLAUDE.md exists?}
+    CheckClaude -->|No| ApplyTemplate[Apply Default Templates]
+    CheckClaude -->|Yes| ShowOptions[Show Integration Options]
 
-### Phase 3: Gradual Adoption
+    ShowOptions --> Option1[Option 1: Import]
+    ShowOptions --> Option2[Option 2: Symlink]
+    ShowOptions --> Option3[Option 3: Skip]
 
-- Users split existing `constitution.md` into modular files
-- CLI tool: `rstn constitution split` (auto-splits by language/component)
+    Option1 --> Copy[Copy content to<br/>global.md frontmatter]
+    Option2 --> Link[Create symlink in<br/>.rstn/constitutions/]
+    Option3 --> ApplyTemplate
 
-### Phase 4: Deprecation (Future)
+    Copy --> ApplyTemplate
+    Link --> ApplyTemplate
+    ApplyTemplate --> Done([Complete])
+```
 
-- Remove legacy `constitution.md` support
-- All projects use modular system
+### Integration Options
+
+| Option | Description | Use Case |
+|--------|-------------|----------|
+| **Import** | Copy CLAUDE.md content into `global.md` | When you want to consolidate everything |
+| **Symlink** | Create `constitutions/claude.md` → `../../CLAUDE.md` | When CLAUDE.md is actively maintained |
+| **Skip** | Ignore existing CLAUDE.md | When starting fresh or CLAUDE.md is outdated |
+
+### Implementation Note
+
+- Detection: Check for `CLAUDE.md` at project root
+- If found: Show 3 options in UI
+- Default: **Symlink** (preserves existing workflow, reduces duplication)
 
 ---
 
-## 11. Design Principles
+## 11. Migration and Rollout
+
+### Current State: Optimized Templates Only
+
+The Constitution initialization provides:
+1. **Auto-detect languages** in project (Rust, TypeScript, Python, etc.)
+2. **Apply optimized templates** for detected languages
+3. **CLAUDE.md integration** if exists (Import/Symlink/Skip)
+
+### What's Deprecated
+
+- ❌ **Q&A Workflow**: Removed - user input reduces template effectiveness
+- ❌ **Custom Constitution Creation**: Use templates instead
+- ❌ **Complex Customization UI**: Simplicity over flexibility
+
+### Migration Path
+
+**For Projects with Legacy `constitution.md`**:
+1. Backup existing file
+2. Run `constitution-init` → Apply Default Templates
+3. Review generated files in `.rstn/constitutions/`
+4. Optionally merge custom content from backup
+
+**For New Projects**:
+1. Run `constitution-init`
+2. Choose CLAUDE.md integration option (if applicable)
+3. Templates auto-applied based on detected languages
+
+### Backward Compatibility
+
+- If `.rstn/constitutions/` exists → Use modular system
+- If only `.rstn/constitution.md` exists → Legacy mode (read only)
+- If neither exists → Initialize with templates
+
+---
+
+## 12. Design Principles
 
 ### Deterministic by Default
 
@@ -613,7 +674,7 @@ packages/core/src/
 
 ---
 
-## 12. Comparison to Alternatives
+## 13. Comparison to Alternatives
 
 ### Alternative 1: Monolithic Constitution
 
@@ -656,7 +717,7 @@ packages/core/src/
 
 ---
 
-## 13. Open Questions
+## 14. Open Questions
 
 1. **Token Estimation Accuracy**: How to ensure `token_estimate` is accurate?
    - **Option 1**: Manual specification (user provides)
@@ -681,7 +742,7 @@ packages/core/src/
 
 ---
 
-## 14. References
+## 15. References
 
 - **Workflow State Machine**: `09-workflow-prompt-claude.md`
 - **Testing Guide**: `../workflow/testing-guide.md`
@@ -690,13 +751,15 @@ packages/core/src/
 
 ---
 
-## 15. Changelog
+## 16. Changelog
 
 | Date | Change | Author |
 |------|--------|--------|
 | 2025-12-29 | Initial design document | Claude Sonnet 4.5 |
 | 2025-12-29 | Added 3-stage selection algorithm | Claude Sonnet 4.5 |
 | 2025-12-29 | Added token budget management | Claude Sonnet 4.5 |
+| 2025-12-29 | **Redesign**: Deprecated Q&A workflow, added "Optimized Templates > User Customization" philosophy | Claude Opus 4.5 |
+| 2025-12-29 | Added CLAUDE.md integration section (Import/Symlink/Skip options) | Claude Opus 4.5 |
 
 ---
 
