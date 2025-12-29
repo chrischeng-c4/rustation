@@ -2,6 +2,10 @@ import { Page, expect } from '@playwright/test'
 import * as os from 'os'
 import * as path from 'path'
 import * as fs from 'fs/promises'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+
+const execAsync = promisify(exec)
 
 /**
  * Open a project programmatically via state dispatch
@@ -53,16 +57,32 @@ export async function openProject(page: Page, projectPath: string): Promise<void
 }
 
 /**
- * Create a temporary test project directory
+ * Create a temporary test project directory with valid git repo
  */
 export async function createTestProject(): Promise<string> {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstn-test-'))
 
-  // Initialize as git repo (rstn requires git)
-  await fs.mkdir(path.join(tmpDir, '.git'))
+  // Initialize as proper git repo (rstn requires valid git)
+  await execAsync('git init', { cwd: tmpDir })
+  await execAsync('git config user.name "Test User"', { cwd: tmpDir })
+  await execAsync('git config user.email "test@example.com"', { cwd: tmpDir })
 
-  // Create a minimal justfile
-  await fs.writeFile(path.join(tmpDir, 'justfile'), 'test:\n\techo "test"')
+  // Create a minimal justfile with test commands
+  const justfileContent = `# Test project justfile
+test:
+\techo "Running tests"
+
+build:
+\techo "Building project"
+
+constitution-init:
+\techo "Initialize constitution"
+`
+  await fs.writeFile(path.join(tmpDir, 'justfile'), justfileContent)
+
+  // Create initial commit so git repo is fully valid
+  await execAsync('git add .', { cwd: tmpDir })
+  await execAsync('git commit -m "Initial commit"', { cwd: tmpDir })
 
   return tmpDir
 }

@@ -62,58 +62,56 @@ The `AppState` struct in Rust has an `active_project()` method that returns a co
 
 ---
 
-## 🟡 MEDIUM - Test Helper Issues
+## 🟢 FIXED - Test Helper Issues
 
-### Issue #2: createTestProject() Creates Invalid Projects
+### Issue #2: createTestProject() Creates Invalid Projects ✅ FIXED
 
-**Status**: Workaround applied (using real project)
+**Status**: FIXED (2025-12-29)
 **Severity**: Medium
 **Component**: E2E Test Helpers
 
 #### Description
 
-The `createTestProject()` helper creates minimal test projects with just `.git/` and `justfile`, but these may be invalid for rustation's requirements.
+The `createTestProject()` helper was creating minimal test projects with just an empty `.git/` directory and `justfile`, which was invalid for rustation's requirements.
 
-#### Current Implementation
+#### Root Cause
+
+Empty `.git/` directory is not a valid git repository. Git requires proper initialization with `git init` command which creates:
+- `.git/HEAD`
+- `.git/config`
+- `.git/refs/`
+- Other git metadata
+
+#### Fix Applied
+
+Updated `createTestProject()` to use proper git commands:
 
 ```typescript
 export async function createTestProject(): Promise<string> {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstn-test-'))
 
-  // Initialize as git repo (rstn requires git)
-  await fs.mkdir(path.join(tmpDir, '.git'))
+  // Initialize as proper git repo
+  await execAsync('git init', { cwd: tmpDir })
+  await execAsync('git config user.name "Test User"', { cwd: tmpDir })
+  await execAsync('git config user.email "test@example.com"', { cwd: tmpDir })
 
-  // Create a minimal justfile
-  await fs.writeFile(path.join(tmpDir, 'justfile'), 'test:\n\techo "test"')
+  // Create justfile with test commands including constitution-init
+  await fs.writeFile(path.join(tmpDir, 'justfile'), justfileContent)
+
+  // Create initial commit so git repo is fully valid
+  await execAsync('git add .', { cwd: tmpDir })
+  await execAsync('git commit -m "Initial commit"', { cwd: tmpDir })
 
   return tmpDir
 }
 ```
 
-#### Problems
+#### Benefits
 
-1. Empty `.git/` directory may not be recognized as valid git repo
-2. Missing git metadata (HEAD, config, refs)
-3. No actual git commits or branches
-4. May trigger validation failures
-
-#### Workaround
-
-Tests now use the real rustation project:
-```typescript
-testProjectPath = '/Users/chrischeng/projects/rustation'
-```
-
-#### Proper Fix Needed
-
-Create valid git repos using `git init` command:
-```bash
-git init
-git config user.name "Test User"
-git config user.email "test@example.com"
-git add .
-git commit -m "Initial commit"
-```
+1. ✅ Valid git repository with proper metadata
+2. ✅ Has initial commit (branch exists)
+3. ✅ Includes `constitution-init` command in justfile
+4. ✅ Can be used for isolated test scenarios
 
 ---
 
