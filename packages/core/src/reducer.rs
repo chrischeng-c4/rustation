@@ -350,51 +350,6 @@ pub fn reduce(state: &mut AppState, action: Action) {
             }
         }
 
-        Action::AddDebugLog { ref log } => {
-            if let Some(project) = state.active_project_mut() {
-                if let Some(worktree) = project.active_worktree_mut() {
-                    // Convert action data to state type
-                    let debug_log = crate::app_state::ClaudeDebugLog {
-                        timestamp: log.timestamp.clone(),
-                        level: match log.level.as_str() {
-                            "info" => crate::app_state::LogLevel::Info,
-                            "debug" => crate::app_state::LogLevel::Debug,
-                            "error" => crate::app_state::LogLevel::Error,
-                            _ => crate::app_state::LogLevel::Debug,
-                        },
-                        event_type: match log.event_type.as_str() {
-                            "spawn_attempt" => crate::app_state::LogEventType::SpawnAttempt,
-                            "spawn_success" => crate::app_state::LogEventType::SpawnSuccess,
-                            "spawn_error" => crate::app_state::LogEventType::SpawnError,
-                            "stream_event" => crate::app_state::LogEventType::StreamEvent,
-                            "message_complete" => crate::app_state::LogEventType::MessageComplete,
-                            "parse_error" => crate::app_state::LogEventType::ParseError,
-                            _ => crate::app_state::LogEventType::StreamEvent,
-                        },
-                        message: log.message.clone(),
-                        details: log.details.clone(),
-                    };
-
-                    // Add log entry
-                    worktree.chat.debug_logs.push(debug_log);
-
-                    // Keep only last N logs (prevent memory bloat)
-                    let max_logs = worktree.chat.max_debug_logs;
-                    if worktree.chat.debug_logs.len() > max_logs {
-                        worktree.chat.debug_logs.drain(0..(worktree.chat.debug_logs.len() - max_logs));
-                    }
-                }
-            }
-        }
-
-        Action::ClearDebugLogs => {
-            if let Some(project) = state.active_project_mut() {
-                if let Some(worktree) = project.active_worktree_mut() {
-                    worktree.chat.debug_logs.clear();
-                }
-            }
-        }
-
         // ====================================================================
         // Constitution Workflow Actions (worktree scope)
         // ====================================================================
@@ -1052,7 +1007,6 @@ fn log_action_if_interesting(state: &mut AppState, action: &Action) {
         Action::AppendTaskOutput { .. } => ("AppendTaskOutput", false),
         Action::AppendConstitutionOutput { .. } => ("AppendConstitutionOutput", false),
         Action::AddMcpLogEntry { .. } => ("AddMcpLogEntry", false),
-        Action::AddDebugLog { .. } => ("AddDebugLog", false),
         Action::AddDevLog { .. } => ("AddDevLog", false), // Avoid infinite loop!
         Action::ClearDevLogs => ("ClearDevLogs", false),
 

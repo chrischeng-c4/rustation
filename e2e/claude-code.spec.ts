@@ -267,15 +267,6 @@ test.describe('Claude Code Integration', () => {
       return parsed.projects?.[0]?.worktrees?.[0]?.chat
     })
 
-    // Print debug logs for investigation
-    console.log('\n=== Debug Logs (after 2s) ===')
-    if (chatState?.debug_logs) {
-      chatState.debug_logs.forEach((log: any, idx: number) => {
-        console.log(`${idx + 1}. [${log.level}] [${log.event_type}] ${log.message}`)
-      })
-    } else {
-      console.log('No debug logs found')
-    }
     console.log('\n=== Initial State ===')
     console.log('is_typing:', chatState?.is_typing)
     console.log('error:', chatState?.error)
@@ -292,13 +283,6 @@ test.describe('Claude Code Integration', () => {
       return parsed.projects?.[0]?.worktrees?.[0]?.chat
     })
 
-    // Print final debug logs
-    console.log('\n=== Debug Logs (after 37s) ===')
-    if (chatState?.debug_logs) {
-      chatState.debug_logs.forEach((log: any, idx: number) => {
-        console.log(`${idx + 1}. [${log.level}] [${log.event_type}] ${log.message}`)
-      })
-    }
     console.log('\n=== Final State ===')
     console.log('is_typing:', chatState?.is_typing)
     console.log('error:', chatState?.error)
@@ -306,43 +290,6 @@ test.describe('Claude Code Integration', () => {
 
     // CRITICAL: is_typing MUST be false after timeout
     expect(chatState?.is_typing).toBe(false)
-  })
-
-  test('timeout error appears in debug logs', async ({ page }) => {
-    const hasProject = await hasProjectOpen(page)
-    test.skip(!hasProject, 'No project available for testing')
-
-    await clickClaudeCode(page)
-
-    // Look for Debug Logs panel (should be visible in 3-column layout)
-    const debugLogsHeader = page.getByText('Debug Logs')
-    await expect(debugLogsHeader).toBeVisible({ timeout: 5000 })
-
-    const textarea = page.getByPlaceholder(/Ask Claude Code/i)
-    await textarea.fill('Test debug logging')
-
-    const sendButton = page.locator('button').filter({ has: page.locator('svg.lucide-send') }).first()
-    await sendButton.click()
-
-    // Wait for spawn logs to appear
-    await page.waitForTimeout(2000)
-
-    // Check debug logs contain spawn attempt/success or error
-    const chatState = await page.evaluate(async () => {
-      const json = await (window as any).stateApi.getState()
-      const parsed = JSON.parse(json)
-      return parsed.projects?.[0]?.worktrees?.[0]?.chat
-    })
-
-    // Should have debug logs
-    expect(chatState?.debug_logs).toBeDefined()
-    expect(chatState?.debug_logs?.length).toBeGreaterThan(0)
-
-    // Should have spawn_attempt log
-    const hasSpawnLog = chatState?.debug_logs?.some(
-      (log: any) => log.event_type === 'spawn_attempt' || log.event_type === 'spawn_success' || log.event_type === 'spawn_error'
-    )
-    expect(hasSpawnLog).toBe(true)
   })
 
   test('error message appears when Claude CLI not available', async ({ page }) => {
@@ -376,42 +323,5 @@ test.describe('Claude Code Integration', () => {
 
     // Regardless of error, is_typing should be false
     expect(chatState?.is_typing).toBe(false)
-  })
-
-  test('debug logs copy button works', async ({ page }) => {
-    const hasProject = await hasProjectOpen(page)
-    test.skip(!hasProject, 'No project available for testing')
-
-    await clickClaudeCode(page)
-
-    const textarea = page.getByPlaceholder(/Ask Claude Code/i)
-    await textarea.fill('Test copy logs')
-
-    const sendButton = page.locator('button').filter({ has: page.locator('svg.lucide-send') }).first()
-    await sendButton.click()
-
-    // Wait for logs to appear
-    await page.waitForTimeout(2000)
-
-    // Find the copy button in Debug Logs panel (has Copy icon, before Trash icon)
-    const copyButton = page.locator('button').filter({ has: page.locator('svg.lucide-copy') }).first()
-
-    // Should be visible if there are logs
-    const chatState = await page.evaluate(async () => {
-      const json = await (window as any).stateApi.getState()
-      const parsed = JSON.parse(json)
-      return parsed.projects?.[0]?.worktrees?.[0]?.chat
-    })
-
-    if (chatState?.debug_logs?.length > 0) {
-      await expect(copyButton).toBeVisible()
-
-      // Click copy button
-      await copyButton.click()
-
-      // Verify Check icon appears (indicates copy success)
-      const checkIcon = page.locator('svg.lucide-check').first()
-      await expect(checkIcon).toBeVisible({ timeout: 1000 })
-    }
   })
 })

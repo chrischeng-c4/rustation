@@ -1252,50 +1252,13 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
             let agent_rules_for_task = agent_rules_config.clone();
             let project_id_for_task = project_id.clone();
 
-            // Log spawn attempt (debug mode)
-            {
-                let mut state = get_app_state().write().await;
-                reduce(
-                    &mut state,
-                    Action::AddDebugLog {
-                        log: actions::ClaudeDebugLogData {
-                            timestamp: chrono::Utc::now().to_rfc3339(),
-                            level: "info".to_string(),
-                            event_type: "spawn_attempt".to_string(),
-                            message: format!(
-                                "Spawning Claude CLI: claude -p --verbose --output-format stream-json \"{}...\"",
-                                &prompt[..prompt.len().min(50)]
-                            ),
-                            details: Some(serde_json::json!({
-                                "cwd": cwd.display().to_string(),
-                                "prompt_length": prompt.len(),
-                            })),
-                        },
-                    },
-                );
-            } // Write lock released here
-            notify_state_update().await;
-
             // Spawn async task to handle CLI interaction without blocking
-
             tokio::spawn(async move {
     // Validate Claude CLI exists before attempting spawn
     if let Err(e) = claude_cli::validate_claude_cli().await {
         let error = e.to_string();
         {
             let mut state = get_app_state().write().await;
-            reduce(
-                &mut state,
-                Action::AddDebugLog {
-                    log: actions::ClaudeDebugLogData {
-                        timestamp: chrono::Utc::now().to_rfc3339(),
-                        level: "error".to_string(),
-                        event_type: "spawn_error".to_string(),
-                        message: format!("Claude CLI validation failed: {}", error),
-                        details: None,
-                    },
-                },
-            );
             reduce(&mut state, Action::SetChatError { error });
             reduce(&mut state, Action::SetChatTyping { is_typing: false });
         }
@@ -1337,28 +1300,7 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
     // Spawn Claude CLI process (with MCP config and/or agent rules if available)
     match claude_cli::spawn_claude(&prompt, &cwd_for_task, mcp_config_for_task.as_deref(), agent_rules_path.as_deref()) {
         Ok(mut child) => {
-            // Log spawn success
-            {
-                let mut state = get_app_state().write().await;
-                reduce(
-                    &mut state,
-                    Action::AddDebugLog {
-                        log: actions::ClaudeDebugLogData {
-                            timestamp: chrono::Utc::now().to_rfc3339(),
-                            level: "info".to_string(),
-                            event_type: "spawn_success".to_string(),
-                            message: format!(
-                                "Claude CLI spawned successfully (PID: {:?})",
-                                child.id()
-                            ),
-                            details: None,
-                        },
-                    },
-                );
-            }
-            notify_state_update().await;
-
-            // Monitor stderr for diagnostic information
+            // Monitor stderr for diagnostic information (errors logged to console)
             if let Some(stderr) = child.stderr.take() {
                 tokio::spawn(async move {
                     let reader = BufReader::new(stderr);
@@ -1367,23 +1309,8 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                     while let Ok(Some(line)) = lines.next_line().await {
                         let trimmed = line.trim();
                         if !trimmed.is_empty() {
-                            // Log each stderr line to debug logs
-                            {
-                                let mut state = get_app_state().write().await;
-                                reduce(
-                                    &mut state,
-                                    Action::AddDebugLog {
-                                        log: actions::ClaudeDebugLogData {
-                                            timestamp: chrono::Utc::now().to_rfc3339(),
-                                            level: "error".to_string(),
-                                            event_type: "stderr".to_string(),
-                                            message: trimmed.to_string(),
-                                            details: None,
-                                        },
-                                    },
-                                );
-                            }
-                            notify_state_update().await;
+                            // Log stderr to console for debugging
+                            eprintln!("[Claude CLI stderr] {}", trimmed);
                         }
                     }
                 });
@@ -1404,18 +1331,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                             let error = "Request exceeded 5 minute timeout".to_string();
                             {
                                 let mut state = get_app_state().write().await;
-                                reduce(
-                                    &mut state,
-                                    Action::AddDebugLog {
-                                        log: actions::ClaudeDebugLogData {
-                                            timestamp: chrono::Utc::now().to_rfc3339(),
-                                            level: "error".to_string(),
-                                            event_type: "total_timeout".to_string(),
-                                            message: "Total timeout: Request exceeded 5 minutes".to_string(),
-                                            details: None,
-                                        },
-                                    },
-                                );
                                 reduce(&mut state, Action::SetChatError { error });
                                 reduce(&mut state, Action::SetChatTyping { is_typing: false });
                             }
@@ -1429,41 +1344,13 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                             stream.next_event()
                         ).await {
                             Ok(Some(Ok(event))) => {
-                                // Log unsupported events for debugging
+                                // Handle unsupported events
                                 if matches!(event, claude_cli::ClaudeStreamEvent::Other) {
-                                    {
-                                        let mut state = get_app_state().write().await;
-                                        reduce(
-                                            &mut state,
-                                            Action::AddDebugLog {
-                                                log: actions::ClaudeDebugLogData {
-                                                    timestamp: chrono::Utc::now().to_rfc3339(),
-                                                    level: "warn".to_string(),
-                                                    event_type: "unsupported_event".to_string(),
-                                                    message: format!("Received unsupported event type: {:?}", event),
-                                                    details: None,
-                                                },
-                                            },
-                                        );
-                                    }
-                                    notify_state_update().await;
                                     consecutive_other_events += 1;
                                     if consecutive_other_events >= MAX_CONSECUTIVE_OTHER {
                                         let error = format!("Received {} consecutive unsupported events from Claude CLI", consecutive_other_events);
                                         {
                                             let mut state = get_app_state().write().await;
-                                            reduce(
-                                                &mut state,
-                                                Action::AddDebugLog {
-                                                    log: actions::ClaudeDebugLogData {
-                                                        timestamp: chrono::Utc::now().to_rfc3339(),
-                                                        level: "error".to_string(),
-                                                        event_type: "too_many_unsupported".to_string(),
-                                                        message: "Too many unsupported events, likely incompatible format".to_string(),
-                                                        details: None,
-                                                    },
-                                                },
-                                            );
                                             reduce(&mut state, Action::SetChatError { error });
                                             reduce(&mut state, Action::SetChatTyping { is_typing: false });
                                         }
@@ -1505,18 +1392,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                                 if claude_cli::is_message_stop(&event) {
                                     {
                                         let mut state = get_app_state().write().await;
-                                        reduce(
-                                            &mut state,
-                                            Action::AddDebugLog {
-                                                log: actions::ClaudeDebugLogData {
-                                                    timestamp: chrono::Utc::now().to_rfc3339(),
-                                                    level: "info".to_string(),
-                                                    event_type: "message_complete".to_string(),
-                                                    message: "Claude response complete".to_string(),
-                                                    details: None,
-                                                },
-                                            },
-                                        );
                                         reduce(&mut state, Action::SetChatTyping { is_typing: false });
                                     }
                                     notify_state_update().await;
@@ -1528,18 +1403,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                                 let error = e.to_string();
                                 {
                                     let mut state = get_app_state().write().await;
-                                    reduce(
-                                        &mut state,
-                                        Action::AddDebugLog {
-                                            log: actions::ClaudeDebugLogData {
-                                                timestamp: chrono::Utc::now().to_rfc3339(),
-                                                level: "error".to_string(),
-                                                event_type: "parse_error".to_string(),
-                                                message: format!("JSONL parse error: {}", error),
-                                                details: None,
-                                            },
-                                        },
-                                    );
                                     reduce(&mut state, Action::SetChatError { error });
                                     reduce(&mut state, Action::SetChatTyping { is_typing: false });
                                 }
@@ -1551,18 +1414,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                                 let error = "Claude CLI ended unexpectedly. Check if you have valid API credentials.".to_string();
                                 {
                                     let mut state = get_app_state().write().await;
-                                    reduce(
-                                        &mut state,
-                                        Action::AddDebugLog {
-                                            log: actions::ClaudeDebugLogData {
-                                                timestamp: chrono::Utc::now().to_rfc3339(),
-                                                level: "error".to_string(),
-                                                event_type: "stream_end".to_string(),
-                                                message: "Stream ended (EOF) without message_stop - likely authentication or CLI error".to_string(),
-                                                details: None,
-                                            },
-                                        },
-                                    );
                                     reduce(&mut state, Action::SetChatError { error });
                                     reduce(&mut state, Action::SetChatTyping { is_typing: false });
                                 }
@@ -1574,18 +1425,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                                 let error = "No response from Claude CLI for 30 seconds".to_string();
                                 {
                                     let mut state = get_app_state().write().await;
-                                    reduce(
-                                        &mut state,
-                                        Action::AddDebugLog {
-                                            log: actions::ClaudeDebugLogData {
-                                                timestamp: chrono::Utc::now().to_rfc3339(),
-                                                level: "error".to_string(),
-                                                event_type: "event_timeout".to_string(),
-                                                message: "Event timeout: No response for 30 seconds".to_string(),
-                                                details: None,
-                                            },
-                                        },
-                                    );
                                     reduce(&mut state, Action::SetChatError { error });
                                     reduce(&mut state, Action::SetChatTyping { is_typing: false });
                                 }
@@ -1620,18 +1459,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
             let error = e.to_string();
             {
                 let mut state = get_app_state().write().await;
-                reduce(
-                    &mut state,
-                    Action::AddDebugLog {
-                        log: actions::ClaudeDebugLogData {
-                            timestamp: chrono::Utc::now().to_rfc3339(),
-                            level: "error".to_string(),
-                            event_type: "spawn_error".to_string(),
-                            message: format!("Failed to spawn Claude CLI: {}", error),
-                            details: None,
-                        },
-                    },
-                );
                 reduce(&mut state, Action::SetChatError { error });
                 reduce(&mut state, Action::SetChatTyping { is_typing: false });
             }
@@ -1658,12 +1485,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         | Action::UpdateAgentProfile { .. }
         | Action::DeleteAgentProfile { .. }
         | Action::SelectAgentProfile { .. } => {
-            // These are pure state mutations, handled synchronously in reducer
-            // No async operations needed
-        }
-
-        // Debug log actions (sync - handled in reducer)
-        Action::AddDebugLog { .. } | Action::ClearDebugLogs => {
             // These are pure state mutations, handled synchronously in reducer
             // No async operations needed
         }

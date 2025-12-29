@@ -103,12 +103,6 @@ pub enum Action {
     /// Clear all chat messages
     ClearChat,
 
-    /// Add a debug log entry (for Claude Code CLI logging)
-    AddDebugLog { log: ClaudeDebugLogData },
-
-    /// Clear all debug logs
-    ClearDebugLogs,
-
     // ========================================================================
     // Constitution Workflow Actions (CESDD Phase 1)
     // ========================================================================
@@ -422,16 +416,6 @@ pub struct ChatMessageData {
     pub timestamp: String,
     #[serde(default)]
     pub is_streaming: bool,
-}
-
-/// Claude debug log data for actions
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ClaudeDebugLogData {
-    pub timestamp: String,
-    pub level: String,
-    pub event_type: String,
-    pub message: String,
-    pub details: Option<serde_json::Value>,
 }
 
 /// Docker service data for actions (lightweight, serializable)

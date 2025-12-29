@@ -1,11 +1,10 @@
 import { useEffect, useCallback } from 'react'
-import { RefreshCw, AlertCircle, Bot } from 'lucide-react'
+import { RefreshCw, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { LogPanel } from '@/components/LogPanel'
 import { TaskCard } from './TaskCard'
 import { ChatPanel } from './ChatPanel'
-import { DebugLogPanel } from './DebugLogPanel'
 import { ConstitutionPanel } from './ConstitutionPanel'
 import { useTasksState } from '@/hooks/useAppState'
 import type { JustCommandInfo } from '@/types/state'
@@ -118,18 +117,13 @@ export function TasksPage() {
         </div>
       )}
 
-      {/* Two-column or Three-column layout based on active command */}
-      <div
-        className={cn(
-          'flex flex-1 gap-4 overflow-hidden',
-          isClaudeCodeActive ? 'grid grid-cols-3' : isConstitutionInitActive ? 'flex' : 'flex'
-        )}
-      >
+      {/* Two-column layout */}
+      <div className="flex flex-1 gap-4 overflow-hidden">
         {/* Column 1: Commands List */}
         <div
           className={cn(
             'overflow-hidden rounded-lg border',
-            isClaudeCodeActive ? '' : isConstitutionInitActive ? 'w-1/3' : 'w-1/2'
+            isClaudeCodeActive ? 'w-1/3' : isConstitutionInitActive ? 'w-1/3' : 'w-1/2'
           )}
         >
           <div className="border-b bg-muted/40 px-4 py-2">
@@ -168,15 +162,8 @@ export function TasksPage() {
 
         {/* Column 2: Chat Panel (only when Claude Code active) */}
         {isClaudeCodeActive && (
-          <div className="overflow-hidden">
+          <div className="w-2/3 overflow-hidden">
             <ChatPanel />
-          </div>
-        )}
-
-        {/* Column 3: Debug Log Panel (only when Claude Code active) */}
-        {isClaudeCodeActive && (
-          <div className="overflow-hidden">
-            <DebugLogPanel />
           </div>
         )}
 

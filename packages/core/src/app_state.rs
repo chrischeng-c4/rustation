@@ -441,16 +441,6 @@ pub struct ChatState {
     /// Error message (if any)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-    /// Debug logs for Claude Code streaming (dev mode only)
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub debug_logs: Vec<ClaudeDebugLog>,
-    /// Maximum number of debug logs to keep (prevent memory bloat)
-    #[serde(default = "default_max_debug_logs")]
-    pub max_debug_logs: usize,
-}
-
-fn default_max_debug_logs() -> usize {
-    500
 }
 
 impl Default for ChatState {
@@ -459,53 +449,8 @@ impl Default for ChatState {
             messages: Vec::new(),
             is_typing: false,
             error: None,
-            debug_logs: Vec::new(),
-            max_debug_logs: 500,
         }
     }
-}
-
-/// Debug log entry for Claude Code CLI integration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ClaudeDebugLog {
-    /// Timestamp (ISO 8601)
-    pub timestamp: String,
-    /// Log level (info, debug, error)
-    pub level: LogLevel,
-    /// Event type categorization
-    pub event_type: LogEventType,
-    /// Human-readable message
-    pub message: String,
-    /// Additional structured details (JSON)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub details: Option<serde_json::Value>,
-}
-
-/// Log level for debug logs
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum LogLevel {
-    Info,
-    Debug,
-    Error,
-}
-
-/// Event type for Claude Code debug logs
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LogEventType {
-    /// Before spawning Claude CLI
-    SpawnAttempt,
-    /// CLI spawned with PID
-    SpawnSuccess,
-    /// Failed to spawn
-    SpawnError,
-    /// JSONL event received
-    StreamEvent,
-    /// message_stop received
-    MessageComplete,
-    /// JSONL parse error
-    ParseError,
 }
 
 impl ChatState {

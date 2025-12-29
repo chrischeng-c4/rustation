@@ -207,30 +207,10 @@ export interface ChatMessage {
   is_streaming?: boolean
 }
 
-export type LogLevel = 'info' | 'debug' | 'error'
-
-export type LogEventType =
-  | 'spawn_attempt'
-  | 'spawn_success'
-  | 'spawn_error'
-  | 'stream_event'
-  | 'message_complete'
-  | 'parse_error'
-
-export interface ClaudeDebugLog {
-  timestamp: string
-  level: LogLevel
-  event_type: LogEventType
-  message: string
-  details?: unknown
-}
-
 export interface ChatState {
   messages: ChatMessage[]
   is_typing: boolean
   error?: string
-  debug_logs?: ClaudeDebugLog[]
-  max_debug_logs?: number
 }
 
 // ============================================================================
@@ -468,15 +448,6 @@ export interface ClearChatErrorAction {
 
 export interface ClearChatAction {
   type: 'ClearChat'
-}
-
-export interface AddDebugLogAction {
-  type: 'AddDebugLog'
-  payload: { log: ClaudeDebugLogData }
-}
-
-export interface ClearDebugLogsAction {
-  type: 'ClearDebugLogs'
 }
 
 // Constitution Workflow Actions
@@ -851,14 +822,6 @@ export interface ChatMessageData {
   is_streaming?: boolean
 }
 
-export interface ClaudeDebugLogData {
-  timestamp: string
-  level: string
-  event_type: string
-  message: string
-  details?: unknown
-}
-
 export interface EnvCopyResultData {
   copied_files: string[]
   failed_files: [string, string][]
@@ -918,8 +881,6 @@ export type Action =
   | SetChatErrorAction
   | ClearChatErrorAction
   | ClearChatAction
-  | AddDebugLogAction
-  | ClearDebugLogsAction
   | StartConstitutionWorkflowAction
   | AnswerConstitutionQuestionAction
   | GenerateConstitutionAction
