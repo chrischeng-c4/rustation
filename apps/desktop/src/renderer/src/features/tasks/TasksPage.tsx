@@ -75,6 +75,8 @@ export function TasksPage() {
     await dispatch({ type: 'ClearTaskOutput' })
     // Clear any existing workflow so user can choose fresh
     await dispatch({ type: 'ClearConstitutionWorkflow' })
+    // Check constitution existence to update UI
+    await dispatch({ type: 'CheckConstitutionExists' })
     // Note: Don't start workflow here - let user choose between
     // "Apply Default Template" or "Create with Q&A" in ConstitutionPanel
   }, [dispatch])
