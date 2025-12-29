@@ -35,6 +35,9 @@ pub struct AppState {
     /// Currently active view
     #[serde(default)]
     pub active_view: ActiveView,
+    /// Dev logs for debugging (dev mode only, right panel)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dev_logs: Vec<DevLog>,
 }
 
 impl Default for AppState {
@@ -49,9 +52,13 @@ impl Default for AppState {
             docker: DockersState::default(),
             notifications: Vec::new(),
             active_view: ActiveView::default(),
+            dev_logs: Vec::new(),
         }
     }
 }
+
+/// Maximum number of dev log entries to keep
+const MAX_DEV_LOGS: usize = 200;
 
 impl AppState {
     /// Get the active project (if any)
@@ -62,6 +69,129 @@ impl AppState {
     /// Get the active project mutably (if any)
     pub fn active_project_mut(&mut self) -> Option<&mut ProjectState> {
         self.projects.get_mut(self.active_project_index)
+    }
+
+    /// Add a dev log entry, keeping only the most recent MAX_DEV_LOGS
+    pub fn add_dev_log(&mut self, log: DevLog) {
+        self.dev_logs.push(log);
+        if self.dev_logs.len() > MAX_DEV_LOGS {
+            self.dev_logs.remove(0);
+        }
+    }
+
+    /// Clear all dev logs
+    pub fn clear_dev_logs(&mut self) {
+        self.dev_logs.clear();
+    }
+}
+
+// ============================================================================
+// Dev Logs (Development Mode Only)
+// ============================================================================
+
+/// Source of the log entry
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DevLogSource {
+    /// From Rust backend (reducer, async handlers)
+    Rust,
+    /// From React frontend
+    Frontend,
+    /// From Claude CLI
+    Claude,
+    /// From IPC layer
+    Ipc,
+}
+
+/// Type/category of the log entry
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DevLogType {
+    /// State action dispatched
+    Action,
+    /// State change
+    State,
+    /// Claude CLI output
+    Claude,
+    /// Error occurred
+    Error,
+    /// Informational
+    Info,
+}
+
+/// Development log entry for debugging
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DevLog {
+    /// Unique identifier
+    pub id: String,
+    /// Timestamp (ISO 8601)
+    pub timestamp: String,
+    /// Source of the log
+    pub source: DevLogSource,
+    /// Type/category
+    pub log_type: DevLogType,
+    /// Short summary for collapsed view (most important info)
+    pub summary: String,
+    /// Full structured data (JSON, shown when expanded)
+    pub data: serde_json::Value,
+}
+
+impl DevLog {
+    /// Create a new dev log entry
+    pub fn new(
+        source: DevLogSource,
+        log_type: DevLogType,
+        summary: impl Into<String>,
+        data: serde_json::Value,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            source,
+            log_type,
+            summary: summary.into(),
+            data,
+        }
+    }
+
+    /// Create an action log
+    pub fn action(action_name: &str, payload: serde_json::Value) -> Self {
+        Self::new(
+            DevLogSource::Rust,
+            DevLogType::Action,
+            format!("Action: {}", action_name),
+            payload,
+        )
+    }
+
+    /// Create a state change log
+    pub fn state_change(description: &str, details: serde_json::Value) -> Self {
+        Self::new(
+            DevLogSource::Rust,
+            DevLogType::State,
+            description.to_string(),
+            details,
+        )
+    }
+
+    /// Create an error log
+    pub fn error(message: &str, details: serde_json::Value) -> Self {
+        Self::new(
+            DevLogSource::Rust,
+            DevLogType::Error,
+            format!("Error: {}", message),
+            details,
+        )
+    }
+
+    /// Create a Claude output log
+    pub fn claude(summary: &str, output: serde_json::Value) -> Self {
+        Self::new(
+            DevLogSource::Claude,
+            DevLogType::Claude,
+            summary.to_string(),
+            output,
+        )
     }
 }
 
@@ -152,6 +282,9 @@ pub struct WorktreeState {
     pub active_tab: FeatureTab,
     /// Tasks state for this worktree
     pub tasks: TasksState,
+    /// Changes state for CESDD Phase 2
+    #[serde(default)]
+    pub changes: ChangesState,
     // Note: Docker state moved to AppState.docker (global scope)
 }
 
@@ -169,6 +302,7 @@ impl WorktreeState {
             is_modified: false,
             active_tab: FeatureTab::Tasks,
             tasks: TasksState::default(),
+            changes: ChangesState::default(),
         }
     }
 }
@@ -311,16 +445,6 @@ pub struct ChatState {
     /// Error message (if any)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-    /// Debug logs for Claude Code streaming (dev mode only)
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub debug_logs: Vec<ClaudeDebugLog>,
-    /// Maximum number of debug logs to keep (prevent memory bloat)
-    #[serde(default = "default_max_debug_logs")]
-    pub max_debug_logs: usize,
-}
-
-fn default_max_debug_logs() -> usize {
-    500
 }
 
 impl Default for ChatState {
@@ -329,53 +453,8 @@ impl Default for ChatState {
             messages: Vec::new(),
             is_typing: false,
             error: None,
-            debug_logs: Vec::new(),
-            max_debug_logs: 500,
         }
     }
-}
-
-/// Debug log entry for Claude Code CLI integration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ClaudeDebugLog {
-    /// Timestamp (ISO 8601)
-    pub timestamp: String,
-    /// Log level (info, debug, error)
-    pub level: LogLevel,
-    /// Event type categorization
-    pub event_type: LogEventType,
-    /// Human-readable message
-    pub message: String,
-    /// Additional structured details (JSON)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub details: Option<serde_json::Value>,
-}
-
-/// Log level for debug logs
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum LogLevel {
-    Info,
-    Debug,
-    Error,
-}
-
-/// Event type for Claude Code debug logs
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LogEventType {
-    /// Before spawning Claude CLI
-    SpawnAttempt,
-    /// CLI spawned with PID
-    SpawnSuccess,
-    /// Failed to spawn
-    SpawnError,
-    /// JSONL event received
-    StreamEvent,
-    /// message_stop received
-    MessageComplete,
-    /// JSONL parse error
-    ParseError,
 }
 
 impl ChatState {
@@ -428,8 +507,10 @@ pub enum FeatureTab {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ActiveView {
-    /// Tasks page (worktree scope)
+    /// Workflows page - guided, stateful workflows (worktree scope)
     #[default]
+    Workflows,
+    /// Tasks page - simple justfile commands (worktree scope)
     Tasks,
     /// Settings page (worktree scope)
     Settings,
@@ -699,6 +780,7 @@ pub enum NotificationType {
 impl From<crate::actions::ActiveViewData> for ActiveView {
     fn from(data: crate::actions::ActiveViewData) -> Self {
         match data {
+            crate::actions::ActiveViewData::Workflows => ActiveView::Workflows,
             crate::actions::ActiveViewData::Tasks => ActiveView::Tasks,
             crate::actions::ActiveViewData::Settings => ActiveView::Settings,
             crate::actions::ActiveViewData::Dockers => ActiveView::Dockers,
@@ -718,6 +800,38 @@ impl From<crate::actions::NotificationTypeData> for NotificationType {
             crate::actions::NotificationTypeData::Success => NotificationType::Success,
             crate::actions::NotificationTypeData::Warning => NotificationType::Warning,
             crate::actions::NotificationTypeData::Error => NotificationType::Error,
+        }
+    }
+}
+
+impl From<crate::actions::ChangeStatusData> for ChangeStatus {
+    fn from(data: crate::actions::ChangeStatusData) -> Self {
+        match data {
+            crate::actions::ChangeStatusData::Proposed => ChangeStatus::Proposed,
+            crate::actions::ChangeStatusData::Planning => ChangeStatus::Planning,
+            crate::actions::ChangeStatusData::Planned => ChangeStatus::Planned,
+            crate::actions::ChangeStatusData::Implementing => ChangeStatus::Implementing,
+            crate::actions::ChangeStatusData::Testing => ChangeStatus::Testing,
+            crate::actions::ChangeStatusData::Done => ChangeStatus::Done,
+            crate::actions::ChangeStatusData::Archived => ChangeStatus::Archived,
+            crate::actions::ChangeStatusData::Cancelled => ChangeStatus::Cancelled,
+            crate::actions::ChangeStatusData::Failed => ChangeStatus::Failed,
+        }
+    }
+}
+
+impl From<crate::actions::ChangeData> for Change {
+    fn from(data: crate::actions::ChangeData) -> Self {
+        Change {
+            id: data.id,
+            name: data.name,
+            status: data.status.into(),
+            intent: data.intent,
+            proposal: data.proposal,
+            plan: data.plan,
+            streaming_output: data.streaming_output,
+            created_at: data.created_at,
+            updated_at: data.updated_at,
         }
     }
 }
@@ -869,6 +983,9 @@ pub struct TasksState {
     /// Constitution workflow state (CESDD Phase 1)
     #[serde(default)]
     pub constitution_workflow: Option<ConstitutionWorkflow>,
+    /// Whether .rstn/constitution.md exists (None = not checked yet)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub constitution_exists: Option<bool>,
 }
 
 /// Constitution workflow status
@@ -913,6 +1030,73 @@ pub enum TaskStatus {
     Running,
     Success,
     Error,
+}
+
+// ============================================================================
+// Changes State (CESDD Phase 2)
+// ============================================================================
+
+/// State for managing Changes (CESDD Transactional Layer)
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct ChangesState {
+    /// Active changes in .rstn/changes/
+    pub changes: Vec<Change>,
+    /// Currently selected change for detail view
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_change_id: Option<String>,
+    /// Whether changes are being loaded
+    pub is_loading: bool,
+}
+
+/// A single Change (feature, bugfix, refactor, etc.)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Change {
+    /// Unique identifier (e.g., "feature-auth", "bugfix-login")
+    pub id: String,
+    /// Human-readable title derived from intent
+    pub name: String,
+    /// Current status in the workflow
+    pub status: ChangeStatus,
+    /// User's original intent (input)
+    pub intent: String,
+    /// Generated proposal content (from proposal.md)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proposal: Option<String>,
+    /// Generated plan content (from plan.md)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan: Option<String>,
+    /// Streaming output (during generation)
+    #[serde(default)]
+    pub streaming_output: String,
+    /// Creation timestamp (ISO 8601)
+    pub created_at: String,
+    /// Last update timestamp (ISO 8601)
+    pub updated_at: String,
+}
+
+/// Change status in CESDD workflow
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ChangeStatus {
+    /// Initial state - proposal.md created
+    #[default]
+    Proposed,
+    /// Claude is generating plan.md (streaming)
+    Planning,
+    /// plan.md complete, waiting for approval
+    Planned,
+    /// User approved, implementation in progress
+    Implementing,
+    /// Implementation complete, testing
+    Testing,
+    /// All done, ready for archival
+    Done,
+    /// Archived to Living Context
+    Archived,
+    /// User cancelled
+    Cancelled,
+    /// Build/test errors
+    Failed,
 }
 
 /// UI theme

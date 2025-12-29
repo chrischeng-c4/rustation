@@ -1,32 +1,19 @@
 import { useEffect, useCallback } from 'react'
-import { RefreshCw, AlertCircle, Bot } from 'lucide-react'
+import { RefreshCw, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { LogPanel } from '@/components/LogPanel'
 import { TaskCard } from './TaskCard'
-import { ChatPanel } from './ChatPanel'
-import { DebugLogPanel } from './DebugLogPanel'
-import { ConstitutionPanel } from './ConstitutionPanel'
 import { useTasksState } from '@/hooks/useAppState'
-import type { JustCommandInfo } from '@/types/state'
-import { cn } from '@/lib/utils'
 
-// Claude Code as a special "command" in the list
-const CLAUDE_CODE_COMMAND: JustCommandInfo = {
-  name: 'claude-code',
-  description: 'Chat with Claude Code AI assistant',
-  recipe: '',
-}
-
-// Constitution initialization as a special "command"
-const CONSTITUTION_INIT_COMMAND: JustCommandInfo = {
-  name: 'constitution-init',
-  description: 'Initialize project constitution (CESDD)',
-  recipe: '',
-}
-
+/**
+ * TasksPage - Simple justfile command runner.
+ *
+ * This page is for fire-and-forget task execution.
+ * For guided, stateful workflows, use the Workflows tab.
+ */
 export function TasksPage() {
-  const { tasks, projectPath, dispatch, isLoading: isStateLoading } = useTasksState()
+  const { tasks, projectPath, dispatch } = useTasksState()
 
   // Derive values from state
   const commands = tasks?.commands ?? []
@@ -63,28 +50,6 @@ export function TasksPage() {
     }
   }, [dispatch, justfilePath])
 
-  // Handle selecting Claude Code (just sets active command, no "run")
-  const handleSelectClaudeCode = useCallback(async () => {
-    await dispatch({ type: 'SetActiveCommand', payload: { name: 'claude-code' } })
-    await dispatch({ type: 'ClearTaskOutput' })
-  }, [dispatch])
-
-  // Handle selecting Constitution Init (sets active command and initializes workflow)
-  const handleSelectConstitutionInit = useCallback(async () => {
-    await dispatch({ type: 'SetActiveCommand', payload: { name: 'constitution-init' } })
-    await dispatch({ type: 'ClearTaskOutput' })
-    // Initialize workflow state
-    await dispatch({ type: 'StartConstitutionWorkflow' })
-  }, [dispatch])
-
-  // Check if Claude Code is active
-  const isClaudeCodeActive = activeCommand === 'claude-code'
-  // Check if Constitution Init is active
-  const isConstitutionInitActive = activeCommand === 'constitution-init'
-
-  // Combined command list: Special commands first, then justfile commands
-  const displayCommands = [CLAUDE_CODE_COMMAND, CONSTITUTION_INIT_COMMAND, ...commands]
-
   // No project path means no active project
   if (!projectPath) {
     return (
@@ -118,39 +83,22 @@ export function TasksPage() {
         </div>
       )}
 
-      {/* Two-column or Three-column layout based on active command */}
-      <div
-        className={cn(
-          'flex flex-1 gap-4 overflow-hidden',
-          isClaudeCodeActive ? 'grid grid-cols-3' : isConstitutionInitActive ? 'flex' : 'flex'
-        )}
-      >
+      {/* Two-column layout */}
+      <div className="flex flex-1 gap-4 overflow-hidden">
         {/* Column 1: Commands List */}
-        <div
-          className={cn(
-            'overflow-hidden rounded-lg border',
-            isClaudeCodeActive ? '' : isConstitutionInitActive ? 'w-1/3' : 'w-1/2'
-          )}
-        >
+        <div className="w-1/2 overflow-hidden rounded-lg border">
           <div className="border-b bg-muted/40 px-4 py-2">
             <span className="text-sm font-medium">Commands</span>
           </div>
           <ScrollArea className="h-[calc(100%-40px)]">
             <div className="space-y-2 p-4">
-              {displayCommands.map((cmd) => (
+              {commands.map((cmd) => (
                 <TaskCard
                   key={cmd.name}
                   command={cmd}
                   status={taskStatuses[cmd.name] || 'idle'}
                   isActive={activeCommand === cmd.name}
-                  onRun={
-                    cmd.name === 'claude-code'
-                      ? handleSelectClaudeCode
-                      : cmd.name === 'constitution-init'
-                        ? handleSelectConstitutionInit
-                        : handleRun
-                  }
-                  isClaudeCode={cmd.name === 'claude-code'}
+                  onRun={handleRun}
                 />
               ))}
               {commands.length === 0 && !isRefreshing && (
@@ -166,38 +114,15 @@ export function TasksPage() {
           </ScrollArea>
         </div>
 
-        {/* Column 2: Chat Panel (only when Claude Code active) */}
-        {isClaudeCodeActive && (
-          <div className="overflow-hidden">
-            <ChatPanel />
-          </div>
-        )}
-
-        {/* Column 3: Debug Log Panel (only when Claude Code active) */}
-        {isClaudeCodeActive && (
-          <div className="overflow-hidden">
-            <DebugLogPanel />
-          </div>
-        )}
-
-        {/* Column 2: Constitution Panel (when Constitution Init active) */}
-        {isConstitutionInitActive && (
-          <div className="w-2/3 overflow-hidden">
-            <ConstitutionPanel />
-          </div>
-        )}
-
-        {/* Column 2: Log Panel (when justfile command active) */}
-        {!isClaudeCodeActive && !isConstitutionInitActive && (
-          <div className="w-1/2 overflow-hidden">
-            <LogPanel
-              title={activeCommand ? `just ${activeCommand}` : 'Output'}
-              logs={output}
-              showCopy={true}
-              emptyMessage="Select a command to run"
-            />
-          </div>
-        )}
+        {/* Column 2: Log Panel */}
+        <div className="w-1/2 overflow-hidden">
+          <LogPanel
+            title={activeCommand ? `just ${activeCommand}` : 'Output'}
+            logs={output}
+            showCopy={true}
+            emptyMessage="Select a command to run"
+          />
+        </div>
       </div>
     </div>
   )

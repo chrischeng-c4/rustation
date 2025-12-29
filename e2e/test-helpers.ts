@@ -2,6 +2,10 @@ import { Page, expect } from '@playwright/test'
 import * as os from 'os'
 import * as path from 'path'
 import * as fs from 'fs/promises'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+
+const execAsync = promisify(exec)
 
 /**
  * Open a project programmatically via state dispatch
@@ -22,9 +26,11 @@ export async function openProject(page: Page, projectPath: string): Promise<void
     async () => {
       const json = await (window as any).stateApi.getState()
       const state = JSON.parse(json)
+      // Note: active_project is not serialized, use projects[active_project_index]
+      const activeProject = state?.projects?.[state?.active_project_index]
       return (
-        state?.active_project?.worktrees &&
-        state.active_project.worktrees.length > 0
+        activeProject?.worktrees &&
+        activeProject.worktrees.length > 0
       )
     },
     { timeout: 10000 }
@@ -43,22 +49,40 @@ export async function openProject(page: Page, projectPath: string): Promise<void
     return JSON.parse(json)
   })
 
-  if (!stateAfterWait?.active_project?.worktrees || stateAfterWait.active_project.worktrees.length === 0) {
+  // Note: active_project is not serialized, use projects[active_project_index]
+  const activeProject = stateAfterWait?.projects?.[stateAfterWait?.active_project_index]
+  if (!activeProject?.worktrees || activeProject.worktrees.length === 0) {
     throw new Error('Project closed after initial load - state validation failed')
   }
 }
 
 /**
- * Create a temporary test project directory
+ * Create a temporary test project directory with valid git repo
  */
 export async function createTestProject(): Promise<string> {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstn-test-'))
 
-  // Initialize as git repo (rstn requires git)
-  await fs.mkdir(path.join(tmpDir, '.git'))
+  // Initialize as proper git repo (rstn requires valid git)
+  await execAsync('git init', { cwd: tmpDir })
+  await execAsync('git config user.name "Test User"', { cwd: tmpDir })
+  await execAsync('git config user.email "test@example.com"', { cwd: tmpDir })
 
-  // Create a minimal justfile
-  await fs.writeFile(path.join(tmpDir, 'justfile'), 'test:\n\techo "test"')
+  // Create a minimal justfile with test commands
+  const justfileContent = `# Test project justfile
+test:
+\techo "Running tests"
+
+build:
+\techo "Building project"
+
+constitution-init:
+\techo "Initialize constitution"
+`
+  await fs.writeFile(path.join(tmpDir, 'justfile'), justfileContent)
+
+  // Create initial commit so git repo is fully valid
+  await execAsync('git add .', { cwd: tmpDir })
+  await execAsync('git commit -m "Initial commit"', { cwd: tmpDir })
 
   return tmpDir
 }

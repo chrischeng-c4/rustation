@@ -9,6 +9,7 @@ pub mod actions;
 pub mod agent_rules;
 pub mod app_state;
 pub mod claude_cli;
+pub mod constitution;
 pub mod context_engine;
 pub mod docker;
 pub mod env;
@@ -44,6 +45,8 @@ static APP_STATE: OnceCell<Arc<RwLock<AppState>>> = OnceCell::const_new();
 
 // State update listener (callback to JavaScript)
 static STATE_LISTENER: OnceCell<ThreadsafeFunction<String>> = OnceCell::const_new();
+
+// DEFAULT_CONSTITUTION moved to constitution.rs module (modular templates)
 
 fn get_app_state() -> &'static Arc<RwLock<AppState>> {
     APP_STATE.get().expect("AppState not initialized. Call state_init first.")
@@ -854,6 +857,25 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         Action::OpenProject { ref path } => {
             // After opening a project, refresh worktrees from git
             refresh_worktrees_for_path(path).await;
+
+            // Check constitution existence for the active worktree
+            // Supports both modular (.rstn/constitutions/) and legacy (.rstn/constitution.md)
+            let worktree_path = {
+                let state = get_app_state().read().await;
+                state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .map(|w| w.path.clone())
+            };
+            if let Some(wt_path) = worktree_path {
+                let exists = constitution::constitution_exists(std::path::Path::new(&wt_path));
+
+                {
+                    let mut state = get_app_state().write().await;
+                    reduce(&mut state, Action::SetConstitutionExists { exists });
+                }
+                notify_state_update().await;
+            }
         }
 
         Action::RefreshWorktrees => {
@@ -1179,7 +1201,10 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         | Action::SetTerminalSession { .. }
         | Action::SetTerminalSize { .. }
         // View actions (sync)
-        | Action::SetActiveView { .. } => {
+        | Action::SetActiveView { .. }
+        // Dev log actions (sync)
+        | Action::AddDevLog { .. }
+        | Action::ClearDevLogs => {
             // Already handled synchronously
         }
 
@@ -1249,50 +1274,13 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
             let agent_rules_for_task = agent_rules_config.clone();
             let project_id_for_task = project_id.clone();
 
-            // Log spawn attempt (debug mode)
-            {
-                let mut state = get_app_state().write().await;
-                reduce(
-                    &mut state,
-                    Action::AddDebugLog {
-                        log: actions::ClaudeDebugLogData {
-                            timestamp: chrono::Utc::now().to_rfc3339(),
-                            level: "info".to_string(),
-                            event_type: "spawn_attempt".to_string(),
-                            message: format!(
-                                "Spawning Claude CLI: claude -p --verbose --output-format stream-json \"{}...\"",
-                                &prompt[..prompt.len().min(50)]
-                            ),
-                            details: Some(serde_json::json!({
-                                "cwd": cwd.display().to_string(),
-                                "prompt_length": prompt.len(),
-                            })),
-                        },
-                    },
-                );
-            } // Write lock released here
-            notify_state_update().await;
-
             // Spawn async task to handle CLI interaction without blocking
-
             tokio::spawn(async move {
     // Validate Claude CLI exists before attempting spawn
     if let Err(e) = claude_cli::validate_claude_cli().await {
         let error = e.to_string();
         {
             let mut state = get_app_state().write().await;
-            reduce(
-                &mut state,
-                Action::AddDebugLog {
-                    log: actions::ClaudeDebugLogData {
-                        timestamp: chrono::Utc::now().to_rfc3339(),
-                        level: "error".to_string(),
-                        event_type: "spawn_error".to_string(),
-                        message: format!("Claude CLI validation failed: {}", error),
-                        details: None,
-                    },
-                },
-            );
             reduce(&mut state, Action::SetChatError { error });
             reduce(&mut state, Action::SetChatTyping { is_typing: false });
         }
@@ -1334,28 +1322,7 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
     // Spawn Claude CLI process (with MCP config and/or agent rules if available)
     match claude_cli::spawn_claude(&prompt, &cwd_for_task, mcp_config_for_task.as_deref(), agent_rules_path.as_deref()) {
         Ok(mut child) => {
-            // Log spawn success
-            {
-                let mut state = get_app_state().write().await;
-                reduce(
-                    &mut state,
-                    Action::AddDebugLog {
-                        log: actions::ClaudeDebugLogData {
-                            timestamp: chrono::Utc::now().to_rfc3339(),
-                            level: "info".to_string(),
-                            event_type: "spawn_success".to_string(),
-                            message: format!(
-                                "Claude CLI spawned successfully (PID: {:?})",
-                                child.id()
-                            ),
-                            details: None,
-                        },
-                    },
-                );
-            }
-            notify_state_update().await;
-
-            // Monitor stderr for diagnostic information
+            // Monitor stderr for diagnostic information (errors logged to console)
             if let Some(stderr) = child.stderr.take() {
                 tokio::spawn(async move {
                     let reader = BufReader::new(stderr);
@@ -1364,23 +1331,8 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                     while let Ok(Some(line)) = lines.next_line().await {
                         let trimmed = line.trim();
                         if !trimmed.is_empty() {
-                            // Log each stderr line to debug logs
-                            {
-                                let mut state = get_app_state().write().await;
-                                reduce(
-                                    &mut state,
-                                    Action::AddDebugLog {
-                                        log: actions::ClaudeDebugLogData {
-                                            timestamp: chrono::Utc::now().to_rfc3339(),
-                                            level: "error".to_string(),
-                                            event_type: "stderr".to_string(),
-                                            message: trimmed.to_string(),
-                                            details: None,
-                                        },
-                                    },
-                                );
-                            }
-                            notify_state_update().await;
+                            // Log stderr to console for debugging
+                            eprintln!("[Claude CLI stderr] {}", trimmed);
                         }
                     }
                 });
@@ -1401,18 +1353,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                             let error = "Request exceeded 5 minute timeout".to_string();
                             {
                                 let mut state = get_app_state().write().await;
-                                reduce(
-                                    &mut state,
-                                    Action::AddDebugLog {
-                                        log: actions::ClaudeDebugLogData {
-                                            timestamp: chrono::Utc::now().to_rfc3339(),
-                                            level: "error".to_string(),
-                                            event_type: "total_timeout".to_string(),
-                                            message: "Total timeout: Request exceeded 5 minutes".to_string(),
-                                            details: None,
-                                        },
-                                    },
-                                );
                                 reduce(&mut state, Action::SetChatError { error });
                                 reduce(&mut state, Action::SetChatTyping { is_typing: false });
                             }
@@ -1426,41 +1366,13 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                             stream.next_event()
                         ).await {
                             Ok(Some(Ok(event))) => {
-                                // Log unsupported events for debugging
+                                // Handle unsupported events
                                 if matches!(event, claude_cli::ClaudeStreamEvent::Other) {
-                                    {
-                                        let mut state = get_app_state().write().await;
-                                        reduce(
-                                            &mut state,
-                                            Action::AddDebugLog {
-                                                log: actions::ClaudeDebugLogData {
-                                                    timestamp: chrono::Utc::now().to_rfc3339(),
-                                                    level: "warn".to_string(),
-                                                    event_type: "unsupported_event".to_string(),
-                                                    message: format!("Received unsupported event type: {:?}", event),
-                                                    details: None,
-                                                },
-                                            },
-                                        );
-                                    }
-                                    notify_state_update().await;
                                     consecutive_other_events += 1;
                                     if consecutive_other_events >= MAX_CONSECUTIVE_OTHER {
                                         let error = format!("Received {} consecutive unsupported events from Claude CLI", consecutive_other_events);
                                         {
                                             let mut state = get_app_state().write().await;
-                                            reduce(
-                                                &mut state,
-                                                Action::AddDebugLog {
-                                                    log: actions::ClaudeDebugLogData {
-                                                        timestamp: chrono::Utc::now().to_rfc3339(),
-                                                        level: "error".to_string(),
-                                                        event_type: "too_many_unsupported".to_string(),
-                                                        message: "Too many unsupported events, likely incompatible format".to_string(),
-                                                        details: None,
-                                                    },
-                                                },
-                                            );
                                             reduce(&mut state, Action::SetChatError { error });
                                             reduce(&mut state, Action::SetChatTyping { is_typing: false });
                                         }
@@ -1502,18 +1414,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                                 if claude_cli::is_message_stop(&event) {
                                     {
                                         let mut state = get_app_state().write().await;
-                                        reduce(
-                                            &mut state,
-                                            Action::AddDebugLog {
-                                                log: actions::ClaudeDebugLogData {
-                                                    timestamp: chrono::Utc::now().to_rfc3339(),
-                                                    level: "info".to_string(),
-                                                    event_type: "message_complete".to_string(),
-                                                    message: "Claude response complete".to_string(),
-                                                    details: None,
-                                                },
-                                            },
-                                        );
                                         reduce(&mut state, Action::SetChatTyping { is_typing: false });
                                     }
                                     notify_state_update().await;
@@ -1525,18 +1425,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                                 let error = e.to_string();
                                 {
                                     let mut state = get_app_state().write().await;
-                                    reduce(
-                                        &mut state,
-                                        Action::AddDebugLog {
-                                            log: actions::ClaudeDebugLogData {
-                                                timestamp: chrono::Utc::now().to_rfc3339(),
-                                                level: "error".to_string(),
-                                                event_type: "parse_error".to_string(),
-                                                message: format!("JSONL parse error: {}", error),
-                                                details: None,
-                                            },
-                                        },
-                                    );
                                     reduce(&mut state, Action::SetChatError { error });
                                     reduce(&mut state, Action::SetChatTyping { is_typing: false });
                                 }
@@ -1548,18 +1436,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                                 let error = "Claude CLI ended unexpectedly. Check if you have valid API credentials.".to_string();
                                 {
                                     let mut state = get_app_state().write().await;
-                                    reduce(
-                                        &mut state,
-                                        Action::AddDebugLog {
-                                            log: actions::ClaudeDebugLogData {
-                                                timestamp: chrono::Utc::now().to_rfc3339(),
-                                                level: "error".to_string(),
-                                                event_type: "stream_end".to_string(),
-                                                message: "Stream ended (EOF) without message_stop - likely authentication or CLI error".to_string(),
-                                                details: None,
-                                            },
-                                        },
-                                    );
                                     reduce(&mut state, Action::SetChatError { error });
                                     reduce(&mut state, Action::SetChatTyping { is_typing: false });
                                 }
@@ -1571,18 +1447,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                                 let error = "No response from Claude CLI for 30 seconds".to_string();
                                 {
                                     let mut state = get_app_state().write().await;
-                                    reduce(
-                                        &mut state,
-                                        Action::AddDebugLog {
-                                            log: actions::ClaudeDebugLogData {
-                                                timestamp: chrono::Utc::now().to_rfc3339(),
-                                                level: "error".to_string(),
-                                                event_type: "event_timeout".to_string(),
-                                                message: "Event timeout: No response for 30 seconds".to_string(),
-                                                details: None,
-                                            },
-                                        },
-                                    );
                                     reduce(&mut state, Action::SetChatError { error });
                                     reduce(&mut state, Action::SetChatTyping { is_typing: false });
                                 }
@@ -1617,18 +1481,6 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
             let error = e.to_string();
             {
                 let mut state = get_app_state().write().await;
-                reduce(
-                    &mut state,
-                    Action::AddDebugLog {
-                        log: actions::ClaudeDebugLogData {
-                            timestamp: chrono::Utc::now().to_rfc3339(),
-                            level: "error".to_string(),
-                            event_type: "spawn_error".to_string(),
-                            message: format!("Failed to spawn Claude CLI: {}", error),
-                            details: None,
-                        },
-                    },
-                );
                 reduce(&mut state, Action::SetChatError { error });
                 reduce(&mut state, Action::SetChatTyping { is_typing: false });
             }
@@ -1659,14 +1511,9 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
             // No async operations needed
         }
 
-        // Debug log actions (sync - handled in reducer)
-        Action::AddDebugLog { .. } | Action::ClearDebugLogs => {
-            // These are pure state mutations, handled synchronously in reducer
-            // No async operations needed
-        }
-
         // Constitution Workflow actions (CESDD Phase 1)
         Action::StartConstitutionWorkflow
+        | Action::ClearConstitutionWorkflow
         | Action::AnswerConstitutionQuestion { .. }
         | Action::AppendConstitutionOutput { .. } => {
             // Sync actions - handled in reducer
@@ -1883,6 +1730,245 @@ Be specific, actionable, and authoritative. Use "MUST", "MUST NOT" language."#,
             }
         }
 
+        Action::CheckConstitutionExists => {
+            // Get the active worktree path
+            let worktree_path = {
+                let state = get_app_state().read().await;
+                state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .map(|w| w.path.clone())
+            };
+
+            if let Some(wt_path) = worktree_path {
+                // Check for modular (.rstn/constitutions/) or legacy (.rstn/constitution.md)
+                let exists = constitution::constitution_exists(std::path::Path::new(&wt_path));
+
+                {
+                    let mut state = get_app_state().write().await;
+                    reduce(&mut state, Action::SetConstitutionExists { exists });
+                }
+                notify_state_update().await;
+            }
+        }
+
+        Action::SetConstitutionExists { .. } => {
+            // Sync action - handled in reducer
+        }
+
+        Action::ApplyDefaultConstitution => {
+            // Get the active worktree path
+            let worktree_path = {
+                let state = get_app_state().read().await;
+                state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .map(|w| w.path.clone())
+            };
+
+            if let Some(wt_path) = worktree_path {
+                let project_path = std::path::Path::new(&wt_path);
+
+                // Create modular constitution with language detection
+                match constitution::create_modular_constitution(project_path).await {
+                    Ok(()) => {
+                        // Update state
+                        {
+                            let mut state = get_app_state().write().await;
+                            reduce(&mut state, Action::SetConstitutionExists { exists: true });
+                        }
+                        notify_state_update().await;
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create modular constitution: {}", e);
+                    }
+                }
+            }
+        }
+
+        // ====================================================================
+        // Change Management Actions (CESDD Phase 2 - async operations)
+        // ====================================================================
+        Action::CreateChange { intent } => {
+            // Get the active worktree path
+            let worktree_path = {
+                let state = get_app_state().read().await;
+                state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .map(|w| w.path.clone())
+            };
+
+            if let Some(wt_path) = worktree_path {
+                // Generate change ID and name from intent
+                let change_id = format!("change-{}", chrono::Utc::now().timestamp_millis());
+                let change_name = slugify(&intent);
+                let now = chrono::Utc::now().to_rfc3339();
+
+                // Create change directory: .rstn/changes/<change-name>/
+                let changes_dir = std::path::Path::new(&wt_path)
+                    .join(".rstn")
+                    .join("changes")
+                    .join(&change_name);
+                if let Err(e) = std::fs::create_dir_all(&changes_dir) {
+                    eprintln!("Failed to create changes directory: {}", e);
+                    return Ok(());
+                }
+
+                // Write intent.md
+                let intent_path = changes_dir.join("intent.md");
+                if let Err(e) = std::fs::write(&intent_path, &intent) {
+                    eprintln!("Failed to write intent.md: {}", e);
+                    return Ok(());
+                }
+
+                // Create the change in state
+                let change = app_state::Change {
+                    id: change_id,
+                    name: change_name,
+                    status: app_state::ChangeStatus::Proposed,
+                    intent: intent.clone(),
+                    proposal: None,
+                    plan: None,
+                    streaming_output: String::new(),
+                    created_at: now.clone(),
+                    updated_at: now,
+                };
+
+                {
+                    let mut state = get_app_state().write().await;
+                    if let Some(project) = state.active_project_mut() {
+                        if let Some(worktree) = project.active_worktree_mut() {
+                            worktree.changes.changes.push(change);
+                            worktree.changes.is_loading = false;
+                        }
+                    }
+                }
+                notify_state_update().await;
+            }
+        }
+
+        Action::GenerateProposal { change_id } => {
+            // Reduce first to set status to Planning
+            {
+                let mut state = get_app_state().write().await;
+                reduce(
+                    &mut state,
+                    Action::GenerateProposal {
+                        change_id: change_id.clone(),
+                    },
+                );
+            }
+            notify_state_update().await;
+
+            // TODO: Implement Claude CLI streaming for proposal generation
+            // For now, just mark as complete with placeholder
+            eprintln!("GenerateProposal: Claude CLI integration pending for change {}", change_id);
+        }
+
+        Action::AppendProposalOutput { .. } | Action::CompleteProposal { .. } => {
+            // Sync actions - handled in reducer
+        }
+
+        Action::GeneratePlan { change_id } => {
+            // Reduce first to set status to Planning
+            {
+                let mut state = get_app_state().write().await;
+                reduce(
+                    &mut state,
+                    Action::GeneratePlan {
+                        change_id: change_id.clone(),
+                    },
+                );
+            }
+            notify_state_update().await;
+
+            // TODO: Implement Claude CLI streaming for plan generation
+            eprintln!("GeneratePlan: Claude CLI integration pending for change {}", change_id);
+        }
+
+        Action::AppendPlanOutput { .. }
+        | Action::CompletePlan { .. }
+        | Action::ApprovePlan { .. }
+        | Action::CancelChange { .. }
+        | Action::SelectChange { .. }
+        | Action::SetChangesLoading { .. } => {
+            // Sync actions - handled in reducer
+        }
+
+        Action::RefreshChanges => {
+            // Get the active worktree path
+            let worktree_path = {
+                let state = get_app_state().read().await;
+                state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .map(|w| w.path.clone())
+            };
+
+            if let Some(wt_path) = worktree_path {
+                let changes_dir = std::path::Path::new(&wt_path)
+                    .join(".rstn")
+                    .join("changes");
+
+                let mut changes = Vec::new();
+
+                if changes_dir.exists() {
+                    if let Ok(entries) = std::fs::read_dir(&changes_dir) {
+                        for entry in entries.flatten() {
+                            if entry.path().is_dir() {
+                                let change_name = entry.file_name().to_string_lossy().to_string();
+                                let intent_path = entry.path().join("intent.md");
+                                let proposal_path = entry.path().join("proposal.md");
+                                let plan_path = entry.path().join("plan.md");
+
+                                let intent = std::fs::read_to_string(&intent_path)
+                                    .unwrap_or_default();
+                                let proposal = std::fs::read_to_string(&proposal_path).ok();
+                                let plan = std::fs::read_to_string(&plan_path).ok();
+
+                                // Determine status from files
+                                let status = if plan.is_some() {
+                                    app_state::ChangeStatus::Planned
+                                } else {
+                                    // Default to Proposed if no plan yet
+                                    app_state::ChangeStatus::Proposed
+                                };
+
+                                let now = chrono::Utc::now().to_rfc3339();
+                                changes.push(app_state::Change {
+                                    id: format!("change-{}", change_name),
+                                    name: change_name,
+                                    status,
+                                    intent,
+                                    proposal,
+                                    plan,
+                                    streaming_output: String::new(),
+                                    created_at: now.clone(),
+                                    updated_at: now,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                {
+                    let mut state = get_app_state().write().await;
+                    if let Some(project) = state.active_project_mut() {
+                        if let Some(worktree) = project.active_worktree_mut() {
+                            worktree.changes.changes = changes;
+                            worktree.changes.is_loading = false;
+                        }
+                    }
+                }
+                notify_state_update().await;
+            }
+        }
+
+        Action::SetChanges { .. } => {
+            // Sync action - handled in reducer
+        }
+
         // Terminal actions (async - PTY operations)
         Action::SpawnTerminal { .. }
         | Action::ResizeTerminal { .. }
@@ -1894,4 +1980,20 @@ Be specific, actionable, and authoritative. Use "MUST", "MUST NOT" language."#,
     }
 
     Ok(())
+}
+
+/// Convert intent to a URL-friendly slug
+fn slugify(intent: &str) -> String {
+    intent
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+        .chars()
+        .take(50)
+        .collect()
 }

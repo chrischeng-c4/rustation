@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ListTodo, Settings, RefreshCw, FolderOpen, Server, MessageSquare, TerminalSquare } from 'lucide-react'
+import { ListTodo, Settings, RefreshCw, FolderOpen, Server, MessageSquare, TerminalSquare, Workflow } from 'lucide-react'
 import { DockersPage } from '@/features/dockers/DockersPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { EnvPage } from '@/features/env'
@@ -9,12 +9,17 @@ import { SettingsPage } from '@/features/settings'
 import { McpPage } from '@/features/mcp'
 import { ChatPage } from '@/features/chat'
 import { TerminalPage } from '@/features/terminal'
+import { WorkflowsPage } from '@/features/workflows'
 import { Toaster } from '@/features/notifications'
 import { CommandPalette } from '@/components/command-palette'
+import { DevLogPanel } from '@/components/DevLogPanel'
 import { useActiveWorktree, useAppState } from '@/hooks/useAppState'
 import { ProjectTabs } from '@/components/ProjectTabs'
 import { Button } from '@/components/ui/button'
 import type { ActiveView } from '@/types/state'
+
+// Dev mode check - only show DevLogPanel in development
+const IS_DEV = import.meta.env.DEV
 
 function NoProjectView() {
   const { dispatch } = useAppState()
@@ -95,6 +100,8 @@ function App() {
         return <ChatPage />
       case 'terminal':
         return <TerminalPage />
+      case 'workflows':
+        return <WorkflowsPage />
       default:
         return <TasksPage />
     }
@@ -103,7 +110,7 @@ function App() {
   // Determine if sidebar items should be highlighted
   // Only highlight for worktree-scope views (tasks, settings, mcp, chat, terminal)
   const getSidebarValue = () => {
-    if (activeView === 'tasks' || activeView === 'settings' || activeView === 'mcp' || activeView === 'chat' || activeView === 'terminal') {
+    if (activeView === 'tasks' || activeView === 'settings' || activeView === 'mcp' || activeView === 'chat' || activeView === 'terminal' || activeView === 'workflows') {
       return activeView
     }
     // For global/project scope views (dockers, env), don't highlight sidebar
@@ -138,6 +145,13 @@ function App() {
           >
             {/* Sidebar: Only worktree-scope features */}
             <TabsList className="flex h-full w-16 flex-col items-center gap-2 rounded-none border-r bg-muted/40 p-2">
+              <TabsTrigger
+                value="workflows"
+                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
+              >
+                <Workflow className="h-5 w-5" />
+                <span className="text-[10px]">Flows</span>
+              </TabsTrigger>
               <TabsTrigger
                 value="tasks"
                 className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
@@ -182,6 +196,9 @@ function App() {
           /* No project open - show NoProjectView for worktree-scope views */
           <NoProjectView />
         )}
+
+        {/* Dev Log Panel (right side, dev mode only) */}
+        {IS_DEV && <DevLogPanel />}
       </div>
     </div>
   )

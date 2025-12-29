@@ -18,7 +18,7 @@ export type FeatureTab = 'tasks' | 'dockers' | 'settings'
  * - dockers: Global scope
  * - env, agent_rules: Project scope
  */
-export type ActiveView = 'tasks' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal' | 'agent_rules'
+export type ActiveView = 'tasks' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal' | 'agent_rules' | 'workflows'
 
 // ============================================================================
 // Docker State
@@ -69,6 +69,39 @@ export interface DockersState {
 }
 
 // ============================================================================
+// Change Management State (CESDD Phase 2)
+// ============================================================================
+
+export type ChangeStatus =
+  | 'proposed'
+  | 'planning'
+  | 'planned'
+  | 'implementing'
+  | 'testing'
+  | 'done'
+  | 'archived'
+  | 'cancelled'
+  | 'failed'
+
+export interface Change {
+  id: string
+  name: string
+  status: ChangeStatus
+  intent: string
+  proposal: string | null
+  plan: string | null
+  streaming_output: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ChangesState {
+  changes: Change[]
+  selected_change_id: string | null
+  is_loading: boolean
+}
+
+// ============================================================================
 // Tasks State
 // ============================================================================
 
@@ -108,6 +141,8 @@ export interface TasksState {
   error: string | null
   /** Constitution workflow state (CESDD Phase 1) */
   constitution_workflow: ConstitutionWorkflow | null
+  /** Whether .rstn/constitution.md exists (null = not checked yet) */
+  constitution_exists: boolean | null
 }
 
 // ============================================================================
@@ -207,30 +242,10 @@ export interface ChatMessage {
   is_streaming?: boolean
 }
 
-export type LogLevel = 'info' | 'debug' | 'error'
-
-export type LogEventType =
-  | 'spawn_attempt'
-  | 'spawn_success'
-  | 'spawn_error'
-  | 'stream_event'
-  | 'message_complete'
-  | 'parse_error'
-
-export interface ClaudeDebugLog {
-  timestamp: string
-  level: LogLevel
-  event_type: LogEventType
-  message: string
-  details?: unknown
-}
-
 export interface ChatState {
   messages: ChatMessage[]
   is_typing: boolean
   error?: string
-  debug_logs?: ClaudeDebugLog[]
-  max_debug_logs?: number
 }
 
 // ============================================================================
@@ -258,6 +273,7 @@ export interface WorktreeState {
   is_modified: boolean
   active_tab: FeatureTab
   tasks: TasksState
+  changes: ChangesState
   // NOTE: dockers moved to AppState.docker (global scope)
 }
 
@@ -303,6 +319,23 @@ export interface AppError {
 }
 
 // ============================================================================
+// Dev Logs (Development Mode Only)
+// ============================================================================
+
+export type DevLogSource = 'rust' | 'frontend' | 'claude' | 'ipc'
+
+export type DevLogType = 'action' | 'state' | 'claude' | 'error' | 'info'
+
+export interface DevLog {
+  id: string
+  timestamp: string
+  source: DevLogSource
+  log_type: DevLogType
+  summary: string
+  data: unknown
+}
+
+// ============================================================================
 // Main AppState
 // ============================================================================
 
@@ -317,6 +350,8 @@ export interface AppState {
   docker: DockersState
   notifications: Notification[]
   active_view: ActiveView
+  // Dev logs (development mode only)
+  dev_logs?: DevLog[]
 }
 
 // ============================================================================
@@ -451,13 +486,109 @@ export interface ClearChatAction {
   type: 'ClearChat'
 }
 
-export interface AddDebugLogAction {
-  type: 'AddDebugLog'
-  payload: { log: ClaudeDebugLogData }
+// Constitution Workflow Actions
+export interface StartConstitutionWorkflowAction {
+  type: 'StartConstitutionWorkflow'
 }
 
-export interface ClearDebugLogsAction {
-  type: 'ClearDebugLogs'
+export interface ClearConstitutionWorkflowAction {
+  type: 'ClearConstitutionWorkflow'
+}
+
+export interface AnswerConstitutionQuestionAction {
+  type: 'AnswerConstitutionQuestion'
+  payload: { answer: string }
+}
+
+export interface GenerateConstitutionAction {
+  type: 'GenerateConstitution'
+}
+
+export interface AppendConstitutionOutputAction {
+  type: 'AppendConstitutionOutput'
+  payload: { content: string }
+}
+
+export interface SaveConstitutionAction {
+  type: 'SaveConstitution'
+}
+
+export interface CheckConstitutionExistsAction {
+  type: 'CheckConstitutionExists'
+}
+
+export interface SetConstitutionExistsAction {
+  type: 'SetConstitutionExists'
+  payload: { exists: boolean }
+}
+
+export interface ApplyDefaultConstitutionAction {
+  type: 'ApplyDefaultConstitution'
+}
+
+// Change Management Actions (CESDD Phase 2)
+export interface CreateChangeAction {
+  type: 'CreateChange'
+  payload: { intent: string }
+}
+
+export interface GenerateProposalAction {
+  type: 'GenerateProposal'
+  payload: { change_id: string }
+}
+
+export interface AppendProposalOutputAction {
+  type: 'AppendProposalOutput'
+  payload: { change_id: string; content: string }
+}
+
+export interface CompleteProposalAction {
+  type: 'CompleteProposal'
+  payload: { change_id: string }
+}
+
+export interface GeneratePlanAction {
+  type: 'GeneratePlan'
+  payload: { change_id: string }
+}
+
+export interface AppendPlanOutputAction {
+  type: 'AppendPlanOutput'
+  payload: { change_id: string; content: string }
+}
+
+export interface CompletePlanAction {
+  type: 'CompletePlan'
+  payload: { change_id: string }
+}
+
+export interface ApprovePlanAction {
+  type: 'ApprovePlan'
+  payload: { change_id: string }
+}
+
+export interface CancelChangeAction {
+  type: 'CancelChange'
+  payload: { change_id: string }
+}
+
+export interface SelectChangeAction {
+  type: 'SelectChange'
+  payload: { change_id: string | null }
+}
+
+export interface RefreshChangesAction {
+  type: 'RefreshChanges'
+}
+
+export interface SetChangesAction {
+  type: 'SetChanges'
+  payload: { changes: ChangeData[] }
+}
+
+export interface SetChangesLoadingAction {
+  type: 'SetChangesLoading'
+  payload: { is_loading: boolean }
 }
 
 // Docker Actions
@@ -809,14 +940,6 @@ export interface ChatMessageData {
   is_streaming?: boolean
 }
 
-export interface ClaudeDebugLogData {
-  timestamp: string
-  level: string
-  event_type: string
-  message: string
-  details?: unknown
-}
-
 export interface EnvCopyResultData {
   copied_files: string[]
   failed_files: [string, string][]
@@ -825,7 +948,52 @@ export interface EnvCopyResultData {
 
 export type NotificationTypeData = 'info' | 'success' | 'warning' | 'error'
 
-export type ActiveViewData = 'tasks' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal' | 'agent_rules'
+export type ActiveViewData = 'tasks' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal' | 'agent_rules' | 'workflows'
+
+export type DevLogSourceData = 'rust' | 'frontend' | 'claude' | 'ipc'
+
+export type DevLogTypeData = 'action' | 'state' | 'claude' | 'error' | 'info'
+
+export interface DevLogData {
+  source: DevLogSourceData
+  log_type: DevLogTypeData
+  summary: string
+  data: unknown
+}
+
+// Change Management Data Types (CESDD Phase 2)
+export type ChangeStatusData =
+  | 'proposed'
+  | 'planning'
+  | 'planned'
+  | 'implementing'
+  | 'testing'
+  | 'done'
+  | 'archived'
+  | 'cancelled'
+  | 'failed'
+
+export interface ChangeData {
+  id: string
+  name: string
+  status: ChangeStatusData
+  intent: string
+  proposal: string | null
+  plan: string | null
+  streaming_output: string
+  created_at: string
+  updated_at: string
+}
+
+// Dev Log Actions
+export interface AddDevLogAction {
+  type: 'AddDevLog'
+  payload: { log: DevLogData }
+}
+
+export interface ClearDevLogsAction {
+  type: 'ClearDevLogs'
+}
 
 // Union type of all actions
 export type Action =
@@ -855,8 +1023,28 @@ export type Action =
   | SetChatErrorAction
   | ClearChatErrorAction
   | ClearChatAction
-  | AddDebugLogAction
-  | ClearDebugLogsAction
+  | StartConstitutionWorkflowAction
+  | ClearConstitutionWorkflowAction
+  | AnswerConstitutionQuestionAction
+  | GenerateConstitutionAction
+  | AppendConstitutionOutputAction
+  | SaveConstitutionAction
+  | CheckConstitutionExistsAction
+  | SetConstitutionExistsAction
+  | ApplyDefaultConstitutionAction
+  | CreateChangeAction
+  | GenerateProposalAction
+  | AppendProposalOutputAction
+  | CompleteProposalAction
+  | GeneratePlanAction
+  | AppendPlanOutputAction
+  | CompletePlanAction
+  | ApprovePlanAction
+  | CancelChangeAction
+  | SelectChangeAction
+  | RefreshChangesAction
+  | SetChangesAction
+  | SetChangesLoadingAction
   | CheckDockerAvailabilityAction
   | SetDockerAvailableAction
   | RefreshDockerServicesAction
@@ -912,6 +1100,8 @@ export type Action =
   | SetTerminalSizeAction
   | SetErrorAction
   | ClearErrorAction
+  | AddDevLogAction
+  | ClearDevLogsAction
 
 // ============================================================================
 // UI Helpers

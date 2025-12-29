@@ -134,8 +134,8 @@ test.describe('Worktree Debug', () => {
     await expect(branchTab).toBeVisible()
     console.log('Branch tab "main" is visible!')
 
-    // Check for the "+" button to add worktree
-    const addWorktreeButton = worktreeRow.locator('button').filter({ has: window.locator('svg') })
+    // Check for the "+" button to add worktree (small icon button with h-6 w-6 classes)
+    const addWorktreeButton = worktreeRow.locator('button.h-6.w-6').first()
     await expect(addWorktreeButton).toBeVisible()
     console.log('Add worktree button is visible!')
 
@@ -151,9 +151,9 @@ test.describe('Worktree Debug', () => {
     // Wait for any state to settle
     await window.waitForTimeout(500)
 
-    // Find the worktree row and the "+" button
+    // Find the worktree row and the "+" button (small icon button with h-6 w-6 classes)
     const worktreeRow = window.locator('.border-t.border-border\\/50.bg-muted\\/20')
-    const addWorktreeButton = worktreeRow.locator('button').filter({ has: window.locator('svg') })
+    const addWorktreeButton = worktreeRow.locator('button.h-6.w-6').first()
 
     // Click the add worktree button
     await addWorktreeButton.click()

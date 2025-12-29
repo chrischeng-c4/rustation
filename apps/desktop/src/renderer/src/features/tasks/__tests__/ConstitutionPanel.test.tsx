@@ -40,7 +40,7 @@ const createMockState = (
             status,
           },
         },
-        chat: { messages: [], is_typing: false, error: null, debug_logs: [] },
+        chat: { messages: [], is_typing: false, error: null },
         mcp: {
           status: 'stopped',
           port: null,

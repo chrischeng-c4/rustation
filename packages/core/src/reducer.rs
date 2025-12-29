@@ -6,13 +6,14 @@
 //! - No side effects (async operations handled separately)
 
 use crate::actions::{
-    Action, ChatRoleData, ConflictingContainerData, DockerServiceData, JustCommandData,
-    McpLogDirectionData, McpStatusData, PortConflictData, TaskStatusData,
+    Action, ChatRoleData, ConflictingContainerData, DevLogSourceData, DevLogTypeData,
+    DockerServiceData, JustCommandData, McpLogDirectionData, McpStatusData, PortConflictData,
+    TaskStatusData,
 };
 use crate::app_state::{
-    AppError, AppState, ConflictingContainer, DockerServiceInfo, EnvCopyResult, JustCommandInfo,
-    McpStatus, Notification, PendingConflict, PortConflict, ProjectState, RecentProject,
-    ServiceStatus, ServiceType, TaskStatus, WorktreeState,
+    AppError, AppState, ConflictingContainer, DevLog, DevLogSource, DevLogType, DockerServiceInfo,
+    EnvCopyResult, JustCommandInfo, McpStatus, Notification, PendingConflict, PortConflict,
+    ProjectState, RecentProject, ServiceStatus, ServiceType, TaskStatus, WorktreeState,
 };
 use crate::persistence;
 use crate::worktree;
@@ -23,6 +24,9 @@ use crate::worktree;
 /// Async operations (Docker calls, etc.) are handled by the dispatcher
 /// which calls this reducer after async operations complete.
 pub fn reduce(state: &mut AppState, action: Action) {
+    // Auto-log actions for dev debugging (only key actions to avoid noise)
+    log_action_if_interesting(state, &action);
+
     match action {
         // ====================================================================
         // Project Management
@@ -346,51 +350,6 @@ pub fn reduce(state: &mut AppState, action: Action) {
             }
         }
 
-        Action::AddDebugLog { ref log } => {
-            if let Some(project) = state.active_project_mut() {
-                if let Some(worktree) = project.active_worktree_mut() {
-                    // Convert action data to state type
-                    let debug_log = crate::app_state::ClaudeDebugLog {
-                        timestamp: log.timestamp.clone(),
-                        level: match log.level.as_str() {
-                            "info" => crate::app_state::LogLevel::Info,
-                            "debug" => crate::app_state::LogLevel::Debug,
-                            "error" => crate::app_state::LogLevel::Error,
-                            _ => crate::app_state::LogLevel::Debug,
-                        },
-                        event_type: match log.event_type.as_str() {
-                            "spawn_attempt" => crate::app_state::LogEventType::SpawnAttempt,
-                            "spawn_success" => crate::app_state::LogEventType::SpawnSuccess,
-                            "spawn_error" => crate::app_state::LogEventType::SpawnError,
-                            "stream_event" => crate::app_state::LogEventType::StreamEvent,
-                            "message_complete" => crate::app_state::LogEventType::MessageComplete,
-                            "parse_error" => crate::app_state::LogEventType::ParseError,
-                            _ => crate::app_state::LogEventType::StreamEvent,
-                        },
-                        message: log.message.clone(),
-                        details: log.details.clone(),
-                    };
-
-                    // Add log entry
-                    worktree.chat.debug_logs.push(debug_log);
-
-                    // Keep only last N logs (prevent memory bloat)
-                    let max_logs = worktree.chat.max_debug_logs;
-                    if worktree.chat.debug_logs.len() > max_logs {
-                        worktree.chat.debug_logs.drain(0..(worktree.chat.debug_logs.len() - max_logs));
-                    }
-                }
-            }
-        }
-
-        Action::ClearDebugLogs => {
-            if let Some(project) = state.active_project_mut() {
-                if let Some(worktree) = project.active_worktree_mut() {
-                    worktree.chat.debug_logs.clear();
-                }
-            }
-        }
-
         // ====================================================================
         // Constitution Workflow Actions (worktree scope)
         // ====================================================================
@@ -404,6 +363,14 @@ pub fn reduce(state: &mut AppState, action: Action) {
                             output: String::new(),
                             status: crate::app_state::WorkflowStatus::Collecting,
                         });
+                }
+            }
+        }
+
+        Action::ClearConstitutionWorkflow => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.tasks.constitution_workflow = None;
                 }
             }
         }
@@ -458,6 +425,204 @@ pub fn reduce(state: &mut AppState, action: Action) {
                     if let Some(workflow) = &mut worktree.tasks.constitution_workflow {
                         workflow.status = crate::app_state::WorkflowStatus::Complete;
                     }
+                }
+            }
+        }
+
+        Action::CheckConstitutionExists => {
+            // Async trigger - no immediate state change
+            // The async handler in lib.rs will check file and dispatch SetConstitutionExists
+        }
+
+        Action::SetConstitutionExists { exists } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.tasks.constitution_exists = Some(exists);
+                }
+            }
+        }
+
+        Action::ApplyDefaultConstitution => {
+            // Async action - file write handled in lib.rs
+            // No immediate state change needed
+        }
+
+        // ====================================================================
+        // Change Management Actions (CESDD Phase 2 - worktree scope)
+        // ====================================================================
+        Action::CreateChange { intent } => {
+            // Async action - file creation handled in lib.rs
+            // Creates .rstn/changes/<change-id>/
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.changes.is_loading = true;
+                }
+            }
+            let _ = intent; // Used by async handler
+        }
+
+        Action::GenerateProposal { change_id } => {
+            // Start proposal generation - set status to Planning
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(change) = worktree
+                        .changes
+                        .changes
+                        .iter_mut()
+                        .find(|c| c.id == change_id)
+                    {
+                        change.status = crate::app_state::ChangeStatus::Planning;
+                        change.streaming_output.clear();
+                    }
+                }
+            }
+        }
+
+        Action::AppendProposalOutput { change_id, content } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(change) = worktree
+                        .changes
+                        .changes
+                        .iter_mut()
+                        .find(|c| c.id == change_id)
+                    {
+                        change.streaming_output.push_str(&content);
+                    }
+                }
+            }
+        }
+
+        Action::CompleteProposal { change_id } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(change) = worktree
+                        .changes
+                        .changes
+                        .iter_mut()
+                        .find(|c| c.id == change_id)
+                    {
+                        // Move streaming output to proposal
+                        change.proposal = Some(std::mem::take(&mut change.streaming_output));
+                        change.status = crate::app_state::ChangeStatus::Proposed;
+                        change.updated_at = chrono::Utc::now().to_rfc3339();
+                    }
+                }
+            }
+        }
+
+        Action::GeneratePlan { change_id } => {
+            // Start plan generation
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(change) = worktree
+                        .changes
+                        .changes
+                        .iter_mut()
+                        .find(|c| c.id == change_id)
+                    {
+                        change.status = crate::app_state::ChangeStatus::Planning;
+                        change.streaming_output.clear();
+                    }
+                }
+            }
+        }
+
+        Action::AppendPlanOutput { change_id, content } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(change) = worktree
+                        .changes
+                        .changes
+                        .iter_mut()
+                        .find(|c| c.id == change_id)
+                    {
+                        change.streaming_output.push_str(&content);
+                    }
+                }
+            }
+        }
+
+        Action::CompletePlan { change_id } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(change) = worktree
+                        .changes
+                        .changes
+                        .iter_mut()
+                        .find(|c| c.id == change_id)
+                    {
+                        // Move streaming output to plan
+                        change.plan = Some(std::mem::take(&mut change.streaming_output));
+                        change.status = crate::app_state::ChangeStatus::Planned;
+                        change.updated_at = chrono::Utc::now().to_rfc3339();
+                    }
+                }
+            }
+        }
+
+        Action::ApprovePlan { change_id } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(change) = worktree
+                        .changes
+                        .changes
+                        .iter_mut()
+                        .find(|c| c.id == change_id)
+                    {
+                        change.status = crate::app_state::ChangeStatus::Implementing;
+                        change.updated_at = chrono::Utc::now().to_rfc3339();
+                    }
+                }
+            }
+        }
+
+        Action::CancelChange { change_id } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(change) = worktree
+                        .changes
+                        .changes
+                        .iter_mut()
+                        .find(|c| c.id == change_id)
+                    {
+                        change.status = crate::app_state::ChangeStatus::Cancelled;
+                        change.updated_at = chrono::Utc::now().to_rfc3339();
+                    }
+                }
+            }
+        }
+
+        Action::SelectChange { change_id } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.changes.selected_change_id = change_id;
+                }
+            }
+        }
+
+        Action::RefreshChanges => {
+            // Async trigger - actual file reading handled in lib.rs
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.changes.is_loading = true;
+                }
+            }
+        }
+
+        Action::SetChanges { changes } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.changes.changes = changes.into_iter().map(|c| c.into()).collect();
+                    worktree.changes.is_loading = false;
+                }
+            }
+        }
+
+        Action::SetChangesLoading { is_loading } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.changes.is_loading = is_loading;
                 }
             }
         }
@@ -924,6 +1089,34 @@ pub fn reduce(state: &mut AppState, action: Action) {
         }
 
         // ====================================================================
+        // Dev Log Actions (global scope, dev mode only)
+        // ====================================================================
+        Action::AddDevLog { log } => {
+            let dev_log = DevLog::new(
+                match log.source {
+                    DevLogSourceData::Rust => DevLogSource::Rust,
+                    DevLogSourceData::Frontend => DevLogSource::Frontend,
+                    DevLogSourceData::Claude => DevLogSource::Claude,
+                    DevLogSourceData::Ipc => DevLogSource::Ipc,
+                },
+                match log.log_type {
+                    DevLogTypeData::Action => DevLogType::Action,
+                    DevLogTypeData::State => DevLogType::State,
+                    DevLogTypeData::Claude => DevLogType::Claude,
+                    DevLogTypeData::Error => DevLogType::Error,
+                    DevLogTypeData::Info => DevLogType::Info,
+                },
+                log.summary,
+                log.data,
+            );
+            state.add_dev_log(dev_log);
+        }
+
+        Action::ClearDevLogs => {
+            state.clear_dev_logs();
+        }
+
+        // ====================================================================
         // Async-only Actions (no synchronous state change)
         // ====================================================================
         // These are handled by handle_async_action() in lib.rs
@@ -965,6 +1158,93 @@ fn update_recent_projects(state: &mut AppState, path: &str) {
     // Keep only last 10 recent projects
     const MAX_RECENT: usize = 10;
     state.recent_projects.truncate(MAX_RECENT);
+}
+
+/// Log key actions for dev debugging.
+/// Only logs "interesting" actions to avoid noise from high-frequency actions.
+fn log_action_if_interesting(state: &mut AppState, action: &Action) {
+    // Get action name and determine if it's interesting
+    let (action_name, is_interesting) = match action {
+        // Project management - always interesting
+        Action::OpenProject { .. } => ("OpenProject", true),
+        Action::CloseProject { .. } => ("CloseProject", true),
+        Action::SwitchProject { .. } => ("SwitchProject", true),
+
+        // Worktree changes - always interesting
+        Action::AddWorktree { .. } => ("AddWorktree", true),
+        Action::AddWorktreeNewBranch { .. } => ("AddWorktreeNewBranch", true),
+        Action::RemoveWorktree { .. } => ("RemoveWorktree", true),
+        Action::SwitchWorktree { .. } => ("SwitchWorktree", true),
+        Action::RefreshWorktrees => ("RefreshWorktrees", true),
+
+        // MCP lifecycle - interesting
+        Action::StartMcpServer => ("StartMcpServer", true),
+        Action::StopMcpServer => ("StopMcpServer", true),
+        Action::SetMcpStatus { .. } => ("SetMcpStatus", true),
+        Action::SetMcpError { .. } => ("SetMcpError", true),
+
+        // Docker operations - interesting
+        Action::StartDockerService { .. } => ("StartDockerService", true),
+        Action::StopDockerService { .. } => ("StopDockerService", true),
+        Action::RestartDockerService { .. } => ("RestartDockerService", true),
+        Action::SetPortConflict { .. } => ("SetPortConflict", true),
+
+        // Constitution workflow - interesting
+        Action::StartConstitutionWorkflow => ("StartConstitutionWorkflow", true),
+        Action::ClearConstitutionWorkflow => ("ClearConstitutionWorkflow", true),
+        Action::AnswerConstitutionQuestion { .. } => ("AnswerConstitutionQuestion", true),
+        Action::GenerateConstitution => ("GenerateConstitution", true),
+        Action::SaveConstitution => ("SaveConstitution", true),
+        Action::CheckConstitutionExists => ("CheckConstitutionExists", true),
+        Action::SetConstitutionExists { .. } => ("SetConstitutionExists", true),
+        Action::ApplyDefaultConstitution => ("ApplyDefaultConstitution", true),
+
+        // Change Management - interesting (key state changes)
+        Action::CreateChange { .. } => ("CreateChange", true),
+        Action::GenerateProposal { .. } => ("GenerateProposal", true),
+        Action::CompleteProposal { .. } => ("CompleteProposal", true),
+        Action::GeneratePlan { .. } => ("GeneratePlan", true),
+        Action::CompletePlan { .. } => ("CompletePlan", true),
+        Action::ApprovePlan { .. } => ("ApprovePlan", true),
+        Action::CancelChange { .. } => ("CancelChange", true),
+        Action::SelectChange { .. } => ("SelectChange", true),
+        Action::RefreshChanges => ("RefreshChanges", true),
+        Action::SetChanges { .. } => ("SetChanges", true),
+        Action::SetChangesLoading { .. } => ("SetChangesLoading", false),
+        // High-frequency streaming actions - not interesting
+        Action::AppendProposalOutput { .. } => ("AppendProposalOutput", false),
+        Action::AppendPlanOutput { .. } => ("AppendPlanOutput", false),
+
+        // Task execution - interesting
+        Action::RunJustCommand { .. } => ("RunJustCommand", true),
+        Action::SetTaskStatus { .. } => ("SetTaskStatus", true),
+
+        // Errors - always interesting
+        Action::SetError { .. } => ("SetError", true),
+        Action::SetChatError { .. } => ("SetChatError", true),
+        Action::SetTasksError { .. } => ("SetTasksError", true),
+
+        // Chat sending - interesting (but not content appending)
+        Action::SendChatMessage { .. } => ("SendChatMessage", true),
+        Action::AddChatMessage { .. } => ("AddChatMessage", true),
+
+        // High-frequency actions - not interesting (skip to reduce noise)
+        Action::AppendChatContent { .. } => ("AppendChatContent", false),
+        Action::AppendTaskOutput { .. } => ("AppendTaskOutput", false),
+        Action::AppendConstitutionOutput { .. } => ("AppendConstitutionOutput", false),
+        Action::AddMcpLogEntry { .. } => ("AddMcpLogEntry", false),
+        Action::AddDevLog { .. } => ("AddDevLog", false), // Avoid infinite loop!
+        Action::ClearDevLogs => ("ClearDevLogs", false),
+
+        // Other actions - log for completeness but with lower priority
+        _ => ("OtherAction", false),
+    };
+
+    if is_interesting {
+        // Create the log entry
+        let log = DevLog::action(action_name, serde_json::to_value(action).unwrap_or_default());
+        state.add_dev_log(log);
+    }
 }
 
 // ============================================================================
@@ -1460,8 +1740,8 @@ mod tests {
 
         let mut state = AppState::default();
 
-        // Default is tasks
-        assert_eq!(state.active_view, ActiveView::Tasks);
+        // Default is workflows
+        assert_eq!(state.active_view, ActiveView::Workflows);
 
         // Switch to dockers
         reduce(
@@ -1490,7 +1770,7 @@ mod tests {
         );
         assert_eq!(state.active_view, ActiveView::Settings);
 
-        // Switch back to tasks
+        // Switch to tasks
         reduce(
             &mut state,
             Action::SetActiveView {
@@ -1498,6 +1778,15 @@ mod tests {
             },
         );
         assert_eq!(state.active_view, ActiveView::Tasks);
+
+        // Switch to workflows
+        reduce(
+            &mut state,
+            Action::SetActiveView {
+                view: crate::actions::ActiveViewData::Workflows,
+            },
+        );
+        assert_eq!(state.active_view, ActiveView::Workflows);
     }
 
     // ========================================================================
@@ -2746,5 +3035,41 @@ mod tests {
         let workflow = worktree.tasks.constitution_workflow.as_ref().unwrap();
         assert_eq!(workflow.current_question, 1);
         assert_eq!(workflow.answers.get("tech_stack").unwrap(), "React + Rust");
+    }
+
+    #[test]
+    fn test_set_constitution_exists() {
+        let mut state = state_with_project();
+
+        // Initially null (not checked)
+        let worktree = active_worktree(&state);
+        assert!(worktree.tasks.constitution_exists.is_none());
+
+        // Set to true
+        reduce(&mut state, Action::SetConstitutionExists { exists: true });
+        let worktree = active_worktree(&state);
+        assert_eq!(worktree.tasks.constitution_exists, Some(true));
+
+        // Set to false
+        reduce(&mut state, Action::SetConstitutionExists { exists: false });
+        let worktree = active_worktree(&state);
+        assert_eq!(worktree.tasks.constitution_exists, Some(false));
+    }
+
+    #[test]
+    fn test_constitution_exists_serialization() {
+        let mut state = state_with_project();
+
+        // Set constitution exists
+        reduce(&mut state, Action::SetConstitutionExists { exists: true });
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&state).unwrap();
+        assert!(json.contains("constitution_exists"));
+
+        // Deserialize back
+        let loaded: AppState = serde_json::from_str(&json).unwrap();
+        let worktree = loaded.active_project().unwrap().active_worktree().unwrap();
+        assert_eq!(worktree.tasks.constitution_exists, Some(true));
     }
 }

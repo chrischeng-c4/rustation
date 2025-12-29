@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { FileText, RefreshCw, CheckCircle, ChevronRight } from 'lucide-react'
+import { FileText, RefreshCw, CheckCircle, ChevronRight, AlertCircle, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -10,13 +10,17 @@ import ReactMarkdown from 'react-markdown'
 /**
  * Constitution initialization workflow panel.
  * Guides user through questions and generates .rstn/constitution.md via Claude.
+ * Also supports one-click default constitution application.
  */
 export function ConstitutionPanel() {
   const { state, dispatch, isLoading } = useAppState()
   const [currentAnswer, setCurrentAnswer] = useState('')
 
-  const workflow = state?.active_project?.worktrees?.[state.active_project?.active_worktree_index ?? 0]
-    ?.tasks?.constitution_workflow
+  // Note: active_project is not serialized, use projects[active_project_index]
+  const activeProject = state?.projects?.[state?.active_project_index ?? 0]
+  const worktree = activeProject?.worktrees?.[activeProject?.active_worktree_index ?? 0]
+  const workflow = worktree?.tasks?.constitution_workflow
+  const constitutionExists = worktree?.tasks?.constitution_exists
 
   const questions = [
     {
@@ -40,6 +44,14 @@ export function ConstitutionPanel() {
       hint: 'e.g., state-first, no singletons',
     },
   ]
+
+  const handleApplyDefault = useCallback(async () => {
+    await dispatch({ type: 'ApplyDefaultConstitution' })
+  }, [dispatch])
+
+  const handleStartQA = useCallback(async () => {
+    await dispatch({ type: 'StartConstitutionWorkflow' })
+  }, [dispatch])
 
   const handleAnswerSubmit = useCallback(async () => {
     if (!currentAnswer.trim()) return
@@ -65,8 +77,95 @@ export function ConstitutionPanel() {
     [handleAnswerSubmit]
   )
 
-  // Loading state
-  if (isLoading || !workflow) {
+  // Loading state - checking existence
+  if (isLoading || constitutionExists === null || constitutionExists === undefined) {
+    return (
+      <div className="flex h-full items-center justify-center rounded-lg border">
+        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-sm text-muted-foreground">Checking constitution...</span>
+      </div>
+    )
+  }
+
+  // Constitution exists - show success state (only when no active workflow)
+  if (constitutionExists === true && !workflow) {
+    return (
+      <div className="flex h-full flex-col rounded-lg border">
+        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-green-500" />
+            <span className="text-sm font-medium">Constitution Active</span>
+          </div>
+        </div>
+        <div className="flex flex-1 items-center justify-center p-4">
+          <Card className="p-6 text-center border-green-500/50 bg-green-50 dark:bg-green-950/20">
+            <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
+            <h3 className="text-lg font-medium mb-2">Constitution Exists</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Your project has a constitution at <code className="text-xs">.rstn/constitutions/</code>
+            </p>
+            <Button variant="outline" size="sm" onClick={handleStartQA}>
+              Regenerate with Q&A
+            </Button>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // Constitution missing - show initial options (only when no active workflow)
+  if (constitutionExists === false && !workflow) {
+    return (
+      <div className="flex h-full flex-col rounded-lg border">
+        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+            <span className="text-sm font-medium">No Constitution</span>
+          </div>
+        </div>
+        <div className="flex flex-1 items-center justify-center p-4">
+          <div className="max-w-md space-y-4">
+            <Card className="p-6 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
+              <h3 className="text-lg font-medium mb-2">Initialize Constitution</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                A constitution defines development standards for AI-assisted coding.
+              </p>
+
+              <div className="space-y-3">
+                <Button className="w-full" onClick={handleApplyDefault}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Apply Default Template
+                </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  Auto-detects languages and creates modular rules
+                </p>
+
+                <div className="relative py-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="bg-background px-2 text-muted-foreground">or</span>
+                  </div>
+                </div>
+
+                <Button variant="outline" className="w-full" onClick={handleStartQA}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Create with Q&A
+                </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  Answer questions to generate a customized constitution
+                </p>
+              </div>
+            </Card>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Workflow active - show workflow phases
+  if (!workflow) {
     return (
       <div className="flex h-full items-center justify-center rounded-lg border">
         <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />

@@ -82,19 +82,19 @@ test.afterAll(async () => {
 
 // All tests in a single serial block to share state
 test.describe.serial('Docker Tests', () => {
-  test('shows Docker tab in sidebar when project is open', async () => {
-    // Sidebar tab uses "Docker" text
-    const dockerTab = window.locator('span:has-text("Docker")').first()
-    await expect(dockerTab).toBeVisible({ timeout: 5000 })
-    console.log('Docker tab is visible in sidebar')
+  test('shows Docker button in top bar when project is open', async () => {
+    // Docker button is in the top bar (ProjectTabs), not sidebar
+    const dockerButton = window.locator('button:has-text("Docker")').first()
+    await expect(dockerButton).toBeVisible({ timeout: 5000 })
+    console.log('Docker button is visible in top bar')
 
-    await window.screenshot({ path: 'test-results/docker-00-sidebar.png' })
+    await window.screenshot({ path: 'test-results/docker-00-topbar.png' })
   })
 
   test('can navigate to Docker tab and shows content', async () => {
-    // Click on Docker tab (the TabsTrigger containing "Docker")
-    const dockerTab = window.locator('button:has(span:has-text("Docker"))').first()
-    await dockerTab.click()
+    // Click on Docker button in top bar
+    const dockerButton = window.locator('button:has-text("Docker")').first()
+    await dockerButton.click()
     await window.waitForTimeout(1500)
 
     await window.screenshot({ path: 'test-results/docker-01-after-click.png' })
