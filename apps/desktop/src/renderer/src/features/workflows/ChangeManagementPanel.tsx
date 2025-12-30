@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, FileText, CheckCircle, Clock, XCircle } from 'lucide-react'
+import { Plus, FileText, CheckCircle, Clock, XCircle, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -86,10 +86,45 @@ export function ChangeManagementPanel() {
     )
   }
 
+  // Empty state - show centered card like other panels
+  if (!isLoading && changes.length === 0) {
+    return (
+      <div className="flex h-full flex-col rounded-lg border">
+        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+            <span className="text-sm font-medium">No Changes</span>
+          </div>
+        </div>
+        <div className="flex flex-1 items-center justify-center p-4">
+          <div className="max-w-md space-y-4">
+            <Card className="p-6 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
+              <h3 className="text-lg font-medium mb-2">Start Change Management</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Create changes to manage features with proposal and plan generation powered by Claude.
+              </p>
+
+              <Button className="w-full" onClick={() => setIsDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create First Change
+              </Button>
+            </Card>
+          </div>
+        </div>
+
+        <NewChangeDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          onSubmit={handleCreateChange}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full gap-4">
       {/* Change List (Left) */}
-      <div className="w-72 flex-shrink-0">
+      <div className="w-60 flex-shrink-0">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Changes</h2>
           <Button size="sm" onClick={() => setIsDialogOpen(true)}>
@@ -102,16 +137,6 @@ export function ChangeManagementPanel() {
           <div className="flex h-32 items-center justify-center text-muted-foreground">
             Loading changes...
           </div>
-        ) : changes.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-              <FileText className="mb-2 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">No changes yet</p>
-              <p className="text-xs text-muted-foreground">
-                Create a change to start managing your features
-              </p>
-            </CardContent>
-          </Card>
         ) : (
           <ScrollArea className="h-[calc(100vh-200px)]">
             <div className="space-y-2 pr-2">

@@ -36,6 +36,9 @@ const createMockWorktree = (overrides?: Partial<WorktreeState>): WorktreeState =
     constitution_workflow: null,
     constitution_exists: null,
     constitution_content: null,
+    claude_md_exists: null,
+    claude_md_content: null,
+    claude_md_skipped: false,
     review_gate: {
       sessions: {},
       active_session_id: null,
@@ -348,6 +351,9 @@ describe('useTasksState', () => {
       constitution_workflow: null,
       constitution_exists: null,
       constitution_content: null,
+      claude_md_exists: null,
+      claude_md_content: null,
+      claude_md_skipped: false,
       review_gate: {
         sessions: {},
         active_session_id: null,

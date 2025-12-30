@@ -1,10 +1,12 @@
-import { FileText, Play, Check, X, Clock, Archive, RefreshCw, Rocket, ClipboardCheck, MessageSquare, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { FileText, Play, Check, X, Clock, Archive, RefreshCw, Rocket, ClipboardCheck, MessageSquare, ThumbsUp, ThumbsDown, ChevronDown, FileCode } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useAppState } from '@/hooks/useAppState'
+import { ContextFilesInput } from './ContextFilesInput'
 import type { Change, ReviewSession, ReviewStatus } from '@/types/state'
 
 interface ChangeDetailViewProps {
@@ -201,6 +203,31 @@ export function ChangeDetailView({ change }: ChangeDetailViewProps) {
       </CardHeader>
 
       <CardContent className="h-[calc(100%-100px)]">
+        {/* Context Files Section */}
+        {worktree?.path && (
+          <Collapsible className="mb-4">
+            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm hover:bg-muted/50 transition-colors [&[data-state=open]>svg]:rotate-180">
+              <div className="flex items-center gap-2">
+                <FileCode className="h-4 w-4" />
+                <span>Context Files</span>
+                {(change.context_files?.length ?? 0) > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {change.context_files.length}
+                  </Badge>
+                )}
+              </div>
+              <ChevronDown className="h-4 w-4 transition-transform duration-200" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2 rounded-md border p-3">
+              <ContextFilesInput
+                changeId={change.id}
+                files={change.context_files ?? []}
+                projectRoot={worktree.path}
+              />
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
         <Tabs defaultValue="proposal" className="h-full">
           <TabsList className="mb-4">
             <TabsTrigger value="proposal" className="gap-1">

@@ -5,7 +5,6 @@ import {
   CheckCircle,
   AlertCircle,
   Sparkles,
-  FolderOpen,
   Clock,
   Wand2,
   Loader2,
@@ -135,7 +134,7 @@ export function ContextPanel() {
     )
   }
 
-  // Context not initialized - show two options
+  // Context not initialized - show single card with two options (consistent with other panels)
   if (!isInitialized) {
     return (
       <div className="flex h-full flex-col rounded-lg border">
@@ -146,40 +145,38 @@ export function ContextPanel() {
           </div>
         </div>
         <div className="flex flex-1 items-center justify-center p-4">
-          <div className="flex flex-col gap-4 max-w-lg w-full">
-            {/* AI Generation Option */}
+          <div className="max-w-md space-y-4">
             <Card className="p-6 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
-              <div className="flex items-start gap-4">
-                <Wand2 className="h-10 w-10 text-blue-500 shrink-0" />
-                <div className="flex-1">
-                  <h3 className="text-lg font-medium mb-1">Generate with AI</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Let AI analyze your codebase and generate comprehensive context files including
-                    tech stack, architecture, and product overview.
-                  </p>
-                  <Button className="w-full" onClick={handleGenerateContext}>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Generate Context
-                  </Button>
-                </div>
-              </div>
-            </Card>
+              <h3 className="text-lg font-medium mb-2">Initialize Living Context</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Living context provides AI with project knowledge including tech stack, architecture, and recent changes.
+              </p>
 
-            {/* Template Option */}
-            <Card className="p-6 border-muted">
-              <div className="flex items-start gap-4">
-                <FolderOpen className="h-10 w-10 text-muted-foreground shrink-0" />
-                <div className="flex-1">
-                  <h3 className="text-lg font-medium mb-1">Use Templates</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Create empty template files that you can fill in manually. Good if you prefer
-                    to write context yourself.
-                  </p>
-                  <Button variant="outline" className="w-full" onClick={handleInitialize}>
-                    <FileText className="mr-2 h-4 w-4" />
-                    Initialize Templates
-                  </Button>
+              <div className="space-y-3">
+                <Button className="w-full" onClick={handleGenerateContext}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Generate with AI
+                </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  Analyzes codebase and generates comprehensive context files
+                </p>
+
+                <div className="relative py-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="bg-background px-2 text-muted-foreground">or</span>
+                  </div>
                 </div>
+
+                <Button variant="outline" className="w-full" onClick={handleInitialize}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Use Templates
+                </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  Create empty template files to fill in manually
+                </p>
               </div>
             </Card>
 

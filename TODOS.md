@@ -21,14 +21,16 @@ Basic file reading capability for all workflows.
 
 **Security Scope**: Project directory + `~/.rstn/`
 
-### Phase A2: Extended Use Cases (In Progress)
+### Phase A2: Extended Use Cases (Complete)
 
 Apply file reading to specific workflow scenarios.
 
 - [x] Read `constitution.md` and display in Constitution Panel UI
-- [ ] Read project source code for Claude analysis
-- [ ] Read workflow outputs (proposal/plan files)
-- [ ] General file browser UI component
+- [x] Read project source code for Claude analysis
+  - `SourceCodeViewer` component for viewing files
+  - `ContextFilesInput` component for selecting context files
+  - Claude context injection in proposal/plan generation
+- [x] Read workflow outputs (proposal/plan files) - Already cached in Change state
 
 ### Phase A3: Additional File Operations (Future)
 
@@ -37,6 +39,7 @@ Expand file operation capabilities.
 - [ ] File listing API (`window.api.file.list`)
 - [ ] Directory tree API
 - [ ] File metadata API (size, mtime, permissions)
+- [ ] General file browser UI component (deferred from A2)
 - [ ] File write API (with security scope validation)
 
 ---

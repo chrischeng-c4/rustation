@@ -57,7 +57,7 @@ export function DevLogPanel() {
   }
 
   return (
-    <div className="flex h-full w-80 flex-col border-l bg-background">
+    <div className="flex h-full w-72 flex-col border-l bg-background">
       {/* Header */}
       <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2">
         <div className="flex items-center gap-2">

@@ -60,7 +60,7 @@ export function WorkflowsPage() {
   return (
     <div className="flex h-full gap-4">
       {/* Workflow List (Left Column) */}
-      <div className="w-72 flex-shrink-0 space-y-2">
+      <div className="w-60 flex-shrink-0 space-y-2">
         <h2 className="mb-3 text-lg font-semibold">Workflows</h2>
         {WORKFLOWS.map((workflow) => {
           const Icon = workflow.icon
