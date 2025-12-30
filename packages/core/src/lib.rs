@@ -13,6 +13,7 @@ pub mod claude_cli;
 pub mod constitution;
 pub mod context;
 pub mod context_engine;
+pub mod context_generate;
 pub mod context_sync;
 pub mod docker;
 pub mod env;
@@ -1337,7 +1338,7 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
 
             if let Some(profile) = active_profile {
                 if !profile.prompt.trim().is_empty() {
-                    match agent_rules::generate_agent_rules_file(&proj_id, &profile.prompt) {
+                    match agent_rules::generate_agent_rules_file(proj_id, &profile.prompt) {
                         Ok(path) => Some(path),
                         Err(e) => {
                             eprintln!("Failed to generate agent rules file: {}", e);
@@ -2698,6 +2699,211 @@ Execute the plan now. Start implementing."#,
         }
 
         // ====================================================================
+        // Context Generation (AI-powered)
+        // ====================================================================
+        Action::GenerateContext => {
+            // Get worktree path
+            let worktree_path = {
+                let state = get_app_state().read().await;
+                state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .map(|w| w.path.clone())
+            };
+
+            if let Some(wt_path) = worktree_path {
+                let path = std::path::Path::new(&wt_path);
+
+                // Set generating state
+                {
+                    let mut state = get_app_state().write().await;
+                    if let Some(project) = state.active_project_mut() {
+                        if let Some(worktree) = project.active_worktree_mut() {
+                            worktree.context.is_generating = true;
+                            worktree.context.generation_output.clear();
+                            worktree.context.generation_error = None;
+                        }
+                    }
+                }
+                notify_state_update().await;
+
+                // Read codebase summary
+                let summary = context_generate::read_codebase_summary(path);
+
+                // Build prompt
+                let prompt = context_generate::build_generate_context_prompt(&summary);
+
+                // Spawn Claude with streaming
+                match claude_cli::spawn_claude(&prompt, path, None, None) {
+                    Ok(mut child) => {
+                        // Monitor stderr
+                        if let Some(stderr) = child.stderr.take() {
+                            tokio::spawn(async move {
+                                let reader = BufReader::new(stderr);
+                                let mut lines = tokio::io::AsyncBufReadExt::lines(reader);
+                                while let Ok(Some(line)) = lines.next_line().await {
+                                    if !line.trim().is_empty() {
+                                        eprintln!("[GenerateContext stderr] {}", line.trim());
+                                    }
+                                }
+                            });
+                        }
+
+                        match claude_cli::ClaudeEventStream::new(&mut child) {
+                            Ok(mut stream) => {
+                                let mut accumulated_output = String::new();
+
+                                loop {
+                                    match tokio::time::timeout(
+                                        claude_cli::EVENT_TIMEOUT,
+                                        stream.next_event(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(Some(Ok(event))) => {
+                                            // Extract and accumulate text
+                                            if let Some(text) = claude_cli::extract_text_delta(&event) {
+                                                accumulated_output.push_str(text);
+                                                {
+                                                    let mut state = get_app_state().write().await;
+                                                    reduce(
+                                                        &mut state,
+                                                        Action::AppendGenerateContextOutput {
+                                                            content: text.to_string(),
+                                                        },
+                                                    );
+                                                }
+                                                notify_state_update().await;
+                                            }
+
+                                            if let Some(text) = claude_cli::extract_assistant_text(&event) {
+                                                accumulated_output.push_str(&text);
+                                            }
+
+                                            // Check for completion
+                                            if claude_cli::is_message_stop(&event) {
+                                                // Parse JSON and write files
+                                                match context_generate::GenerateContextResponse::from_json(&accumulated_output) {
+                                                    Ok(response) => {
+                                                        // Write generated files
+                                                        match context_generate::write_generated_context(path, &response) {
+                                                            Ok(()) => {
+                                                                eprintln!("[GenerateContext] Context files generated successfully");
+
+                                                                // Refresh context files in state
+                                                                let files = context::read_context(path);
+                                                                {
+                                                                    let mut state = get_app_state().write().await;
+                                                                    if let Some(project) = state.active_project_mut() {
+                                                                        if let Some(worktree) = project.active_worktree_mut() {
+                                                                            worktree.context.files = files;
+                                                                            worktree.context.is_generating = false;
+                                                                            worktree.context.is_initialized = true;
+                                                                            worktree.context.generation_output.clear();
+                                                                            worktree.context.last_refreshed =
+                                                                                Some(chrono::Utc::now().to_rfc3339());
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            Err(e) => {
+                                                                eprintln!("[GenerateContext] Failed to write files: {}", e);
+                                                                {
+                                                                    let mut state = get_app_state().write().await;
+                                                                    reduce(
+                                                                        &mut state,
+                                                                        Action::FailGenerateContext { error: e },
+                                                                    );
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        eprintln!("[GenerateContext] Failed to parse response: {}", e);
+                                                        {
+                                                            let mut state = get_app_state().write().await;
+                                                            reduce(
+                                                                &mut state,
+                                                                Action::FailGenerateContext { error: e },
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                                notify_state_update().await;
+                                                break;
+                                            }
+                                        }
+                                        Ok(Some(Err(e))) => {
+                                            eprintln!("[GenerateContext] Stream error: {}", e);
+                                            {
+                                                let mut state = get_app_state().write().await;
+                                                reduce(
+                                                    &mut state,
+                                                    Action::FailGenerateContext {
+                                                        error: e.to_string(),
+                                                    },
+                                                );
+                                            }
+                                            notify_state_update().await;
+                                            break;
+                                        }
+                                        Ok(None) => break,
+                                        Err(_) => {
+                                            eprintln!("[GenerateContext] Timeout");
+                                            {
+                                                let mut state = get_app_state().write().await;
+                                                reduce(
+                                                    &mut state,
+                                                    Action::FailGenerateContext {
+                                                        error: "Request timed out".to_string(),
+                                                    },
+                                                );
+                                            }
+                                            notify_state_update().await;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("[GenerateContext] Failed to create event stream: {}", e);
+                                {
+                                    let mut state = get_app_state().write().await;
+                                    reduce(
+                                        &mut state,
+                                        Action::FailGenerateContext {
+                                            error: e.to_string(),
+                                        },
+                                    );
+                                }
+                                notify_state_update().await;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[GenerateContext] Failed to spawn Claude: {}", e);
+                        {
+                            let mut state = get_app_state().write().await;
+                            reduce(
+                                &mut state,
+                                Action::FailGenerateContext {
+                                    error: e.to_string(),
+                                },
+                            );
+                        }
+                        notify_state_update().await;
+                    }
+                }
+            }
+        }
+
+        Action::AppendGenerateContextOutput { .. }
+        | Action::CompleteGenerateContext
+        | Action::FailGenerateContext { .. } => {
+            // These are handled by reducer (state updates only)
+        }
+
+        // ====================================================================
         // Context Sync & Archive Actions (CESDD Phase 4)
         // ====================================================================
         Action::ArchiveChange { change_id } => {
@@ -2747,7 +2953,7 @@ Execute the plan now. Start implementing."#,
         }
 
         Action::SyncContext { change_id } => {
-            // Get worktree path, change info, and existing context
+            // Get worktree path and change info
             let sync_info = {
                 let state = get_app_state().read().await;
                 state
@@ -2761,6 +2967,7 @@ Execute the plan now. Start implementing."#,
 
             if let Some((wt_path, change_name)) = sync_info {
                 let path = std::path::Path::new(&wt_path);
+                let change_id_clone = change_id.clone();
 
                 // Read proposal and plan
                 let proposal = archive::read_change_proposal(path, &change_name)
@@ -2769,92 +2976,194 @@ Execute the plan now. Start implementing."#,
                     .unwrap_or_default();
 
                 if proposal.is_empty() && plan.is_empty() {
-                    // Nothing to sync
                     return Ok(());
                 }
 
-                // Read existing context
-                let existing_context = context::read_context_combined(path)
+                // Read individual context files for enhanced prompt
+                let context_dir = path.join(".rstn").join("context");
+                let tech_stack = std::fs::read_to_string(context_dir.join("tech-stack.md"))
+                    .unwrap_or_default();
+                let architecture = std::fs::read_to_string(context_dir.join("system-architecture.md"))
+                    .unwrap_or_default();
+                let recent_changes = std::fs::read_to_string(context_dir.join("recent-changes.md"))
                     .unwrap_or_default();
 
-                // Build prompt for Claude
-                let prompt = context_sync::build_context_sync_prompt(
+                // Set syncing state
+                {
+                    let mut state = get_app_state().write().await;
+                    if let Some(project) = state.active_project_mut() {
+                        if let Some(worktree) = project.active_worktree_mut() {
+                            worktree.context.is_syncing = true;
+                            worktree.context.sync_output.clear();
+                            worktree.context.sync_error = None;
+                        }
+                    }
+                }
+                notify_state_update().await;
+
+                // Build enhanced prompt
+                let prompt = context_sync::build_enhanced_context_sync_prompt(
                     &proposal,
                     &plan,
-                    &existing_context,
+                    &tech_stack,
+                    &architecture,
+                    &recent_changes,
                 );
 
-                // Call Claude CLI for context extraction (non-streaming for simplicity)
-                let cwd = wt_path.clone();
-                let mut claude_cmd = tokio::process::Command::new("claude");
-                claude_cmd
-                    .arg("-p")
-                    .arg(&prompt)
-                    .arg("--output-format")
-                    .arg("text")
-                    .current_dir(&cwd);
-
-                match claude_cmd.output().await {
-                    Ok(output) => {
-                        if output.status.success() {
-                            let response = String::from_utf8_lossy(&output.stdout).to_string();
-
-                            // Parse the JSON response
-                            match context_sync::ContextSyncResponse::from_json(&response) {
-                                Ok(sync_response) => {
-                                    if sync_response.has_updates() {
-                                        // Update context files based on response
-                                        // For now, just update recent-changes.md
-                                        let recent_changes_update = context_sync::format_recent_changes(
-                                            &sync_response.recent_change_summary,
-                                            &sync_response.key_decisions,
-                                        );
-
-                                        if !recent_changes_update.is_empty() {
-                                            // Read current recent-changes.md
-                                            let recent_path = path
-                                                .join(".rstn")
-                                                .join("context")
-                                                .join("recent-changes.md");
-
-                                            if let Ok(current) = tokio::fs::read_to_string(&recent_path).await {
-                                                // Append new changes
-                                                let updated = format!("{}\n{}", current, recent_changes_update);
-                                                let _ = tokio::fs::write(&recent_path, updated).await;
-                                            }
-                                        }
-
-                                        // Refresh context after update
-                                        let files = context::read_context(path);
-                                        {
-                                            let mut state = get_app_state().write().await;
-                                            if let Some(project) = state.active_project_mut() {
-                                                if let Some(worktree) = project.active_worktree_mut() {
-                                                    worktree.context.files = files
-                                                        .into_iter()
-                                                        .map(|f| f.into())
-                                                        .collect();
-                                                    worktree.context.last_refreshed =
-                                                        Some(chrono::Utc::now().to_rfc3339());
-                                                }
-                                            }
-                                        }
-                                        notify_state_update().await;
+                // Spawn Claude with streaming
+                match claude_cli::spawn_claude(&prompt, path, None, None) {
+                    Ok(mut child) => {
+                        // Monitor stderr
+                        if let Some(stderr) = child.stderr.take() {
+                            tokio::spawn(async move {
+                                let reader = tokio::io::BufReader::new(stderr);
+                                let mut lines = tokio::io::AsyncBufReadExt::lines(reader);
+                                while let Ok(Some(line)) = lines.next_line().await {
+                                    if !line.trim().is_empty() {
+                                        eprintln!("[SyncContext stderr] {}", line.trim());
                                     }
                                 }
-                                Err(e) => {
-                                    // Log parse error but don't fail the operation
-                                    eprintln!("Failed to parse context sync response: {}", e);
+                            });
+                        }
+
+                        match claude_cli::ClaudeEventStream::new(&mut child) {
+                            Ok(mut stream) => {
+                                let mut accumulated_output = String::new();
+
+                                loop {
+                                    match tokio::time::timeout(
+                                        claude_cli::EVENT_TIMEOUT,
+                                        stream.next_event(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(Some(Ok(event))) => {
+                                            // Extract and accumulate text
+                                            if let Some(text) = claude_cli::extract_text_delta(&event) {
+                                                accumulated_output.push_str(text);
+                                                {
+                                                    let mut state = get_app_state().write().await;
+                                                    reduce(
+                                                        &mut state,
+                                                        Action::AppendContextSyncOutput {
+                                                            change_id: change_id_clone.clone(),
+                                                            content: text.to_string(),
+                                                        },
+                                                    );
+                                                }
+                                                notify_state_update().await;
+                                            }
+
+                                            if let Some(text) = claude_cli::extract_assistant_text(&event) {
+                                                accumulated_output.push_str(&text);
+                                            }
+
+                                            // Check for completion
+                                            if claude_cli::is_message_stop(&event) {
+                                                // Parse JSON and apply updates
+                                                match context_sync::EnhancedContextSyncResponse::from_json(&accumulated_output) {
+                                                    Ok(response) => {
+                                                        // Apply updates to all context files
+                                                        match context_sync::apply_context_updates(path, &response) {
+                                                            Ok(files_updated) => {
+                                                                eprintln!("[SyncContext] Updated {} context files", files_updated);
+                                                            }
+                                                            Err(e) => {
+                                                                eprintln!("[SyncContext] Failed to apply updates: {}", e);
+                                                            }
+                                                        }
+
+                                                        // Refresh context files in state
+                                                        let files = context::read_context(path);
+                                                        {
+                                                            let mut state = get_app_state().write().await;
+                                                            if let Some(project) = state.active_project_mut() {
+                                                                if let Some(worktree) = project.active_worktree_mut() {
+                                                                    worktree.context.files = files;
+                                                                    worktree.context.is_syncing = false;
+                                                                    worktree.context.sync_output.clear();
+                                                                    worktree.context.last_refreshed =
+                                                                        Some(chrono::Utc::now().to_rfc3339());
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        eprintln!("[SyncContext] Failed to parse response: {}", e);
+                                                        {
+                                                            let mut state = get_app_state().write().await;
+                                                            if let Some(project) = state.active_project_mut() {
+                                                                if let Some(worktree) = project.active_worktree_mut() {
+                                                                    worktree.context.is_syncing = false;
+                                                                    worktree.context.sync_error = Some(e);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                notify_state_update().await;
+                                                break;
+                                            }
+                                        }
+                                        Ok(Some(Err(e))) => {
+                                            eprintln!("[SyncContext] Stream error: {}", e);
+                                            {
+                                                let mut state = get_app_state().write().await;
+                                                if let Some(project) = state.active_project_mut() {
+                                                    if let Some(worktree) = project.active_worktree_mut() {
+                                                        worktree.context.is_syncing = false;
+                                                        worktree.context.sync_error = Some(e.to_string());
+                                                    }
+                                                }
+                                            }
+                                            notify_state_update().await;
+                                            break;
+                                        }
+                                        Ok(None) => break,
+                                        Err(_) => {
+                                            eprintln!("[SyncContext] Timeout");
+                                            {
+                                                let mut state = get_app_state().write().await;
+                                                if let Some(project) = state.active_project_mut() {
+                                                    if let Some(worktree) = project.active_worktree_mut() {
+                                                        worktree.context.is_syncing = false;
+                                                        worktree.context.sync_error = Some("Request timed out".to_string());
+                                                    }
+                                                }
+                                            }
+                                            notify_state_update().await;
+                                            break;
+                                        }
+                                    }
                                 }
+                            }
+                            Err(e) => {
+                                eprintln!("[SyncContext] Failed to create event stream: {}", e);
+                                {
+                                    let mut state = get_app_state().write().await;
+                                    if let Some(project) = state.active_project_mut() {
+                                        if let Some(worktree) = project.active_worktree_mut() {
+                                            worktree.context.is_syncing = false;
+                                            worktree.context.sync_error = Some(e.to_string());
+                                        }
+                                    }
+                                }
+                                notify_state_update().await;
                             }
                         }
                     }
                     Err(e) => {
-                        let mut state = get_app_state().write().await;
-                        state.error = Some(app_state::AppError::new(
-                            "CONTEXT_SYNC_ERROR",
-                            format!("Failed to run Claude for context sync: {}", e),
-                        ));
+                        eprintln!("[SyncContext] Failed to spawn Claude: {}", e);
+                        {
+                            let mut state = get_app_state().write().await;
+                            if let Some(project) = state.active_project_mut() {
+                                if let Some(worktree) = project.active_worktree_mut() {
+                                    worktree.context.is_syncing = false;
+                                    worktree.context.sync_error = Some(e.to_string());
+                                }
+                            }
+                        }
+                        notify_state_update().await;
                     }
                 }
             }

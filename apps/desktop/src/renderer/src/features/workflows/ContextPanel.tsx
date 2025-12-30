@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import {
   FileText,
   RefreshCw,
@@ -7,6 +7,8 @@ import {
   Sparkles,
   FolderOpen,
   Clock,
+  Wand2,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -19,6 +21,7 @@ import ReactMarkdown from 'react-markdown'
 /**
  * Context viewing panel for Living Context Layer (CESDD Phase 3).
  * Displays context files from .rstn/context/ directory.
+ * Supports AI-powered context generation and sync.
  */
 export function ContextPanel() {
   const { state, dispatch, isLoading } = useAppState()
@@ -30,8 +33,28 @@ export function ContextPanel() {
   const isInitialized = context?.is_initialized
   const lastRefreshed = context?.last_refreshed
 
+  // AI Generation state
+  const isGenerating = context?.is_generating ?? false
+  const generationOutput = context?.generation_output ?? ''
+  const generationError = context?.generation_error
+
+  // Context Sync state
+  const isSyncing = context?.is_syncing ?? false
+  const syncOutput = context?.sync_output ?? ''
+  const syncError = context?.sync_error
+
+  // Check constitution on mount (triggers CheckConstitutionExists in handler)
+  useEffect(() => {
+    // Trigger context check when panel mounts
+    dispatch({ type: 'RefreshContext' })
+  }, [dispatch])
+
   const handleInitialize = useCallback(async () => {
     await dispatch({ type: 'InitializeContext' })
+  }, [dispatch])
+
+  const handleGenerateContext = useCallback(async () => {
+    await dispatch({ type: 'GenerateContext' })
   }, [dispatch])
 
   const handleRefresh = useCallback(async () => {
@@ -48,7 +71,71 @@ export function ContextPanel() {
     )
   }
 
-  // Context not initialized
+  // AI Generation in progress
+  if (isGenerating) {
+    return (
+      <div className="flex h-full flex-col rounded-lg border">
+        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+            <span className="text-sm font-medium">Generating Context with AI...</span>
+          </div>
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="p-4">
+            <Card className="p-4 bg-muted/30">
+              <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground">
+                {generationOutput || 'Analyzing codebase...'}
+              </pre>
+            </Card>
+            {generationError && (
+              <Card className="mt-4 p-4 border-red-500/50 bg-red-50 dark:bg-red-950/20">
+                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Generation Error</span>
+                </div>
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{generationError}</p>
+              </Card>
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+    )
+  }
+
+  // Context Sync in progress
+  if (isSyncing) {
+    return (
+      <div className="flex h-full flex-col rounded-lg border">
+        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-green-500" />
+            <span className="text-sm font-medium">Syncing Context...</span>
+          </div>
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="p-4">
+            <Card className="p-4 bg-muted/30">
+              <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground">
+                {syncOutput || 'Extracting context updates...'}
+              </pre>
+            </Card>
+            {syncError && (
+              <Card className="mt-4 p-4 border-red-500/50 bg-red-50 dark:bg-red-950/20">
+                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Sync Error</span>
+                </div>
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{syncError}</p>
+              </Card>
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+    )
+  }
+
+  // Context not initialized - show two options
   if (!isInitialized) {
     return (
       <div className="flex h-full flex-col rounded-lg border">
@@ -59,21 +146,47 @@ export function ContextPanel() {
           </div>
         </div>
         <div className="flex flex-1 items-center justify-center p-4">
-          <Card className="max-w-md p-6 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
-            <FolderOpen className="mx-auto h-12 w-12 text-blue-500 mb-4" />
-            <h3 className="text-lg font-medium mb-2 text-center">Initialize Living Context</h3>
-            <p className="text-sm text-muted-foreground mb-4 text-center">
-              Living Context maintains your project's current state - tech stack, architecture
-              decisions, and recent changes. It's auto-curated as you complete changes.
+          <div className="flex flex-col gap-4 max-w-lg w-full">
+            {/* AI Generation Option */}
+            <Card className="p-6 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
+              <div className="flex items-start gap-4">
+                <Wand2 className="h-10 w-10 text-blue-500 shrink-0" />
+                <div className="flex-1">
+                  <h3 className="text-lg font-medium mb-1">Generate with AI</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Let AI analyze your codebase and generate comprehensive context files including
+                    tech stack, architecture, and product overview.
+                  </p>
+                  <Button className="w-full" onClick={handleGenerateContext}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate Context
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            {/* Template Option */}
+            <Card className="p-6 border-muted">
+              <div className="flex items-start gap-4">
+                <FolderOpen className="h-10 w-10 text-muted-foreground shrink-0" />
+                <div className="flex-1">
+                  <h3 className="text-lg font-medium mb-1">Use Templates</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Create empty template files that you can fill in manually. Good if you prefer
+                    to write context yourself.
+                  </p>
+                  <Button variant="outline" className="w-full" onClick={handleInitialize}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Initialize Templates
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            <p className="text-xs text-center text-muted-foreground">
+              Context files are stored in <code>.rstn/context/</code>
             </p>
-            <Button className="w-full" onClick={handleInitialize}>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Initialize Context
-            </Button>
-            <p className="text-xs text-center text-muted-foreground mt-2">
-              Creates <code>.rstn/context/</code> with default templates
-            </p>
-          </Card>
+          </div>
         </div>
       </div>
     )
@@ -98,7 +211,15 @@ export function ContextPanel() {
               {new Date(lastRefreshed).toLocaleTimeString()}
             </span>
           )}
-          <Button variant="ghost" size="sm" onClick={handleRefresh}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleGenerateContext}
+            title="Regenerate context with AI"
+          >
+            <Wand2 className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleRefresh} title="Refresh">
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>

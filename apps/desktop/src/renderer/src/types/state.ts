@@ -132,6 +132,16 @@ export interface ContextState {
   is_loading: boolean
   is_initialized: boolean
   last_refreshed: string | null
+
+  // Context Sync (after Change completion)
+  is_syncing: boolean
+  sync_output: string
+  sync_error: string | null
+
+  // Context Generation (AI-powered)
+  is_generating: boolean
+  generation_output: string
+  generation_error: string | null
 }
 
 // ============================================================================
@@ -855,6 +865,25 @@ export interface CompleteContextSyncAction {
   payload: { change_id: string }
 }
 
+// Context Generation Actions (AI-powered)
+export interface GenerateContextAction {
+  type: 'GenerateContext'
+}
+
+export interface AppendGenerateContextOutputAction {
+  type: 'AppendGenerateContextOutput'
+  payload: { content: string }
+}
+
+export interface CompleteGenerateContextAction {
+  type: 'CompleteGenerateContext'
+}
+
+export interface FailGenerateContextAction {
+  type: 'FailGenerateContext'
+  payload: { error: string }
+}
+
 export interface SetChangeArchivedAction {
   type: 'SetChangeArchived'
   payload: { change_id: string }
@@ -1377,6 +1406,10 @@ export type Action =
   | SyncContextAction
   | AppendContextSyncOutputAction
   | CompleteContextSyncAction
+  | GenerateContextAction
+  | AppendGenerateContextOutputAction
+  | CompleteGenerateContextAction
+  | FailGenerateContextAction
   | SetChangeArchivedAction
   | ExecutePlanAction
   | AppendImplementationOutputAction

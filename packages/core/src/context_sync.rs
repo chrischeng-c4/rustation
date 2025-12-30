@@ -3,6 +3,8 @@
 //! Extracts valuable information from completed changes
 //! and updates Living Context files.
 
+use std::path::Path;
+
 /// Build the prompt for Claude to extract context updates from a completed change.
 ///
 /// The response should be a structured JSON object that we can parse to update context files.
@@ -117,8 +119,229 @@ impl ContextSyncResponse {
     }
 }
 
+/// Build enhanced prompt for context sync with individual file contents.
+/// This allows Claude to make more targeted updates to specific files.
+pub fn build_enhanced_context_sync_prompt(
+    proposal_content: &str,
+    plan_content: &str,
+    tech_stack_content: &str,
+    architecture_content: &str,
+    recent_changes_content: &str,
+) -> String {
+    format!(
+        r#"You are a context curator for a software project. A change has been completed.
+
+## Your Task
+
+Analyze the completed change and extract updates for the project's Living Context files.
+
+## Completed Change
+
+### Proposal
+{proposal_content}
+
+### Implementation Plan
+{plan_content}
+
+## Current Context Files
+
+### tech-stack.md (Current)
+{tech_stack_content}
+
+### system-architecture.md (Current)
+{architecture_content}
+
+### recent-changes.md (Current)
+{recent_changes_content}
+
+## Instructions
+
+Extract updates for each context file:
+
+1. **tech_stack**: New technologies/libraries added (only if truly new, not already in tech-stack.md)
+2. **architecture**: New components or significant architectural changes
+3. **recent_changes**: A summary entry for this change
+
+## Output Format
+
+```json
+{{
+  "tech_stack": [
+    {{ "name": "library-name", "version": "1.0", "purpose": "what it's for" }}
+  ],
+  "architecture": [
+    {{ "component": "component-name", "description": "what it does", "location": "where in codebase" }}
+  ],
+  "recent_changes": {{
+    "date": "YYYY-MM-DD",
+    "change": "One-line summary of what was done",
+    "impact": "High/Medium/Low"
+  }},
+  "summary": "Brief explanation of what was extracted"
+}}
+```
+
+Rules:
+- Use empty array `[]` if no updates for tech_stack or architecture
+- recent_changes is REQUIRED (use today's date: {today})
+- Only include genuinely NEW information not already in context
+- Be concise and accurate
+
+Respond ONLY with the JSON object."#,
+        today = chrono::Utc::now().format("%Y-%m-%d")
+    )
+}
+
+/// Enhanced response structure for context sync
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct EnhancedContextSyncResponse {
+    #[serde(default)]
+    pub tech_stack: Vec<TechStackAddition>,
+    #[serde(default)]
+    pub architecture: Vec<ArchitectureUpdate>,
+    pub recent_changes: RecentChangeEntry,
+    pub summary: String,
+}
+
+/// A single recent change entry
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct RecentChangeEntry {
+    pub date: String,
+    pub change: String,
+    pub impact: String,
+}
+
+impl EnhancedContextSyncResponse {
+    /// Parse JSON string into EnhancedContextSyncResponse
+    pub fn from_json(json_str: &str) -> Result<Self, String> {
+        let json_str = extract_json_from_response(json_str);
+        serde_json::from_str(&json_str)
+            .map_err(|e| format!("Failed to parse enhanced context sync response: {}", e))
+    }
+}
+
+/// Apply context updates to the context files on disk.
+/// Returns the number of files updated.
+pub fn apply_context_updates(
+    project_path: &Path,
+    response: &EnhancedContextSyncResponse,
+) -> Result<u32, String> {
+    let context_dir = project_path.join(".rstn").join("context");
+    let mut files_updated = 0;
+
+    // Update tech-stack.md if there are additions
+    if !response.tech_stack.is_empty() {
+        let tech_stack_path = context_dir.join("tech-stack.md");
+        if tech_stack_path.exists() {
+            let content = std::fs::read_to_string(&tech_stack_path)
+                .map_err(|e| format!("Failed to read tech-stack.md: {}", e))?;
+
+            // Append new rows to the tech stack table
+            let additions = format_tech_stack_additions(&response.tech_stack);
+            let updated_content = append_to_markdown_table(&content, &additions);
+
+            std::fs::write(&tech_stack_path, updated_content)
+                .map_err(|e| format!("Failed to write tech-stack.md: {}", e))?;
+            files_updated += 1;
+        }
+    }
+
+    // Update system-architecture.md if there are updates
+    if !response.architecture.is_empty() {
+        let arch_path = context_dir.join("system-architecture.md");
+        if arch_path.exists() {
+            let content = std::fs::read_to_string(&arch_path)
+                .map_err(|e| format!("Failed to read system-architecture.md: {}", e))?;
+
+            // Append new architecture sections
+            let updates = format_architecture_updates(&response.architecture);
+            let updated_content = format!("{}\n{}", content.trim_end(), updates);
+
+            std::fs::write(&arch_path, updated_content)
+                .map_err(|e| format!("Failed to write system-architecture.md: {}", e))?;
+            files_updated += 1;
+        }
+    }
+
+    // Always update recent-changes.md
+    let recent_path = context_dir.join("recent-changes.md");
+    if recent_path.exists() {
+        let content = std::fs::read_to_string(&recent_path)
+            .map_err(|e| format!("Failed to read recent-changes.md: {}", e))?;
+
+        // Prepend new change entry to the table (newest first)
+        let entry = format!(
+            "| {} | {} | {} |",
+            response.recent_changes.date,
+            response.recent_changes.change,
+            response.recent_changes.impact
+        );
+        let updated_content = prepend_to_markdown_table(&content, &entry);
+
+        std::fs::write(&recent_path, updated_content)
+            .map_err(|e| format!("Failed to write recent-changes.md: {}", e))?;
+        files_updated += 1;
+    }
+
+    Ok(files_updated)
+}
+
+/// Append rows to a markdown table (adds after the last row)
+fn append_to_markdown_table(content: &str, new_rows: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut result = Vec::new();
+    let mut found_table = false;
+    let mut last_table_row = 0;
+
+    // Find the last table row (line starting with |)
+    for (i, line) in lines.iter().enumerate() {
+        if line.trim().starts_with('|') {
+            found_table = true;
+            last_table_row = i;
+        }
+    }
+
+    if found_table {
+        // Insert new rows after the last table row
+        for (i, line) in lines.iter().enumerate() {
+            result.push(line.to_string());
+            if i == last_table_row {
+                result.push(new_rows.to_string());
+            }
+        }
+        result.join("\n")
+    } else {
+        // No table found, just append
+        format!("{}\n{}", content, new_rows)
+    }
+}
+
+/// Prepend rows to a markdown table (adds after the header row)
+fn prepend_to_markdown_table(content: &str, new_row: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut result = Vec::new();
+    let mut inserted = false;
+
+    for line in lines.iter() {
+        result.push(line.to_string());
+
+        // Insert after the separator row (the line with |---|---|)
+        if !inserted && line.contains("---") && line.starts_with('|') {
+            result.push(new_row.to_string());
+            inserted = true;
+        }
+    }
+
+    if !inserted {
+        // No separator found, just append
+        result.push(new_row.to_string());
+    }
+
+    result.join("\n")
+}
+
 /// Extract JSON from a response that might have markdown code blocks
-fn extract_json_from_response(response: &str) -> String {
+pub fn extract_json_from_response(response: &str) -> String {
     // Try to find JSON in code block
     if let Some(start) = response.find("```json") {
         if let Some(end) = response[start + 7..].find("```") {

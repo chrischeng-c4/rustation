@@ -203,6 +203,21 @@ pub enum Action {
     SetContextInitialized { initialized: bool },
 
     // ========================================================================
+    // Context Generation Actions (AI-powered)
+    // ========================================================================
+    /// Generate context files by analyzing codebase with AI
+    GenerateContext,
+
+    /// Append content to context generation output (streaming from Claude)
+    AppendGenerateContextOutput { content: String },
+
+    /// Mark context generation as complete
+    CompleteGenerateContext,
+
+    /// Mark context generation as failed
+    FailGenerateContext { error: String },
+
+    // ========================================================================
     // Context Sync & Archive Actions (CESDD Phase 4)
     // ========================================================================
     /// Archive a completed change to .rstn/archive/

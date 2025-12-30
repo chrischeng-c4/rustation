@@ -438,7 +438,7 @@ pub struct ChatMessage {
 const MAX_CHAT_MESSAGES: usize = 100;
 
 /// Chat state for a worktree
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ChatState {
     /// Chat messages
     #[serde(default)]
@@ -449,16 +449,6 @@ pub struct ChatState {
     /// Error message (if any)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-}
-
-impl Default for ChatState {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-            is_typing: false,
-            error: None,
-        }
-    }
 }
 
 impl ChatState {
@@ -1161,6 +1151,28 @@ pub struct ContextState {
     /// Last refresh timestamp (ISO 8601)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_refreshed: Option<String>,
+
+    // === Context Sync (after Change completion) ===
+    /// Whether context sync is in progress
+    #[serde(default)]
+    pub is_syncing: bool,
+    /// Accumulated streaming output during sync
+    #[serde(default)]
+    pub sync_output: String,
+    /// Error message if sync failed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_error: Option<String>,
+
+    // === Context Generation (AI-powered) ===
+    /// Whether AI context generation is in progress
+    #[serde(default)]
+    pub is_generating: bool,
+    /// Accumulated streaming output during generation
+    #[serde(default)]
+    pub generation_output: String,
+    /// Error message if generation failed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generation_error: Option<String>,
 }
 
 /// A single context file from .rstn/context/

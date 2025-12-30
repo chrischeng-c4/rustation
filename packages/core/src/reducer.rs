@@ -1262,9 +1262,12 @@ pub fn reduce(state: &mut AppState, action: Action) {
         }
 
         Action::AppendContextSyncOutput { change_id, content } => {
-            // Could store streaming output if we implement streaming context sync
+            // Store streaming output to context state and change
             if let Some(project) = state.active_project_mut() {
                 if let Some(worktree) = project.active_worktree_mut() {
+                    // Append to context sync output
+                    worktree.context.sync_output.push_str(&content);
+                    // Also append to change streaming_output for backward compatibility
                     if let Some(change) = worktree
                         .changes
                         .changes
@@ -1281,8 +1284,10 @@ pub fn reduce(state: &mut AppState, action: Action) {
             // Mark context sync as complete
             if let Some(project) = state.active_project_mut() {
                 if let Some(worktree) = project.active_worktree_mut() {
-                    worktree.context.is_loading = false;
-                    // Clear streaming output
+                    worktree.context.is_syncing = false;
+                    worktree.context.sync_output.clear();
+                    worktree.context.sync_error = None;
+                    // Clear streaming output on change
                     if let Some(change) = worktree
                         .changes
                         .changes
@@ -1291,6 +1296,46 @@ pub fn reduce(state: &mut AppState, action: Action) {
                     {
                         change.streaming_output.clear();
                     }
+                }
+            }
+        }
+
+        // ====================================================================
+        // Context Generation Actions (AI-powered)
+        // ====================================================================
+        Action::GenerateContext => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.context.is_generating = true;
+                    worktree.context.generation_output.clear();
+                    worktree.context.generation_error = None;
+                }
+            }
+        }
+
+        Action::AppendGenerateContextOutput { content } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.context.generation_output.push_str(&content);
+                }
+            }
+        }
+
+        Action::CompleteGenerateContext => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.context.is_generating = false;
+                    worktree.context.is_initialized = true;
+                    worktree.context.generation_output.clear();
+                }
+            }
+        }
+
+        Action::FailGenerateContext { error } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.context.is_generating = false;
+                    worktree.context.generation_error = Some(error);
                 }
             }
         }
@@ -1668,7 +1713,7 @@ pub fn reduce(state: &mut AppState, action: Action) {
                 project
                     .agent_rules_config
                     .profiles
-                    .retain(|p| !(p.id == id && !p.is_builtin));
+                    .retain(|p| p.id != id || p.is_builtin);
 
                 // Clear active_profile_id if deleted profile was active
                 if project.agent_rules_config.active_profile_id.as_ref() == Some(&id) {
@@ -1936,6 +1981,7 @@ fn log_action_if_interesting(state: &mut AppState, action: &Action) {
         Action::AppendProposalOutput { .. } => ("AppendProposalOutput", false),
         Action::AppendPlanOutput { .. } => ("AppendPlanOutput", false),
         Action::AppendContextSyncOutput { .. } => ("AppendContextSyncOutput", false),
+        Action::AppendGenerateContextOutput { .. } => ("AppendGenerateContextOutput", false),
         Action::AppendImplementationOutput { .. } => ("AppendImplementationOutput", false),
 
         // Task execution - interesting
