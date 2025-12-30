@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { FileText, RefreshCw, CheckCircle, ChevronRight, AlertCircle, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -21,6 +21,15 @@ export function ConstitutionPanel() {
   const worktree = activeProject?.worktrees?.[activeProject?.active_worktree_index ?? 0]
   const workflow = worktree?.tasks?.constitution_workflow
   const constitutionExists = worktree?.tasks?.constitution_exists
+
+  // Check constitution exists on mount and clear any stale workflow
+  useEffect(() => {
+    const init = async () => {
+      await dispatch({ type: 'ClearConstitutionWorkflow' })
+      await dispatch({ type: 'CheckConstitutionExists' })
+    }
+    init()
+  }, [dispatch])
 
   const questions = [
     {
