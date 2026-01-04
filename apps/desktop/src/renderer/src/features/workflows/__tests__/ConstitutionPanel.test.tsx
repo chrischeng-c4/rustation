@@ -122,7 +122,7 @@ describe('ConstitutionPanel', () => {
   })
 
   describe('Constitution Exists State', () => {
-    it('shows success message when constitution exists', () => {
+    it('shows success message when constitution exists', async () => {
       mockUseAppState.mockReturnValue({
         state: createMockState({ constitutionExists: true }),
         dispatch: mockDispatch,
@@ -130,10 +130,11 @@ describe('ConstitutionPanel', () => {
       })
 
       render(<ConstitutionPanel />)
-      expect(screen.getByText(/Constitution Active/)).toBeInTheDocument()
+      expect(screen.getByText(/Constitution/)).toBeInTheDocument()
+      expect(screen.getByText(/Governance rules for AI development/)).toBeInTheDocument()
     })
 
-    it('shows Regenerate button when constitution exists', () => {
+    it('shows Regenerate button when constitution exists', async () => {
       mockUseAppState.mockReturnValue({
         state: createMockState({ constitutionExists: true }),
         dispatch: mockDispatch,
@@ -193,7 +194,7 @@ describe('ConstitutionPanel', () => {
   })
 
   describe('CLAUDE.md Detection', () => {
-    it('shows CLAUDE.md preview when detected and no constitution exists', () => {
+    it('shows CLAUDE.md preview when detected and no constitution exists', async () => {
       mockUseAppState.mockReturnValue({
         state: createMockState({
           constitutionExists: false,
@@ -206,7 +207,7 @@ describe('ConstitutionPanel', () => {
 
       render(<ConstitutionPanel />)
       expect(screen.getByText(/Found CLAUDE.md/)).toBeInTheDocument()
-      expect(screen.getByText(/Existing Project Instructions Found/)).toBeInTheDocument()
+      expect(screen.getByText(/Existing project instructions detected/)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Use This/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Skip, Create New/ })).toBeInTheDocument()
     })
@@ -375,18 +376,18 @@ describe('ConstitutionPanel', () => {
       expect(screen.getByRole('heading', { name: /What technology stack does this project use/ })).toBeInTheDocument()
     })
 
-    it('shows progress indicator with question count', () => {
+    it('shows progress indicator with question count', async () => {
       mockUseAppState.mockReturnValue({
         state: createMockState({
           constitutionExists: false,
-          workflow: { status: 'collecting', currentQuestion: 1, answers: { tech_stack: 'React' } },
+          workflow: { status: 'collecting', currentQuestion: 1 },
         }),
         dispatch: mockDispatch,
         isLoading: false,
       })
 
       render(<ConstitutionPanel />)
-      expect(screen.getByText('1 / 4')).toBeInTheDocument()
+      expect(screen.getByText('1 / 4 questions answered')).toBeInTheDocument()
     })
 
     it('shows checkmarks for answered questions', () => {
@@ -408,7 +409,7 @@ describe('ConstitutionPanel', () => {
       expect(checkmarks.length).toBeGreaterThanOrEqual(1)
     })
 
-    it('allows typing answer in textarea', () => {
+    it('allows selecting options and typing optional notes', () => {
       mockUseAppState.mockReturnValue({
         state: createMockState({
           constitutionExists: false,
@@ -419,9 +420,12 @@ describe('ConstitutionPanel', () => {
       })
 
       render(<ConstitutionPanel />)
-      const textarea = screen.getByPlaceholderText('Type your answer...')
-      fireEvent.change(textarea, { target: { value: 'React + Rust' } })
-      expect(textarea).toHaveValue('React + Rust')
+      const optionButton = screen.getByRole('button', { name: 'Rust' })
+      fireEvent.click(optionButton)
+
+      const textarea = screen.getByPlaceholderText('Optional notes (keep it short)')
+      fireEvent.change(textarea, { target: { value: 'Targeting CLI tools' } })
+      expect(textarea).toHaveValue('Targeting CLI tools')
     })
 
     it('calls dispatch when Next button clicked', async () => {
@@ -435,16 +439,16 @@ describe('ConstitutionPanel', () => {
       })
 
       render(<ConstitutionPanel />)
-      const textarea = screen.getByPlaceholderText('Type your answer...')
-      const nextButton = screen.getByRole('button', { name: /Next/ })
+      const optionButton = screen.getByRole('button', { name: 'Rust' })
+      const nextButton = screen.getByRole('button', { name: /^Next$/ })
 
-      fireEvent.change(textarea, { target: { value: 'React + Rust' } })
+      fireEvent.click(optionButton)
       fireEvent.click(nextButton)
 
       await waitFor(() => {
         expect(mockDispatch).toHaveBeenCalledWith({
           type: 'AnswerConstitutionQuestion',
-          payload: { answer: 'React + Rust' },
+          payload: { answer: 'Selections:\n- Rust' },
         })
       })
     })
@@ -460,7 +464,7 @@ describe('ConstitutionPanel', () => {
       })
 
       render(<ConstitutionPanel />)
-      const nextButton = screen.getByRole('button', { name: /Next/ })
+      const nextButton = screen.getByRole('button', { name: /^Next$/ })
       expect(nextButton).toBeDisabled()
     })
 
@@ -529,7 +533,7 @@ describe('ConstitutionPanel', () => {
       })
 
       render(<ConstitutionPanel />)
-      expect(screen.getByText(/Generating Constitution.../)).toBeInTheDocument()
+      expect(screen.getByText(/Generating Constitution/)).toBeInTheDocument()
       expect(screen.getByText(/Streaming from Claude Code.../)).toBeInTheDocument()
     })
 

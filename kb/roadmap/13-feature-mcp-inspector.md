@@ -45,6 +45,19 @@ version: 1.0.0
 - `log_entries`: Array of `{ timestamp, direction, method, payload }`.
 - Note: High-volume logs should probably *not* be stored in Redux/AppState permanently to avoid bloat. Streaming them via a specific "Log Channel" event is better.
 
+### MCP Inspector UI State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stopped
+    Stopped --> Starting: StartMcpServer
+    Starting --> Running: SetMcpPort
+    Starting --> Error: SetMcpError
+    Running --> Stopped: StopMcpServer
+    Running --> Error: Tool error
+    Error --> Stopped: StopMcpServer / ClearError
+```
+
 ## 5. Implementation Plan
 
 ### Phase 1: Logging Pipeline

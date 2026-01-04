@@ -109,6 +109,7 @@ ActiveView
 +-- Settings   (Worktree scope)
 +-- Dockers    (Global scope)
 +-- Env        (Project scope)
++-- A2UI       (Worktree scope - Experimental)
 ```
 
 ---

@@ -98,6 +98,11 @@ stateDiagram-v2
 ### 4. Frontend Layer
 
 - [ ] React components complete
+- [ ] **UI Component Architecture followed**:
+    - Ad-hoc components composed of `src/components/ui` primitives.
+    - Global shared components in `src/components/shared`.
+    - Feature-specific components in `src/features/*/components`.
+    - `src/components` root contains ONLY `ui/` and `shared/` directories.
 - [ ] **NO MOCK data in production code** (see CI check below)
 - [ ] Components use `window.api.*` for all backend calls
 - [ ] Error states handled gracefully

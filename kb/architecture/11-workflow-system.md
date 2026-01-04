@@ -118,7 +118,7 @@ node:
   config:
     checks:
       - type: file-exists
-        path: .rstn/constitution.md
+        path: .rstn/constitutions/
         store_as: constitution_exists
       - type: command-exists
         command: claude
@@ -137,7 +137,7 @@ node:
   id: save-constitution
   type: file-write
   config:
-    path: .rstn/constitution.md
+    path: .rstn/constitutions/custom.md
     content_from: constitution_content  # 從 context 取值
     create_dirs: true
   transitions:

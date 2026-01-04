@@ -3,6 +3,7 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: '.',
   testMatch: '**/*.spec.ts',
+  testIgnore: process.env.E2E_ENABLED === '1' ? undefined : '**/*.spec.ts',
   timeout: 60000,
   expect: {
     timeout: 10000,

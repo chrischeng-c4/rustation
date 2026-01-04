@@ -4,6 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { LoadingState } from '@/components/shared/LoadingState'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { useMcpState } from '@/hooks/useAppState'
 import type { McpLogEntry, McpTool } from '@/types/state'
 
@@ -37,23 +41,17 @@ export function McpPage() {
 
   // Loading state
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <LoadingState message="Connecting to MCP server..." />
   }
 
   // No project open
   if (!mcp) {
     return (
-      <div className="flex h-full flex-col items-center justify-center">
-        <Server className="h-12 w-12 text-muted-foreground" />
-        <h2 className="mt-4 text-xl font-semibold">No Project Open</h2>
-        <p className="mt-2 text-muted-foreground">
-          Open a project to enable MCP integration with Claude Code.
-        </p>
-      </div>
+      <EmptyState
+        icon={Server}
+        title="No Project Open"
+        description="Open a project to enable MCP integration with Claude Code."
+      />
     )
   }
 
@@ -64,183 +62,175 @@ export function McpPage() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="space-y-6 p-4">
+      <div className="p-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold">rstn-mcp</h2>
-            <p className="mt-1 text-muted-foreground">
-              Claude Code integration for {projectName}
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          title="rstn-mcp"
+          description={`Claude Code integration for ${projectName}`}
+        />
 
-        {/* Server Status Card */}
-        <Card className="p-4">
-          <h3 className="mb-3 flex items-center gap-2 text-lg font-medium">
-            <Server className="h-5 w-5" />
-            Worktree MCP Server
-          </h3>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Status:</span>
-                <StatusBadge status={mcp.status} />
-              </div>
-
-              {mcp.port && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Port:</span>
-                  <Badge variant="outline">{mcp.port}</Badge>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              {isRunning ? (
-                <Button variant="destructive" size="sm" onClick={handleStop}>
-                  <Square className="mr-2 h-4 w-4" />
-                  Stop Server
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  onClick={handleStart}
-                  disabled={isStarting}
-                >
-                  {isStarting ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="mr-2 h-4 w-4" />
-                      Start Server
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          </div>
-
+        <div className="space-y-6">
           {/* Error message */}
-          {hasError && mcp.error && (
-            <div className="mt-3 flex items-center gap-2 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4" />
-              {mcp.error}
-            </div>
-          )}
+          {hasError && mcp.error && <ErrorBanner error={mcp.error} />}
 
-          {/* Server info */}
-          {isRunning && (
-            <div className="mt-4 space-y-2 rounded-md bg-muted/50 p-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Config File:</span>
-                <code className="text-xs">{mcp.config_path}</code>
+          {/* Server Status Card */}
+          <Card className="p-4">
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-medium">
+              <Server className="h-5 w-5" />
+              Worktree MCP Server
+            </h3>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Status:</span>
+                  <StatusBadge status={mcp.status} />
+                </div>
+
+                {mcp.port && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Port:</span>
+                    <Badge variant="outline">{mcp.port}</Badge>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                {isRunning ? (
+                  <Button variant="destructive" size="sm" onClick={handleStop}>
+                    <Square className="mr-2 h-4 w-4" />
+                    Stop Server
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={handleStart}
+                    disabled={isStarting}
+                  >
+                    {isStarting ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="mr-2 h-4 w-4" />
+                        Start Server
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
-          )}
-        </Card>
 
-        {/* Available Tools Card */}
-        {isRunning && (
-          <Card className="p-4">
-            <h3 className="mb-4 text-lg font-medium">Available Tools</h3>
-            {tools.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No tools available</p>
-            ) : (
-              <div className="space-y-3">
-                {tools.map((tool) => (
-                  <Card key={tool.name} className="p-3 bg-muted/30">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <code className="text-sm font-mono font-semibold">{tool.name}</code>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{tool.description}</p>
-                      {tool.input_schema && (
-                        <details className="text-xs">
-                          <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                            Parameters
-                          </summary>
-                          <pre className="mt-2 overflow-x-auto rounded bg-muted p-2 font-mono text-xs">
-                            {JSON.stringify(tool.input_schema, null, 2)}
-                          </pre>
-                        </details>
-                      )}
-                    </div>
-                  </Card>
-                ))}
+            {/* Server info */}
+            {isRunning && (
+              <div className="mt-4 space-y-2 rounded-md bg-muted/50 p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Config File:</span>
+                  <code className="text-xs">{mcp.config_path}</code>
+                </div>
               </div>
             )}
           </Card>
-        )}
 
-        {/* Claude Code Command Card */}
-        {isRunning && mcp.config_path && (
+          {/* Available Tools Card */}
+          {isRunning && (
+            <Card className="p-4">
+              <h3 className="mb-4 text-lg font-medium">Available Tools</h3>
+              {tools.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No tools available</p>
+              ) : (
+                <div className="space-y-3">
+                  {tools.map((tool) => (
+                    <Card key={tool.name} className="p-3 bg-muted/30">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <code className="text-sm font-mono font-semibold">{tool.name}</code>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{tool.description}</p>
+                        {tool.input_schema && (
+                          <details className="text-xs">
+                            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                              Parameters
+                            </summary>
+                            <pre className="mt-2 overflow-x-auto rounded bg-muted p-2 font-mono text-xs">
+                              {JSON.stringify(tool.input_schema, null, 2)}
+                            </pre>
+                          </details>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Claude Code Command Card */}
+          {isRunning && mcp.config_path && (
+            <Card className="p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-lg font-medium">
+                  <Terminal className="h-5 w-5" />
+                  Claude Code Command
+                </h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyCommand}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy
+                </Button>
+              </div>
+              <div className="rounded-md bg-muted p-3">
+                <code className="text-xs break-all">
+                  claude -p --verbose --output-format stream-json --mcp-config {mcp.config_path} "your prompt here"
+                </code>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                This command is automatically used when you chat with Claude Code. The --mcp-config flag enables Claude to access your project files.
+              </p>
+            </Card>
+          )}
+
+          {/* Server Logs Card */}
           <Card className="p-4">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center justify-between mb-4">
               <h3 className="flex items-center gap-2 text-lg font-medium">
-                <Terminal className="h-5 w-5" />
-                Claude Code Command
+                Server Logs
+                {logEntries.length > 0 && (
+                  <Badge variant="secondary">{logEntries.length}</Badge>
+                )}
               </h3>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleCopyCommand}
+                onClick={handleClearLogs}
+                disabled={logEntries.length === 0}
               >
-                <Copy className="mr-2 h-4 w-4" />
-                Copy
+                <Trash2 className="mr-2 h-4 w-4" />
+                Clear Logs
               </Button>
             </div>
-            <div className="rounded-md bg-muted p-3">
-              <code className="text-xs break-all">
-                claude -p --verbose --output-format stream-json --mcp-config {mcp.config_path} "your prompt here"
-              </code>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              This command is automatically used when you chat with Claude Code. The --mcp-config flag enables Claude to access your project files.
-            </p>
+
+            {logEntries.length === 0 ? (
+              <EmptyState
+                icon={Terminal}
+                title="No Activity Yet"
+                description="MCP tool calls from Claude Code will appear here when the server is running."
+                className="py-12"
+              />
+            ) : (
+              <div className="space-y-2 font-mono text-sm">
+                {logEntries.map((entry, index) => (
+                  <LogEntryRow key={index} entry={entry} />
+                ))}
+              </div>
+            )}
           </Card>
-        )}
-
-        {/* Server Logs Card */}
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="flex items-center gap-2 text-lg font-medium">
-              Server Logs
-              {logEntries.length > 0 && (
-                <Badge variant="secondary">{logEntries.length}</Badge>
-              )}
-            </h3>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClearLogs}
-              disabled={logEntries.length === 0}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Clear Logs
-            </Button>
-          </div>
-
-          {logEntries.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              <Terminal className="mx-auto h-8 w-8 mb-2 opacity-50" />
-              <p>No activity yet</p>
-              <p className="text-sm">
-                MCP tool calls from Claude Code will appear here
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2 font-mono text-sm">
-              {logEntries.map((entry, index) => (
-                <LogEntryRow key={index} entry={entry} />
-              ))}
-            </div>
-          )}
-        </Card>
+        </div>
       </div>
     </ScrollArea>
   )

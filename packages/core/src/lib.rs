@@ -1660,7 +1660,7 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
 
             let prompt = if let Some(claude_md) = claude_md_content {
                 format!(
-                    r#"You are helping create a project Constitution - governance rules for AI development.
+                    r#"You are helping create a project Constitution module for AI development.
 
 IMPORTANT: The project has existing guidelines in CLAUDE.md that should be respected and incorporated:
 
@@ -1674,14 +1674,22 @@ User provided the following additional information:
 - Code Quality Standards: {}
 - Architectural Constraints: {}
 
-Generate a comprehensive constitution.md file in Markdown format that:
-1. Incorporates relevant rules and guidelines from CLAUDE.md
-2. Adds new rules based on user answers above
-3. Avoids contradicting existing guidelines
-4. Organizes everything into clear sections
+Generate a modular constitution file named custom.md in Markdown format that:
+1. Includes frontmatter with: name, type=custom, priority, required=false
+2. Incorporates relevant rules and guidelines from CLAUDE.md
+3. Adds new rules based on user answers above
+4. Avoids contradicting existing guidelines
+5. Organizes everything into clear sections
 
 Structure:
-# Project Constitution
+---
+name: "Custom Rules"
+type: custom
+priority: 30
+required: false
+---
+
+# Custom Rules
 
 ## Technology Stack
 {{rules from CLAUDE.md + user input}}
@@ -1700,7 +1708,7 @@ Be specific, actionable, and authoritative. Use "MUST", "MUST NOT" language."#,
                 )
             } else {
                 format!(
-                    r#"You are helping create a project Constitution - governance rules for AI development.
+                    r#"You are helping create a project Constitution module for AI development.
 
 User provided the following information:
 - Technology Stack: {}
@@ -1708,9 +1716,16 @@ User provided the following information:
 - Code Quality Standards: {}
 - Architectural Constraints: {}
 
-Generate a comprehensive constitution.md file in Markdown format with these sections:
+Generate a modular constitution file named custom.md in Markdown format with these sections:
 
-# Project Constitution
+---
+name: "Custom Rules"
+type: custom
+priority: 30
+required: false
+---
+
+# Custom Rules
 
 ## Technology Stack
 {{detailed rules based on tech_stack}}
@@ -1807,17 +1822,18 @@ Be specific, actionable, and authoritative. Use "MUST", "MUST NOT" language."#,
 
                         if let (Some(content), Some(wt_path)) = (output, worktree_path) {
                             let rstn_dir = std::path::PathBuf::from(&wt_path).join(".rstn");
-                            let constitution_file = rstn_dir.join("constitution.md");
+                            let constitutions_dir = rstn_dir.join("constitutions");
+                            let constitution_file = constitutions_dir.join("custom.md");
 
-                            // Create .rstn directory if it doesn't exist
-                            if let Err(e) = tokio::fs::create_dir_all(&rstn_dir).await {
-                                eprintln!("Failed to create .rstn directory: {}", e);
+                            // Create constitutions directory if it doesn't exist
+                            if let Err(e) = tokio::fs::create_dir_all(&constitutions_dir).await {
+                                eprintln!("Failed to create .rstn/constitutions directory: {}", e);
                                 return;
                             }
 
                             // Write constitution file
                             if let Err(e) = tokio::fs::write(&constitution_file, content).await {
-                                eprintln!("Failed to write constitution.md: {}", e);
+                                eprintln!("Failed to write custom constitution: {}", e);
                                 return;
                             }
 
@@ -1860,17 +1876,18 @@ Be specific, actionable, and authoritative. Use "MUST", "MUST NOT" language."#,
 
             if let (Some(content), Some(wt_path)) = (output, worktree_path) {
                 let rstn_dir = std::path::PathBuf::from(&wt_path).join(".rstn");
-                let constitution_file = rstn_dir.join("constitution.md");
+                let constitutions_dir = rstn_dir.join("constitutions");
+                let constitution_file = constitutions_dir.join("custom.md");
 
-                // Create .rstn directory if it doesn't exist
-                if let Err(e) = tokio::fs::create_dir_all(&rstn_dir).await {
-                    eprintln!("Failed to create .rstn directory: {}", e);
+                // Create constitutions directory if it doesn't exist
+                if let Err(e) = tokio::fs::create_dir_all(&constitutions_dir).await {
+                    eprintln!("Failed to create .rstn/constitutions directory: {}", e);
                     return Ok(());
                 }
 
                 // Write constitution file
                 if let Err(e) = tokio::fs::write(&constitution_file, content).await {
-                    eprintln!("Failed to write constitution.md: {}", e);
+                    eprintln!("Failed to write custom constitution: {}", e);
                     return Ok(());
                 }
 
@@ -1981,15 +1998,21 @@ Be specific, actionable, and authoritative. Use "MUST", "MUST NOT" language."#,
                 let path = std::path::Path::new(&wt_path);
                 let claude_md_path = path.join("CLAUDE.md");
                 let rstn_dir = path.join(".rstn");
-                let constitution_path = rstn_dir.join("constitution.md");
+                let constitutions_dir = rstn_dir.join("constitutions");
+                let constitution_path = constitutions_dir.join("claude.md");
 
-                // Read CLAUDE.md and write to .rstn/constitution.md
+                // Read CLAUDE.md and write to .rstn/constitutions/claude.md
                 if let Ok(content) = std::fs::read_to_string(&claude_md_path) {
-                    // Ensure .rstn directory exists
-                    let _ = std::fs::create_dir_all(&rstn_dir);
+                // Ensure .rstn/constitutions directory exists
+                let _ = std::fs::create_dir_all(&constitutions_dir);
 
-                    // Write to constitution.md
-                    if std::fs::write(&constitution_path, &content).is_ok() {
+                let wrapped = format!(
+                    "---\nname: \"CLAUDE.md\"\ntype: custom\npriority: 40\nrequired: false\n---\n\n{}",
+                    content
+                );
+
+                // Write to claude.md module
+                if std::fs::write(&constitution_path, &wrapped).is_ok() {
                         {
                             let mut state = get_app_state().write().await;
                             reduce(&mut state, Action::SetConstitutionExists { exists: true });

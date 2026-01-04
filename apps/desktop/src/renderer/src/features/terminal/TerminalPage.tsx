@@ -7,6 +7,9 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { LoadingState } from '@/components/shared/LoadingState'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { useTerminalState } from '@/hooks/useAppState'
 
 /**
@@ -64,23 +67,17 @@ export function TerminalPage() {
 
   // Loading state
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <LoadingState message="Initializing terminal session..." />
   }
 
   // No project open
   if (!terminal) {
     return (
-      <div className="flex h-full flex-col items-center justify-center">
-        <TerminalSquare className="h-12 w-12 text-muted-foreground" />
-        <h2 className="mt-4 text-xl font-semibold">No Project Open</h2>
-        <p className="mt-2 text-muted-foreground">
-          Open a project to access the integrated terminal.
-        </p>
-      </div>
+      <EmptyState
+        icon={TerminalSquare}
+        title="No Project Open"
+        description="Open a project to access the integrated terminal."
+      />
     )
   }
 
@@ -89,53 +86,42 @@ export function TerminalPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <TerminalSquare className="h-5 w-5" />
-            Terminal
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {hasSession ? (
-              <>Shell session in {projectName}</>
-            ) : (
-              <>No active session</>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {hasSession ? (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleResize}
-              >
-                <Maximize2 className="mr-2 h-4 w-4" />
-                Expand
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleKill}
-              >
-                <X className="mr-2 h-4 w-4" />
-                Kill
-              </Button>
-            </>
-          ) : (
+      <PageHeader
+        title="Terminal"
+        description={hasSession ? `Shell session in ${projectName}` : "No active session"}
+        icon={<TerminalSquare className="h-5 w-5" />}
+      >
+        {hasSession ? (
+          <>
             <Button
-              onClick={handleSpawn}
+              variant="outline"
+              size="sm"
+              onClick={handleResize}
             >
-              <TerminalSquare className="mr-2 h-4 w-4" />
-              Spawn Shell
+              <Maximize2 className="mr-2 h-4 w-4" />
+              Expand
             </Button>
-          )}
-        </div>
-      </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleKill}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Kill
+            </Button>
+          </>
+        ) : (
+          <Button
+            onClick={handleSpawn}
+          >
+            <TerminalSquare className="mr-2 h-4 w-4" />
+            Spawn Shell
+          </Button>
+        )}
+      </PageHeader>
 
       {/* Terminal Area */}
-      <div className="flex-1 p-4">
+      <div className="flex-1 p-4 pt-0">
         {hasSession ? (
           <Card className="h-full bg-black p-2 font-mono text-sm">
             {/* Terminal Container - xterm.js will attach here */}
@@ -158,18 +144,16 @@ export function TerminalPage() {
             </div>
           </Card>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center">
-            <TerminalSquare className="h-16 w-16 text-muted-foreground opacity-50" />
-            <h3 className="mt-4 text-lg font-medium">No Active Session</h3>
-            <p className="mt-2 text-center text-muted-foreground max-w-md">
-              Click "Spawn Shell" to start a new terminal session.
-              The terminal runs in {worktreePath}.
-            </p>
-            <Button className="mt-4" onClick={handleSpawn}>
-              <TerminalSquare className="mr-2 h-4 w-4" />
-              Spawn Shell
-            </Button>
-          </div>
+          <EmptyState
+            icon={TerminalSquare}
+            title="No Active Session"
+            description={`Click "Spawn Shell" to start a new terminal session in ${worktreePath}.`}
+            action={{
+              label: "Spawn Shell",
+              onClick: handleSpawn,
+              icon: TerminalSquare
+            }}
+          />
         )}
       </div>
 

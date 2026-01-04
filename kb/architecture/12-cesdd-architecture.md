@@ -197,6 +197,31 @@ token_estimate: 800
 
 **Important**: Human CAN edit these files, but rstn will also update them automatically via Context Sync workflow.
 
+### Living Context State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Uninitialized
+
+    Uninitialized --> Loading: InitializeContext / LoadContext
+    Loading --> Ready: SetContext
+
+    Ready --> Loading: RefreshContext
+
+    Ready --> Generating: GenerateContext
+    Generating --> Ready: CompleteGenerateContext
+    Generating --> Error: FailGenerateContext
+
+    Ready --> Syncing: SyncContext
+    Syncing --> Ready: CompleteContextSync
+    Syncing --> Error: SyncContext error
+
+    Error --> Generating: GenerateContext (retry)
+    Error --> Loading: RefreshContext / LoadContext
+```
+
+**Flags**: `is_loading`, `is_syncing`, and `is_generating` encode the active state; `sync_error` and `generation_error` store failures.
+
 ### When Context Updates
 
 | Trigger | Action | Node Type |

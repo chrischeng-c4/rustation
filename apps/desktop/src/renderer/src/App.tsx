@@ -10,11 +10,12 @@ import { McpPage } from '@/features/mcp'
 import { ChatPage } from '@/features/chat'
 import { TerminalPage } from '@/features/terminal'
 import { WorkflowsPage } from '@/features/workflows'
+import { A2UIPage } from '@/features/a2ui/A2UIPage'
 import { Toaster } from '@/features/notifications'
-import { CommandPalette } from '@/components/command-palette'
-import { DevLogPanel } from '@/components/DevLogPanel'
+import { CommandPalette } from '@/features/command-palette'
+import { DevLogPanel } from '@/components/shared/DevLogPanel'
 import { useActiveWorktree, useAppState } from '@/hooks/useAppState'
-import { ProjectTabs } from '@/components/ProjectTabs'
+import { ProjectTabs } from '@/features/projects/components/ProjectTabs'
 import { Button } from '@/components/ui/button'
 import type { ActiveView } from '@/types/state'
 
@@ -102,15 +103,17 @@ function App() {
         return <TerminalPage />
       case 'workflows':
         return <WorkflowsPage />
+      case 'a2ui':
+        return <A2UIPage />
       default:
         return <TasksPage />
     }
   }
 
   // Determine if sidebar items should be highlighted
-  // Only highlight for worktree-scope views (tasks, settings, mcp, chat, terminal)
+  // Only highlight for worktree-scope views (tasks, settings, mcp, chat, terminal, a2ui)
   const getSidebarValue = () => {
-    if (activeView === 'tasks' || activeView === 'settings' || activeView === 'mcp' || activeView === 'chat' || activeView === 'terminal' || activeView === 'workflows') {
+    if (activeView === 'tasks' || activeView === 'settings' || activeView === 'mcp' || activeView === 'chat' || activeView === 'terminal' || activeView === 'workflows' || activeView === 'a2ui') {
       return activeView
     }
     // For global/project scope views (dockers, env), don't highlight sidebar
@@ -172,6 +175,13 @@ function App() {
               >
                 <MessageSquare className="h-5 w-5" />
                 <span className="text-[10px]">Chat</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="a2ui"
+                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
+              >
+                <TerminalSquare className="h-5 w-5 text-purple-500" />
+                <span className="text-[10px]">A2UI</span>
               </TabsTrigger>
               <TabsTrigger
                 value="terminal"

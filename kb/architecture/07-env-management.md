@@ -92,6 +92,19 @@ Users can manually trigger copy via Env page:
 - Choose patterns to copy
 - Execute copy
 
+### Env Copy State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Copying: AutoCopyEnabled + WorktreeCreated
+    Idle --> Copying: ManualCopy
+    Copying --> Success: Copy completed
+    Copying --> Error: Copy failed
+    Success --> Idle: Acknowledge / Next copy
+    Error --> Idle: Acknowledge / Retry
+```
+
 ---
 
 ## 4. UI Integration

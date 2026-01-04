@@ -1007,7 +1007,7 @@ pub struct TasksState {
     /// Constitution workflow state (CESDD Phase 1)
     #[serde(default)]
     pub constitution_workflow: Option<ConstitutionWorkflow>,
-    /// Whether .rstn/constitution.md exists (None = not checked yet)
+    /// Whether a constitution exists (modular or legacy) (None = not checked yet)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub constitution_exists: Option<bool>,
     /// Constitution content (None = not read yet)

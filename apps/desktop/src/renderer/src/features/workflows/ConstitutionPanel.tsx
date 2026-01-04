@@ -1,28 +1,103 @@
 import { useState, useCallback, useEffect } from 'react'
-import { FileText, RefreshCw, CheckCircle, ChevronRight, AlertCircle, Sparkles, FileCode, ChevronDown } from 'lucide-react'
+import { FileText, RefreshCw, CheckCircle, ChevronRight, Sparkles, FileCode, ChevronDown, Scroll } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { WorkflowHeader } from '@/components/shared/WorkflowHeader'
+import { LoadingState } from '@/components/shared/LoadingState'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { useAppState } from '@/hooks/useAppState'
 import ReactMarkdown from 'react-markdown'
+import { Textarea } from '@/components/ui/textarea'
+
+const QUESTION_CONFIGS = [
+  {
+    key: 'tech_stack',
+    question: 'What technology stack does this project use?',
+    hint: 'Pick all that apply. Add optional notes if needed.',
+    options: [
+      'Rust',
+      'TypeScript',
+      'JavaScript',
+      'React',
+      'Electron',
+      'napi-rs',
+      'Node.js',
+      'Python',
+      'uv',
+      'Postgres',
+      'SQLite',
+      'Docker',
+      'Tailwind CSS',
+      'Vite',
+      'Next.js',
+      'Tauri',
+    ],
+  },
+  {
+    key: 'security',
+    question: 'What security requirements must all code follow?',
+    hint: 'Choose constraints. Add a short note if needed.',
+    options: [
+      'No secrets in repo',
+      'Validate all user input',
+      'Deny path traversal',
+      'No network access without approval',
+      'No destructive commands without review',
+      'Limit file access to workspace',
+      'Require ReviewGate for code changes',
+    ],
+  },
+  {
+    key: 'code_quality',
+    question: 'What code quality standards?',
+    hint: 'Select tests and quality bars.',
+    options: [
+      'cargo test must pass',
+      'cargo clippy clean',
+      'pnpm test must pass',
+      'Formatters required',
+      'No unwrap() in production',
+      'State transition tests required',
+      'E2E full-flow tests required',
+      'Coverage >= 80%',
+    ],
+  },
+  {
+    key: 'architecture',
+    question: 'Any architectural constraints?',
+    hint: 'Select architectural rules or add notes.',
+    options: [
+      'State-first (serializable state)',
+      'UI = render(state)',
+      'No business logic in React',
+      'Backend drives mutations',
+      'No MOCK_* in production UI',
+      'Bridge must use real napi-rs',
+      'KB-first (spec before code)',
+      'Split files at 500+ lines',
+    ],
+  },
+] as const
 
 /**
  * Constitution initialization workflow panel.
- * Guides user through questions and generates .rstn/constitution.md via Claude.
+ * Guides user through questions and generates .rstn/constitutions/custom.md via Claude.
  * Also supports one-click default constitution application.
  *
  * Flow:
- * 1. Check if constitution exists (.rstn/constitution.md)
+ * 1. Check if constitution exists (.rstn/constitutions/ or legacy)
  * 2. Check if CLAUDE.md exists in project root
  * 3. If CLAUDE.md exists but no constitution → show preview with import option
  * 4. If neither exists → show "Apply Default" / "Create with Q&A" options
  */
 export function ConstitutionPanel() {
   const { state, dispatch, isLoading } = useAppState()
-  const [currentAnswer, setCurrentAnswer] = useState('')
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({})
+  const [customNotes, setCustomNotes] = useState<Record<string, string>>({})
 
   // Note: active_project is not serialized, use projects[active_project_index]
   const activeProject = state?.projects?.[state?.active_project_index ?? 0]
@@ -59,28 +134,7 @@ export function ConstitutionPanel() {
     }
   }, [claudeMdExists, claudeMdContent, claudeMdSkipped, dispatch])
 
-  const questions = [
-    {
-      key: 'tech_stack',
-      question: 'What technology stack does this project use?',
-      hint: 'e.g., React + Rust, Python + Django',
-    },
-    {
-      key: 'security',
-      question: 'What security requirements must all code follow?',
-      hint: 'e.g., JWT auth required, no SQL injection',
-    },
-    {
-      key: 'code_quality',
-      question: 'What code quality standards?',
-      hint: 'e.g., 80% test coverage, ESLint rules',
-    },
-    {
-      key: 'architecture',
-      question: 'Any architectural constraints?',
-      hint: 'e.g., state-first, no singletons',
-    },
-  ]
+  const questions = QUESTION_CONFIGS
 
   const handleApplyDefault = useCallback(async () => {
     await dispatch({ type: 'ApplyDefaultConstitution' })
@@ -102,57 +156,74 @@ export function ConstitutionPanel() {
   }, [dispatch])
 
   const handleStartQA = useCallback(async () => {
+    setSelectedOptions({})
+    setCustomNotes({})
     await dispatch({ type: 'StartConstitutionWorkflow' })
   }, [dispatch])
 
-  const handleAnswerSubmit = useCallback(async () => {
-    if (!currentAnswer.trim()) return
-
-    await dispatch({
-      type: 'AnswerConstitutionQuestion',
-      payload: { answer: currentAnswer.trim() },
+  const toggleOption = useCallback((questionKey: string, value: string) => {
+    setSelectedOptions((prev) => {
+      const current = prev[questionKey] ?? []
+      if (current.includes(value)) {
+        return { ...prev, [questionKey]: current.filter((item) => item !== value) }
+      }
+      return { ...prev, [questionKey]: [...current, value] }
     })
-    setCurrentAnswer('')
-  }, [currentAnswer, dispatch])
+  }, [])
+
+  const buildAnswer = useCallback(
+    (questionKey: string) => {
+      const selections = selectedOptions[questionKey] ?? []
+      const notes = (customNotes[questionKey] ?? '').trim()
+      if (selections.length === 0 && !notes) return ''
+
+      const parts: string[] = []
+      if (selections.length > 0) {
+        parts.push(`Selections:\n- ${selections.join('\n- ')}`)
+      }
+      if (notes) {
+        parts.push(`Notes:\n${notes}`)
+      }
+      return parts.join('\n\n')
+    },
+    [selectedOptions, customNotes]
+  )
+
+  const handleAnswerSubmit = useCallback(
+    async (questionKey: string) => {
+      const answer = buildAnswer(questionKey)
+      if (!answer) return
+
+      await dispatch({
+        type: 'AnswerConstitutionQuestion',
+        payload: { answer },
+      })
+    },
+    [buildAnswer, dispatch]
+  )
 
   const handleGenerate = useCallback(async () => {
     await dispatch({ type: 'GenerateConstitution' })
   }, [dispatch])
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault()
-        handleAnswerSubmit()
-      }
-    },
-    [handleAnswerSubmit]
-  )
-
   // Loading state - checking existence
   if (isLoading || constitutionExists === null || constitutionExists === undefined) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg border">
-        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-sm text-muted-foreground">Checking constitution...</span>
-      </div>
-    )
+    return <LoadingState message="Checking constitution..." />
   }
 
   // Found CLAUDE.md but no constitution - show import option with preview
   if (claudeMdExists === true && constitutionExists === false && !claudeMdSkipped && !workflow) {
     return (
-      <div className="flex h-full flex-col rounded-lg border">
-        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <FileCode className="h-4 w-4 text-blue-500" />
-            <span className="text-sm font-medium">Found CLAUDE.md</span>
-          </div>
-        </div>
-        <div className="flex flex-1 flex-col p-4">
+      <div className="flex h-full flex-col">
+        <PageHeader
+          title="Found CLAUDE.md"
+          description="Existing project instructions detected"
+          icon={<FileCode className="h-5 w-5 text-blue-500" />}
+        />
+        <div className="flex flex-1 flex-col p-4 pt-0">
           <Card className="flex-1 flex flex-col border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20">
             <div className="p-4 border-b">
-              <h3 className="text-sm font-medium mb-1">Existing Project Instructions Found</h3>
+              <h3 className="text-sm font-medium mb-1">Use existing instructions?</h3>
               <p className="text-xs text-muted-foreground">
                 Your project has a <code className="text-xs bg-muted px-1 rounded">CLAUDE.md</code> file.
                 Would you like to use it as your constitution?
@@ -166,10 +237,7 @@ export function ConstitutionPanel() {
                   <ReactMarkdown>{claudeMdContent}</ReactMarkdown>
                 </div>
               ) : (
-                <div className="flex items-center justify-center py-8">
-                  <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
-                  <span className="text-xs text-muted-foreground">Loading preview...</span>
-                </div>
+                <LoadingState message="Loading preview..." className="h-full" />
               )}
             </ScrollArea>
 
@@ -192,18 +260,18 @@ export function ConstitutionPanel() {
   // Constitution exists - show content (only when no active workflow)
   if (constitutionExists === true && !workflow) {
     return (
-      <div className="flex h-full flex-col rounded-lg border">
-        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <span className="text-sm font-medium">Constitution Active</span>
-          </div>
-          <Button variant="ghost" size="sm" onClick={handleStartQA}>
-            <RefreshCw className="mr-1 h-3 w-3" />
+      <div className="flex h-full flex-col">
+        <PageHeader
+          title="Constitution"
+          description="Governance rules for AI development"
+          icon={<CheckCircle className="h-5 w-5 text-green-500" />}
+        >
+          <Button variant="outline" size="sm" onClick={handleStartQA}>
+            <RefreshCw className="mr-2 h-4 w-4" />
             Regenerate
           </Button>
-        </div>
-        <ScrollArea className="flex-1 p-4">
+        </PageHeader>
+        <ScrollArea className="flex-1 px-4 pb-4">
           {constitutionContent ? (
             <Card className="p-4">
               <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -211,10 +279,7 @@ export function ConstitutionPanel() {
               </div>
             </Card>
           ) : (
-            <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground mr-2" />
-              <span className="text-sm text-muted-foreground">Loading constitution...</span>
-            </div>
+            <LoadingState message="Loading constitution..." />
           )}
         </ScrollArea>
       </div>
@@ -224,21 +289,15 @@ export function ConstitutionPanel() {
   // Constitution missing - show initial options (only when no active workflow)
   if (constitutionExists === false && !workflow) {
     return (
-      <div className="flex h-full flex-col rounded-lg border">
-        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-500" />
-            <span className="text-sm font-medium">No Constitution</span>
-          </div>
-        </div>
+      <div className="flex h-full flex-col">
+        <PageHeader
+          title="Initialize Constitution"
+          description="Define development standards for AI-assisted coding"
+          icon={<Scroll className="h-5 w-5" />}
+        />
         <div className="flex flex-1 items-center justify-center p-4">
-          <div className="max-w-md space-y-4">
+          <div className="max-w-md w-full space-y-4">
             <Card className="p-6 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
-              <h3 className="text-lg font-medium mb-2">Initialize Constitution</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                A constitution defines development standards for AI-assisted coding.
-              </p>
-
               <div className="space-y-3">
                 <Button className="w-full" onClick={handleApplyDefault}>
                   <Sparkles className="mr-2 h-4 w-4" />
@@ -262,7 +321,7 @@ export function ConstitutionPanel() {
                   Create with Q&A
                 </Button>
                 <p className="text-xs text-center text-muted-foreground">
-                  Answer questions to generate a customized constitution
+                  Answer questions to generate a custom module
                 </p>
               </div>
             </Card>
@@ -274,11 +333,7 @@ export function ConstitutionPanel() {
 
   // Workflow active - show workflow phases
   if (!workflow) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg border">
-        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <LoadingState />
   }
 
   const currentQuestionIndex = workflow.current_question
@@ -289,21 +344,20 @@ export function ConstitutionPanel() {
   if (status === 'collecting') {
     const allQuestionsAnswered = currentQuestionIndex >= questions.length
     const currentQ = questions[currentQuestionIndex]
+    const currentSelections = currentQ ? selectedOptions[currentQ.key] ?? [] : []
+    const currentNotes = currentQ ? customNotes[currentQ.key] ?? '' : ''
+    const hasCurrentAnswer =
+      currentSelections.length > 0 || currentNotes.trim().length > 0
 
     return (
-      <div className="flex h-full flex-col rounded-lg border">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-blue-500" />
-            <span className="text-sm font-medium">Initialize Constitution</span>
-          </div>
-          <span className="text-xs text-muted-foreground">
-            {currentQuestionIndex} / {questions.length}
-          </span>
-        </div>
+      <div className="flex h-full flex-col">
+        <WorkflowHeader
+          title="Initialize Constitution"
+          subtitle={`${currentQuestionIndex} / ${questions.length} questions answered`}
+          icon={<FileText className="h-4 w-4 text-blue-500" />}
+        />
 
-        <ScrollArea className="flex-1 p-4">
+        <ScrollArea className="flex-1 p-4 pt-0">
           {/* CLAUDE.md Reference Option */}
           {claudeMdExists && (
             <Card className="mb-4 p-3 border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/20">
@@ -372,18 +426,39 @@ export function ConstitutionPanel() {
               <h3 className="text-sm font-medium mb-1">{currentQ.question}</h3>
               <p className="text-xs text-muted-foreground mb-3">{currentQ.hint}</p>
 
+              <div className="flex flex-wrap gap-2 mb-4">
+                {currentQ.options.map((option) => {
+                  const isSelected = currentSelections.includes(option)
+                  return (
+                    <Button
+                      key={option}
+                      type="button"
+                      size="sm"
+                      variant={isSelected ? 'default' : 'secondary'}
+                      className="h-7 px-2 text-xs"
+                      onClick={() => toggleOption(currentQ.key, option)}
+                    >
+                      {option}
+                    </Button>
+                  )
+                })}
+              </div>
+
               <Textarea
-                value={currentAnswer}
-                onChange={(e) => setCurrentAnswer(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type your answer..."
-                className="min-h-[100px] resize-none text-sm mb-3"
-                autoFocus
+                value={currentNotes}
+                onChange={(e) =>
+                  setCustomNotes((prev) => ({
+                    ...prev,
+                    [currentQ.key]: e.target.value,
+                  }))
+                }
+                placeholder="Optional notes (keep it short)"
+                className="min-h-[90px] resize-none text-sm mb-3"
               />
 
               <Button
-                onClick={handleAnswerSubmit}
-                disabled={!currentAnswer.trim()}
+                onClick={() => handleAnswerSubmit(currentQ.key)}
+                disabled={!hasCurrentAnswer}
                 className="w-full"
                 size="sm"
               >
@@ -416,16 +491,14 @@ export function ConstitutionPanel() {
   // Generating phase
   if (status === 'generating') {
     return (
-      <div className="flex h-full flex-col rounded-lg border">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
-            <span className="text-sm font-medium">Generating Constitution...</span>
-          </div>
-        </div>
+      <div className="flex h-full flex-col">
+        <WorkflowHeader
+          title="Generating Constitution"
+          subtitle="Claude is creating your rules"
+          icon={<RefreshCw className="h-4 w-4 animate-spin text-blue-500" />}
+        />
 
-        <ScrollArea className="flex-1 p-4">
+        <ScrollArea className="flex-1 p-4 pt-0">
           <Card className="p-4">
             <div className="prose prose-sm dark:prose-invert max-w-none">
               <ReactMarkdown>{output || 'Waiting for Claude...'}</ReactMarkdown>
@@ -443,21 +516,19 @@ export function ConstitutionPanel() {
   // Complete phase
   if (status === 'complete') {
     return (
-      <div className="flex h-full flex-col rounded-lg border">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <span className="text-sm font-medium">Constitution Generated</span>
-          </div>
-        </div>
+      <div className="flex h-full flex-col">
+        <WorkflowHeader
+          title="Constitution Generated"
+          subtitle="Saved to .rstn/constitutions/custom.md"
+          icon={<CheckCircle className="h-4 w-4 text-green-500" />}
+        />
 
-        <ScrollArea className="flex-1 p-4">
+        <ScrollArea className="flex-1 p-4 pt-0">
           <Card className="p-4 mb-3 border-green-500/50 bg-green-50 dark:bg-green-950/20">
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-500" />
               <span className="text-xs font-medium">
-                Constitution saved to <code className="text-xs">.rstn/constitution.md</code>
+                Constitution saved to <code className="text-xs">.rstn/constitutions/custom.md</code>
               </span>
             </div>
           </Card>
@@ -472,10 +543,6 @@ export function ConstitutionPanel() {
     )
   }
 
-  // Fallback (shouldn't happen)
-  return (
-    <div className="flex h-full items-center justify-center rounded-lg border">
-      <p className="text-sm text-muted-foreground">Unknown workflow status</p>
-    </div>
-  )
+  // Fallback
+  return <EmptyState icon={AlertCircle} title="Unknown State" description="The workflow entered an invalid state." />
 }

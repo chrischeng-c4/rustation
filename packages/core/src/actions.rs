@@ -253,7 +253,7 @@ pub enum Action {
     /// Append content to constitution output (streaming from Claude)
     AppendConstitutionOutput { content: String },
 
-    /// Save the generated constitution to .rstn/constitution.md
+    /// Save the generated constitution to .rstn/constitutions/custom.md
     SaveConstitution,
 
     /// Check if constitution file exists (async trigger)
@@ -280,7 +280,7 @@ pub enum Action {
     /// Set CLAUDE.md content (internal, after read)
     SetClaudeMdContent { content: Option<String> },
 
-    /// Import CLAUDE.md to .rstn/constitution.md (async)
+    /// Import CLAUDE.md to .rstn/constitutions/claude.md (async)
     ImportClaudeMd,
 
     /// Skip importing CLAUDE.md, show normal init flow

@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Plus, FileText, CheckCircle, Clock, XCircle, AlertCircle } from 'lucide-react'
+import { Plus, CheckCircle, Clock, XCircle, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { WorkflowHeader } from '@/components/shared/WorkflowHeader'
+import { LoadingState } from '@/components/shared/LoadingState'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { useAppState } from '@/hooks/useAppState'
 import { NewChangeDialog } from './NewChangeDialog'
 import { ChangeDetailView } from './ChangeDetailView'
@@ -12,10 +16,10 @@ import type { Change, ChangeStatus } from '@/types/state'
 /**
  * Status badge colors and labels
  */
-const STATUS_CONFIG: Record<ChangeStatus, { color: string; label: string; icon: typeof Clock }> = {
-  proposed: { color: 'bg-blue-500', label: 'Proposed', icon: FileText },
+const STATUS_CONFIG: Record<ChangeStatus, { color: string; label: string; icon: any }> = {
+  proposed: { color: 'bg-blue-500', label: 'Proposed', icon: GitBranch },
   planning: { color: 'bg-yellow-500', label: 'Planning', icon: Clock },
-  planned: { color: 'bg-purple-500', label: 'Planned', icon: FileText },
+  planned: { color: 'bg-purple-500', label: 'Planned', icon: GitBranch },
   implementing: { color: 'bg-orange-500', label: 'Implementing', icon: Clock },
   testing: { color: 'bg-cyan-500', label: 'Testing', icon: Clock },
   done: { color: 'bg-green-500', label: 'Done', icon: CheckCircle },
@@ -68,48 +72,44 @@ export function ChangeManagementPanel() {
       <Card
         key={change.id}
         className={`cursor-pointer transition-colors hover:bg-accent ${
-          isSelected ? 'border-primary bg-accent' : ''
+          isSelected ? 'border-primary bg-accent shadow-sm' : ''
         }`}
         onClick={() => handleSelectChange(change.id)}
       >
         <CardHeader className="p-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium">{change.name}</CardTitle>
-            <Badge variant="secondary" className={`${config.color} text-white`}>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-sm font-medium truncate">{change.name}</CardTitle>
+            <Badge variant="secondary" className={`${config.color} text-white shrink-0 h-5 px-1.5`}>
               <Icon className="mr-1 h-3 w-3" />
               {config.label}
             </Badge>
           </div>
-          <CardDescription className="line-clamp-2 text-xs">{change.intent}</CardDescription>
+          <CardDescription className="line-clamp-2 text-[10px] leading-tight mt-1">{change.intent}</CardDescription>
         </CardHeader>
       </Card>
     )
   }
 
-  // Empty state - show centered card like other panels
+  // Empty state
   if (!isLoading && changes.length === 0) {
     return (
-      <div className="flex h-full flex-col rounded-lg border">
-        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-500" />
-            <span className="text-sm font-medium">No Changes</span>
-          </div>
-        </div>
-        <div className="flex flex-1 items-center justify-center p-4">
-          <div className="max-w-md space-y-4">
-            <Card className="p-6 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
-              <h3 className="text-lg font-medium mb-2">Start Change Management</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Create changes to manage features with proposal and plan generation powered by Claude.
-              </p>
-
-              <Button className="w-full" onClick={() => setIsDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create First Change
-              </Button>
-            </Card>
-          </div>
+      <div className="flex h-full flex-col">
+        <PageHeader
+          title="Change Management"
+          description="Manage features with proposal and plan generation"
+          icon={<GitBranch className="h-5 w-5 text-blue-500" />}
+        />
+        <div className="flex-1 px-4 pb-4">
+          <EmptyState
+            icon={GitBranch}
+            title="Start Change Management"
+            description="Create changes to manage features with AI-powered proposals and plans."
+            action={{
+              label: "Create First Change",
+              onClick: () => setIsDialogOpen(true),
+              icon: Plus
+            }}
+          />
         </div>
 
         <NewChangeDialog
@@ -122,39 +122,49 @@ export function ChangeManagementPanel() {
   }
 
   return (
-    <div className="flex h-full gap-4">
-      {/* Change List (Left) */}
-      <div className="w-60 flex-shrink-0">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Changes</h2>
-          <Button size="sm" onClick={() => setIsDialogOpen(true)}>
-            <Plus className="mr-1 h-4 w-4" />
-            New
-          </Button>
+    <div className="flex h-full flex-col">
+      <WorkflowHeader
+        title="Change Management"
+        subtitle={`${changes.length} active changes in current worktree`}
+        icon={<GitBranch className="h-4 w-4 text-blue-500" />}
+      >
+        <Button size="sm" onClick={() => setIsDialogOpen(true)} className="h-8 gap-1">
+          <Plus className="h-3.5 w-3.5" />
+          New Change
+        </Button>
+      </WorkflowHeader>
+
+      <div className="flex flex-1 gap-4 overflow-hidden px-4 pb-4 pt-4">
+        {/* Change List (Left) */}
+        <div className="w-64 flex-shrink-0 flex flex-col border rounded-lg bg-muted/10">
+          <div className="p-3 border-b bg-muted/30">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Active Changes</h3>
+          </div>
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <LoadingState message="" />
+            </div>
+          ) : (
+            <ScrollArea className="flex-1">
+              <div className="p-2 space-y-2">
+                {changes.map(renderChangeCard)}
+              </div>
+            </ScrollArea>
+          )}
         </div>
 
-        {isLoading ? (
-          <div className="flex h-32 items-center justify-center text-muted-foreground">
-            Loading changes...
-          </div>
-        ) : (
-          <ScrollArea className="h-[calc(100vh-200px)]">
-            <div className="space-y-2 pr-2">
-              {changes.map(renderChangeCard)}
-            </div>
-          </ScrollArea>
-        )}
-      </div>
-
-      {/* Change Detail (Right) */}
-      <div className="flex-1">
-        {selectedChange ? (
-          <ChangeDetailView change={selectedChange} />
-        ) : (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            Select a change to view details
-          </div>
-        )}
+        {/* Change Detail (Right) */}
+        <div className="flex-1 border rounded-lg overflow-hidden flex flex-col bg-background">
+          {selectedChange ? (
+            <ChangeDetailView change={selectedChange} />
+          ) : (
+            <EmptyState
+              icon={GitBranch}
+              title="No Change Selected"
+              description="Select a change from the list on the left to view its details, proposal, and plan."
+            />
+          )}
+        </div>
       </div>
 
       {/* New Change Dialog */}

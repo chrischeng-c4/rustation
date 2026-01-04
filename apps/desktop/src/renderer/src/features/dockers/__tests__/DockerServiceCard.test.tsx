@@ -10,6 +10,7 @@ const mockService: DockerService = {
   status: 'running',
   port: 5432,
   service_type: 'Database',
+  is_rstn_managed: true,
 }
 
 describe('DockerServiceCard', () => {

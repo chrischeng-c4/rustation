@@ -4,16 +4,21 @@ import {
   MessageSquare,
   CheckCircle,
   XCircle,
-  AlertCircle,
   ChevronRight,
   Plus,
   RefreshCw,
+  ClipboardCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { WorkflowHeader } from '@/components/shared/WorkflowHeader'
+import { LoadingState } from '@/components/shared/LoadingState'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { useAppState } from '@/hooks/useAppState'
 import ReactMarkdown from 'react-markdown'
 import type {
@@ -124,38 +129,35 @@ function ContentView({ session, onSectionClick }: ContentViewProps) {
   return (
     <div className="flex h-full flex-col">
       {/* Content Header */}
-      <div className="border-b bg-muted/40 px-4 py-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            <span className="text-sm font-medium">
-              {CONTENT_TYPE_LABELS[session.content.content_type]}
-            </span>
-            {session.iteration > 1 && (
-              <Badge variant="outline" className="text-xs">
-                Iteration {session.iteration}
-              </Badge>
-            )}
-          </div>
-          <Badge className={STATUS_CONFIG[session.status].bgClass}>
-            <span className={STATUS_CONFIG[session.status].textClass}>
-              {STATUS_CONFIG[session.status].label}
-            </span>
-          </Badge>
+      <div className="border-b bg-muted/40 px-4 py-2 flex items-center justify-between h-10 shrink-0">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {CONTENT_TYPE_LABELS[session.content.content_type]}
+          </span>
+          {session.iteration > 1 && (
+            <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-muted/50 border-none">
+              Iteration {session.iteration}
+            </Badge>
+          )}
         </div>
+        <Badge variant="secondary" className={`${STATUS_CONFIG[session.status].bgClass} border-none h-5 px-1.5`}>
+          <span className={`${STATUS_CONFIG[session.status].textClass} text-[10px]`}>
+            {STATUS_CONFIG[session.status].label}
+          </span>
+        </Badge>
       </div>
 
       {/* Section Markers */}
       {sections.length > 0 && (
-        <div className="border-b bg-muted/20 px-4 py-2">
-          <div className="text-xs font-medium text-muted-foreground mb-1">Sections:</div>
+        <div className="border-b bg-muted/20 px-4 py-1.5 shrink-0">
           <div className="flex flex-wrap gap-1">
             {sections.map((section) => (
               <Button
                 key={section.id}
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-xs"
+                className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
                 onClick={() => onSectionClick(section.id)}
               >
                 {section.level === 1 ? '# ' : '## '}
@@ -167,41 +169,43 @@ function ContentView({ session, onSectionClick }: ContentViewProps) {
       )}
 
       {/* Content Body */}
-      <ScrollArea className="flex-1 p-4">
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          <ReactMarkdown>{session.content.content}</ReactMarkdown>
-        </div>
+      <ScrollArea className="flex-1">
+        <div className="p-6">
+          <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base">
+            <ReactMarkdown>{session.content.content}</ReactMarkdown>
+          </div>
 
-        {/* File Changes */}
-        {session.content.file_changes.length > 0 && (
-          <Card className="mt-4">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">File Changes</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {session.content.file_changes.map((change, idx) => (
-                <div key={idx} className="flex items-start gap-2 text-xs">
-                  <Badge
-                    variant={
-                      change.action === 'create'
-                        ? 'default'
-                        : change.action === 'modify'
-                          ? 'secondary'
-                          : 'destructive'
-                    }
-                    className="mt-0.5 h-5"
-                  >
-                    {change.action}
-                  </Badge>
-                  <div className="flex-1">
-                    <code className="text-xs">{change.path}</code>
-                    <p className="text-muted-foreground">{change.summary}</p>
+          {/* File Changes */}
+          {session.content.file_changes.length > 0 && (
+            <div className="mt-8 border rounded-lg overflow-hidden bg-muted/5">
+              <div className="bg-muted/30 px-4 py-2 border-b">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">File Changes</h4>
+              </div>
+              <div className="p-4 space-y-3">
+                {session.content.file_changes.map((change, idx) => (
+                  <div key={idx} className="flex items-start gap-3 text-xs">
+                    <Badge
+                      variant={
+                        change.action === 'create'
+                          ? 'default'
+                          : change.action === 'modify'
+                            ? 'secondary'
+                            : 'destructive'
+                      }
+                      className="mt-0.5 h-5 px-1.5 text-[10px]"
+                    >
+                      {change.action}
+                    </Badge>
+                    <div className="flex-1">
+                      <code className="text-[11px] font-mono bg-muted px-1 rounded">{change.path}</code>
+                      <p className="text-muted-foreground mt-1 leading-relaxed">{change.summary}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </ScrollArea>
     </div>
   )
@@ -228,44 +232,44 @@ function CommentsSidebar({ session, onAddComment, onResolveComment }: CommentsSi
   const resolvedComments = session.comments.filter((c) => c.resolved)
 
   return (
-    <div className="flex h-full w-80 flex-col border-l">
+    <div className="flex h-full w-80 flex-col border-l bg-muted/5">
       {/* Sidebar Header */}
-      <div className="border-b bg-muted/40 px-4 py-2">
+      <div className="border-b bg-muted/40 px-4 py-2 flex items-center justify-between h-10 shrink-0">
         <div className="flex items-center gap-2">
-          <MessageSquare className="h-4 w-4" />
-          <span className="text-sm font-medium">Comments</span>
-          <Badge variant="secondary" className="ml-auto">
-            {unresolvedComments.length}
-          </Badge>
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Comments</span>
         </div>
+        <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+          {unresolvedComments.length} active
+        </Badge>
       </div>
 
       {/* Comments List */}
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-3">
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-4">
           {/* Unresolved Comments */}
           {unresolvedComments.length > 0 && (
-            <div>
-              <div className="text-xs font-medium text-muted-foreground mb-2">Active</div>
+            <div className="space-y-3">
               {unresolvedComments.map((comment) => (
-                <Card key={comment.id} className="mb-2 p-3">
+                <Card key={comment.id} className="shadow-none border-none bg-background p-3 ring-1 ring-border">
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-[10px] h-5 px-1 bg-muted/50 border-none">
                       {getTargetDisplay(comment.target)}
                     </Badge>
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0"
+                      size="icon"
+                      className="h-5 w-5 hover:bg-green-500/10 hover:text-green-600"
                       onClick={() => onResolveComment(comment.id)}
+                      title="Resolve comment"
                     >
-                      <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                      <CheckCircle className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                  <p className="text-xs text-foreground whitespace-pre-wrap">{comment.content}</p>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {comment.author === 'user' ? 'You' : 'System'} •{' '}
-                    {new Date(comment.created_at).toLocaleTimeString()}
+                  <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">{comment.content}</p>
+                  <div className="mt-3 pt-2 border-t border-muted/50 text-[10px] text-muted-foreground flex justify-between">
+                    <span>{comment.author === 'user' ? 'You' : 'System'}</span>
+                    <span>{new Date(comment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                 </Card>
               ))}
@@ -274,42 +278,41 @@ function CommentsSidebar({ session, onAddComment, onResolveComment }: CommentsSi
 
           {/* Resolved Comments */}
           {resolvedComments.length > 0 && (
-            <div>
-              <div className="text-xs font-medium text-muted-foreground mb-2">Resolved</div>
+            <div className="space-y-2 opacity-60">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 px-1">Resolved</div>
               {resolvedComments.map((comment) => (
-                <Card key={comment.id} className="mb-2 p-3 opacity-60">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <Badge variant="outline" className="text-xs">
+                <Card key={comment.id} className="shadow-none border-none bg-muted/20 p-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="outline" className="text-[9px] h-4 px-1 bg-transparent border-muted-foreground/30 text-muted-foreground">
                       {getTargetDisplay(comment.target)}
                     </Badge>
-                    <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                    <CheckCircle className="h-3 w-3 text-muted-foreground" />
                   </div>
-                  <p className="text-xs text-foreground whitespace-pre-wrap">{comment.content}</p>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {comment.author === 'user' ? 'You' : 'System'} •{' '}
-                    {new Date(comment.created_at).toLocaleTimeString()}
-                  </div>
+                  <p className="text-[11px] text-muted-foreground line-clamp-2 italic">{comment.content}</p>
                 </Card>
               ))}
             </div>
           )}
 
           {session.comments.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <MessageSquare className="h-8 w-8 text-muted-foreground mb-2" />
-              <p className="text-xs text-muted-foreground">No comments yet</p>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+                <MessageSquare className="h-6 w-6 text-muted-foreground/50" />
+              </div>
+              <p className="text-xs font-medium text-muted-foreground">No feedback yet</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-1">Add comments to specific sections or the entire document.</p>
             </div>
           )}
         </div>
       </ScrollArea>
 
       {/* Add Comment Form */}
-      <div className="border-t p-4 space-y-2">
+      <div className="border-t bg-background p-4 space-y-3 shrink-0">
         <Textarea
           value={newCommentContent}
           onChange={(e) => setNewCommentContent(e.target.value)}
-          placeholder="Add a comment..."
-          className="min-h-[80px] resize-none text-xs"
+          placeholder="Add your feedback..."
+          className="min-h-[80px] resize-none text-xs border-muted focus-visible:ring-primary/20"
         />
         <div className="flex items-center gap-2">
           <select
@@ -324,7 +327,7 @@ function CommentsSidebar({ session, onAddComment, onResolveComment }: CommentsSi
                 setNewCommentTarget({ type: 'file', path: '' })
               }
             }}
-            className="flex h-8 rounded-md border border-input bg-background px-2 py-1 text-xs"
+            className="flex h-8 rounded-md border border-input bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary/20"
           >
             <option value="document">General</option>
             <option value="section">Section</option>
@@ -334,10 +337,10 @@ function CommentsSidebar({ session, onAddComment, onResolveComment }: CommentsSi
             size="sm"
             onClick={handleAddComment}
             disabled={!newCommentContent.trim()}
-            className="flex-1"
+            className="flex-1 h-8"
           >
-            <Plus className="mr-1 h-3 w-3" />
-            Add
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Comment
           </Button>
         </div>
       </div>
@@ -358,36 +361,36 @@ function ActionBar({ session, onApprove, onRequestChanges, onReject }: ActionBar
   const canReject = session.status === 'reviewing'
 
   return (
-    <div className="border-t bg-muted/20 px-4 py-3">
-      <div className="flex items-center gap-2">
+    <div className="border-t bg-background px-6 py-4 shrink-0">
+      <div className="flex items-center gap-3">
         <Button
           variant="default"
           size="sm"
           onClick={onApprove}
           disabled={!canApprove}
-          className="bg-green-600 hover:bg-green-700"
+          className="bg-green-600 hover:bg-green-700 h-9 px-4 gap-2"
         >
-          <CheckCircle className="mr-1 h-4 w-4" />
-          Approve
+          <CheckCircle className="h-4 w-4" />
+          Approve & Proceed
         </Button>
         <Button
           variant="outline"
           size="sm"
           onClick={onRequestChanges}
           disabled={!canRequestChanges}
-          className="border-yellow-500 text-yellow-700 dark:text-yellow-300"
+          className="border-yellow-500/50 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-500/5 h-9 px-4 gap-2"
         >
-          <AlertCircle className="mr-1 h-4 w-4" />
+          <RefreshCw className="h-4 w-4" />
           Request Changes
         </Button>
         <Button
-          variant="destructive"
+          variant="ghost"
           size="sm"
           onClick={onReject}
           disabled={!canReject}
-          className="ml-auto"
+          className="ml-auto text-muted-foreground hover:text-destructive hover:bg-destructive/5 h-9 px-4 gap-2"
         >
-          <XCircle className="mr-1 h-4 w-4" />
+          <XCircle className="h-4 w-4" />
           Reject
         </Button>
       </div>
@@ -493,21 +496,17 @@ export function ReviewPanel() {
 
   // Loading state
   if (isLoading || reviewGate?.is_loading) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg border">
-        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-sm text-muted-foreground">Loading review sessions...</span>
-      </div>
-    )
+    return <LoadingState message="Loading review sessions..." />
   }
 
   // Error state
   if (reviewGate?.error) {
     return (
-      <div className="flex h-full flex-col items-center justify-center rounded-lg border p-8">
-        <XCircle className="h-12 w-12 text-red-500 mb-4" />
-        <p className="text-sm font-medium">Failed to load review sessions</p>
-        <p className="text-xs text-muted-foreground mt-1">{reviewGate.error}</p>
+      <div className="flex h-full flex-col">
+        <PageHeader title="Review Error" icon={<XCircle className="h-5 w-5 text-red-500" />} />
+        <div className="px-4">
+          <ErrorBanner error={reviewGate.error} />
+        </div>
       </div>
     )
   }
@@ -515,12 +514,15 @@ export function ReviewPanel() {
   // No sessions state
   if (allSessions.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center rounded-lg border p-8">
-        <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-        <p className="text-sm font-medium">No review sessions</p>
-        <p className="text-xs text-muted-foreground mt-1 text-center">
-          Review sessions will appear here when Claude generates artifacts that require review.
-        </p>
+      <div className="flex h-full flex-col">
+        <PageHeader title="ReviewGate" description="Human-in-the-loop review mechanism" icon={<ClipboardCheck className="h-5 w-5 text-blue-500" />} />
+        <div className="flex-1 px-4 pb-4">
+          <EmptyState
+            icon={MessageSquare}
+            title="No Review Sessions"
+            description="Review sessions will appear here when Claude generates artifacts that require your approval."
+          />
+        </div>
       </div>
     )
   }
@@ -528,55 +530,48 @@ export function ReviewPanel() {
   // Multiple sessions - show session selector
   if (allSessions.length > 1 && !activeSession) {
     return (
-      <div className="flex h-full flex-col rounded-lg border">
-        <div className="border-b bg-muted/40 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" />
-            <span className="text-sm font-medium">Review Sessions</span>
-            <Badge variant="secondary" className="ml-auto">
-              {allSessions.length}
-            </Badge>
-          </div>
-        </div>
+      <div className="flex h-full flex-col">
+        <PageHeader
+          title="Review Sessions"
+          description={`${allSessions.length} sessions available for review`}
+          icon={<ClipboardCheck className="h-5 w-5 text-blue-500" />}
+        />
 
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-2">
+        <ScrollArea className="flex-1 px-4 pb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {allSessions.map((session) => (
               <Card
                 key={session.id}
-                className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+                className="cursor-pointer hover:border-primary/50 transition-colors shadow-none bg-muted/10"
                 onClick={() => handleSessionSelect(session.id)}
               >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    <span className="text-sm font-medium">
-                      {CONTENT_TYPE_LABELS[session.content.content_type]}
-                    </span>
+                <CardHeader className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <CardTitle className="text-sm font-semibold">
+                        {CONTENT_TYPE_LABELS[session.content.content_type]}
+                      </CardTitle>
+                    </div>
+                    <Badge className={`${STATUS_CONFIG[session.status].bgClass} border-none h-5 px-1.5 text-[10px]`}>
+                      <span className={STATUS_CONFIG[session.status].textClass}>
+                        {STATUS_CONFIG[session.status].label}
+                      </span>
+                    </Badge>
                   </div>
-                  <Badge className={STATUS_CONFIG[session.status].bgClass}>
-                    <span className={STATUS_CONFIG[session.status].textClass}>
-                      {STATUS_CONFIG[session.status].label}
-                    </span>
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{new Date(session.created_at).toLocaleString()}</span>
-                  {session.iteration > 1 && (
-                    <>
-                      <span>•</span>
-                      <span>Iteration {session.iteration}</span>
-                    </>
-                  )}
-                  {session.comments.length > 0 && (
-                    <>
-                      <span>•</span>
-                      <MessageSquare className="h-3 w-3 inline" />
-                      <span>{session.comments.filter((c) => !c.resolved).length}</span>
-                    </>
-                  )}
-                </div>
-                <ChevronRight className="h-4 w-4 absolute top-4 right-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent className="p-4 pt-0">
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>{new Date(session.created_at).toLocaleDateString()} {new Date(session.created_at).toLocaleTimeString()}</span>
+                    <div className="flex items-center gap-3">
+                      {session.iteration > 1 && <span>Iter {session.iteration}</span>}
+                      <span className="flex items-center gap-1">
+                        <MessageSquare className="h-3 w-3" />
+                        {session.comments.filter((c) => !c.resolved).length}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
               </Card>
             ))}
           </div>
@@ -588,43 +583,48 @@ export function ReviewPanel() {
   // Active session view
   if (!activeSession) {
     return (
-      <div className="flex h-full items-center justify-center rounded-lg border">
-        <p className="text-sm text-muted-foreground">No active review session</p>
+      <div className="flex h-full flex-col">
+        <PageHeader title="ReviewGate" icon={<ClipboardCheck className="h-5 w-5 text-blue-500" />} />
+        <div className="flex-1 px-4 pb-4">
+          <EmptyState icon={MessageSquare} title="No Active Session" description="Please select a session to begin review." />
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex h-full flex-col rounded-lg border">
-      {/* Session selector (if multiple sessions exist) */}
-      {allSessions.length > 1 && (
-        <div className="border-b bg-muted/40 px-4 py-2">
+    <div className="flex h-full flex-col">
+      <WorkflowHeader
+        title={`${CONTENT_TYPE_LABELS[activeSession.content.content_type]} Review`}
+        subtitle={`Iteration ${activeSession.iteration} • ${new Date(activeSession.created_at).toLocaleString()}`}
+        icon={<ClipboardCheck className="h-4 w-4 text-blue-500" />}
+      >
+        {allSessions.length > 1 && (
           <select
             value={activeSession.id}
             onChange={(e) => handleSessionSelect(e.target.value)}
-            className="w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            className="h-7 rounded-md border border-input bg-background px-2 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/20"
           >
             {allSessions.map((session) => (
               <option key={session.id} value={session.id}>
-                {CONTENT_TYPE_LABELS[session.content.content_type]} -{' '}
-                {new Date(session.created_at).toLocaleString()} -{' '}
-                {STATUS_CONFIG[session.status].label}
+                {CONTENT_TYPE_LABELS[session.content.content_type]} - Iter {session.iteration}
               </option>
             ))}
           </select>
-        </div>
-      )}
+        )}
+      </WorkflowHeader>
 
-      {/* Two-column layout: Content + Comments */}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1">
-          <ContentView session={activeSession} onSectionClick={handleSectionClick} />
+      <div className="flex-1 flex overflow-hidden px-4 pb-4 pt-4">
+        <div className="flex-1 flex border rounded-lg overflow-hidden bg-background">
+          <div className="flex-1 min-w-0">
+            <ContentView session={activeSession} onSectionClick={handleSectionClick} />
+          </div>
+          <CommentsSidebar
+            session={activeSession}
+            onAddComment={handleAddComment}
+            onResolveComment={handleResolveComment}
+          />
         </div>
-        <CommentsSidebar
-          session={activeSession}
-          onAddComment={handleAddComment}
-          onResolveComment={handleResolveComment}
-        />
       </div>
 
       {/* Action Bar */}

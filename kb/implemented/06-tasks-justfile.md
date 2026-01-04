@@ -46,6 +46,18 @@ The Tasks tab provides a GUI for running [just](https://github.com/casey/just) c
 - **Clear output** between runs
 - **Copy to clipboard**
 
+### Task Execution State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Running: RunJustCommand
+    Running --> Success: Exit code 0
+    Running --> Error: Exit code != 0
+    Success --> Idle: ClearTaskOutput / RunJustCommand
+    Error --> Idle: ClearTaskOutput / RunJustCommand
+```
+
 ---
 
 ## Justfile Parsing

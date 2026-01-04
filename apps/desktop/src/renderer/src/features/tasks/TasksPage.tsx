@@ -1,8 +1,11 @@
 import { useEffect, useCallback } from 'react'
-import { RefreshCw, AlertCircle } from 'lucide-react'
+import { RefreshCw, ListTodo } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { LogPanel } from '@/components/LogPanel'
+import { LogPanel } from '@/components/shared/LogPanel'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { TaskCard } from './TaskCard'
 import { useTasksState } from '@/hooks/useAppState'
 
@@ -53,35 +56,29 @@ export function TasksPage() {
   // No project path means no active project
   if (!projectPath) {
     return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
-        No project selected
-      </div>
+      <EmptyState
+        icon={ListTodo}
+        title="No Project Selected"
+        description="Please select an open project from the tabs above to manage its tasks."
+      />
     )
   }
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Tasks</h2>
-          <p className="mt-1 text-muted-foreground">Run justfile commands</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Tasks"
+        description="Run justfile commands for the current worktree"
+      >
+        <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </PageHeader>
 
       {/* Error banner */}
-      {error && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-          <AlertCircle className="h-4 w-4" />
-          {error}
-        </div>
-      )}
+      {error && <ErrorBanner error={error} />}
 
       {/* Two-column layout */}
       <div className="flex flex-1 gap-4 overflow-hidden">
@@ -102,13 +99,16 @@ export function TasksPage() {
                 />
               ))}
               {commands.length === 0 && !isRefreshing && (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <p className="text-muted-foreground">No justfile found in project</p>
-                  <Button variant="outline" className="mt-4" onClick={handleRefresh}>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Scan
-                  </Button>
-                </div>
+                <EmptyState
+                  icon={RefreshCw}
+                  title="No Commands"
+                  description="No justfile found in project root."
+                  action={{
+                    label: "Scan Again",
+                    onClick: handleRefresh,
+                    icon: RefreshCw
+                  }}
+                />
               )}
             </div>
           </ScrollArea>

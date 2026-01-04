@@ -39,15 +39,79 @@ Key insight: Constitution effectiveness depends on **structure and patterns**, n
 
 ### What NOT to Do
 
-- ❌ Q&A workflow for custom constitution (deprecated)
+- ❌ Free-form Q&A workflow for custom constitution (deprecated)
 - ❌ Free-form user input for rules
 - ❌ Complex customization UI
+
+## Guided Constitution Setup (Legacy Q&A)
+
+**Purpose**: Provide a low-effort guided setup that minimizes typing while still capturing project-specific constraints.
+
+**Flow**:
+1. User selects options for each question (multi-select).
+2. Optional short notes per question (free text, minimized).
+3. Answers are compiled into a structured summary.
+4. Claude generates a **modular** custom file at `.rstn/constitutions/custom.md`.
+
+**Questions**:
+- Technology Stack
+- Security Requirements
+- Code Quality Standards
+- Architectural Constraints
+
+**Rules**:
+- Always write to modular structure (never overwrite other files).
+- Use a single custom module (`custom.md`) for guided additions.
+- If `CLAUDE.md` is referenced, include it as context only.
+
+**Example Output (Module)**:
+```pseudo-code
+---
+name: "Custom Rules"
+type: custom
+priority: 30
+required: false
+---
+
+# Custom Rules
+
+## Technology Stack
+- Rust
+- TypeScript
+
+## Security Requirements
+- No secrets in repo
+- Validate all inputs
+```
+
+## Legacy Q&A Workflow State Machine (Current Implementation)
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+
+    Idle --> Collecting: StartConstitutionWorkflow
+    Collecting --> Collecting: AnswerConstitutionQuestion
+    Collecting --> Generating: GenerateConstitution
+    Generating --> Generating: AppendConstitutionOutput
+    Generating --> Complete: SaveConstitution
+
+    Complete --> Collecting: StartConstitutionWorkflow (regenerate)
+
+    Collecting --> Idle: ClearConstitutionWorkflow
+    Generating --> Idle: ClearConstitutionWorkflow
+    Complete --> Idle: ClearConstitutionWorkflow
+
+    Idle --> Complete: ApplyDefaultConstitution (template)
+```
+
+**Note**: `constitution_exists` is driven by file checks and is not part of the workflow state itself.
 
 ---
 
 ## 2. File Structure
 
-### Directory Layout
+### Directory Layout (Default and Required)
 
 ```
 .rstn/
@@ -72,12 +136,19 @@ Key insight: Constitution effectiveness depends on **structure and patterns**, n
 | `language` | Language-specific conventions | Loaded when file extension matches | Rust error handling, TypeScript typing |
 | `component` | Component/package-specific | Loaded when working in component directory | `packages/core/**` rules, `apps/desktop/**` rules |
 
+### Default Policy (Single-Project and Monorepo)
+
+**Policy**: Always use modular constitutions. Multi-file structure is the default for **all** projects, not just monorepos.
+
+**Detection**: Monorepo detection (if used) only pre-selects recommended modules. It does **not** change the file structure.
+
 ### Migration Path
 
 **Backward Compatibility**: If `.rstn/constitutions/` does not exist, fall back to `.rstn/constitution.md` (legacy behavior).
 
 **Migration Strategy**:
 1. Initialize with default templates using `rstn constitution init`
+2. Importing `CLAUDE.md` creates `.rstn/constitutions/claude.md` (custom module)
 2. Users can gradually split existing `constitution.md` into modular files
 3. System auto-detects which mode to use (legacy vs modular)
 

@@ -15,7 +15,7 @@ test.describe('Docker Management', () => {
     await navigateToDocker(page)
 
     // Wait for either Docker content or "Docker Not Available" message
-    const dockerHeading = page.locator('h2', { hasText: 'Dockers' })
+    const dockerHeading = page.getByRole('heading', { name: 'Dockers' })
     const notAvailable = page.getByText('Docker Not Available')
 
     await Promise.race([
@@ -36,7 +36,7 @@ test.describe('Docker Management', () => {
     await navigateToDocker(page)
 
     // Should show either Docker heading or not available message
-    const dockerHeading = page.locator('h2', { hasText: 'Dockers' })
+    const dockerHeading = page.getByRole('heading', { name: 'Dockers' })
     const notAvailable = page.getByText('Docker Not Available')
 
     const hasDocker = await dockerHeading.isVisible().catch(() => false)
@@ -143,7 +143,7 @@ test.describe('Docker Management', () => {
     await navigateToDocker(page)
 
     // Should show Docker page
-    const dockerHeading = page.locator('h2', { hasText: 'Dockers' })
+    const dockerHeading = page.getByRole('heading', { name: 'Dockers' })
     const notAvailable = page.getByText('Docker Not Available')
 
     const hasDocker = await dockerHeading.isVisible().catch(() => false)

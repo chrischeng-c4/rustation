@@ -43,6 +43,22 @@ pub struct TerminalState {
 }
 ```
 
+### Terminal Session State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Spawning: SpawnTerminal
+    Spawning --> Active: SetTerminalSession
+    Active --> Resizing: ResizeTerminal
+    Resizing --> Active: Resize complete
+    Active --> Active: WriteTerminal
+    Active --> Idle: KillTerminal / Session closed
+    Spawning --> Error: Spawn failure
+    Active --> Error: PTY error
+    Error --> Idle: KillTerminal / Retry
+```
+
 ## 5. Actions & API
 
 | Action | Payload | Description |

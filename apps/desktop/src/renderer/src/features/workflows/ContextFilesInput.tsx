@@ -13,7 +13,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { SourceCodeViewer } from '@/components/SourceCodeViewer'
+import { SourceCodeViewer } from '@/components/shared/SourceCodeViewer'
 import { useAppState } from '@/hooks/useAppState'
 
 interface ContextFilesInputProps {

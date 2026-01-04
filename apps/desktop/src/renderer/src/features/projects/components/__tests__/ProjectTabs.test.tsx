@@ -25,6 +25,11 @@ vi.mock('@/hooks/useAppState', () => ({
     activeWorktreeIndex: 0,
     worktree: null,
   }),
+  useNotificationsState: () => ({
+    notifications: [],
+    unreadCount: 0,
+    dispatch: mockDispatch,
+  }),
 }))
 
 describe('ProjectTabs', () => {
@@ -108,6 +113,11 @@ describe('ProjectTabs with projects', () => {
         worktrees: [{ id: 'wt1', branch: 'main', is_main: true, is_modified: false }],
         activeWorktreeIndex: 0,
         worktree: { id: 'wt1', branch: 'main', is_main: true, is_modified: false },
+      }),
+      useNotificationsState: () => ({
+        notifications: [],
+        unreadCount: 0,
+        dispatch: mockDispatch,
       }),
     }))
   })

@@ -11,6 +11,7 @@
 | Document | Description |
 |----------|-------------|
 | [00. Architecture](implemented/00-architecture.md) | Electron + React + napi-rs architecture |
+| [01. UI Components](architecture/01-ui-component-architecture.md) | Frontend component hierarchy & patterns |
 | [01. State-First](implemented/01-state-first.md) | Core principle: JSON-serializable state |
 | [02. State Topology](implemented/02-state-topology.md) | AppState tree structure |
 | [03. Persistence](implemented/03-persistence.md) | Save/load application state |
@@ -31,6 +32,16 @@
 | [01. MCP Integration](roadmap/01-mcp-integration.md) | Claude Code integration | Planned |
 | [02. Prompt Claude](roadmap/02-prompt-claude.md) | Conversation interface | Planned |
 | [03. Settings UI](roadmap/03-settings-ui.md) | Settings form | Partial |
+
+---
+
+## Experimental
+
+*Features in early prototyping phase*
+
+| Document | Description |
+|----------|-------------|
+| [A2UI Integration](experimental/a2ui.md) | Server-Driven UI via JSON |
 
 ---
 

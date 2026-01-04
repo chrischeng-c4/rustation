@@ -93,7 +93,7 @@ test.describe.skip('Constitution Workflow - Full Integration (LEGACY)', () => {
     expect(consoleErrors.filter((e) => !e.includes('Electron Security Warning'))).toHaveLength(0)
   })
 
-  test('should enable Next button when answer is typed', async ({ page }) => {
+  test('should enable Next button when options selected', async ({ page }) => {
     const playButton = page.getByTestId('task-card-constitution-init').locator('button')
     await playButton.click()
     await page.waitForTimeout(1000)
@@ -105,17 +105,17 @@ test.describe.skip('Constitution Workflow - Full Integration (LEGACY)', () => {
       await page.waitForTimeout(500)
     }
 
-    const textarea = page.getByPlaceholder('Type your answer...')
     const nextButton = page.getByRole('button', { name: /Next/i })
 
-    // Type answer
-    await textarea.fill('React + Rust + TypeScript')
+    // Select option
+    const rustOption = page.getByRole('button', { name: 'Rust' })
+    await rustOption.click()
 
     // Button should be enabled
     await expect(nextButton).toBeEnabled()
 
-    // Clear answer - button should disable
-    await textarea.clear()
+    // Deselect option - button should disable
+    await rustOption.click()
     await expect(nextButton).toBeDisabled()
   })
 
@@ -131,31 +131,30 @@ test.describe.skip('Constitution Workflow - Full Integration (LEGACY)', () => {
       await page.waitForTimeout(500)
     }
 
-    const textarea = page.getByPlaceholder('Type your answer...')
     const nextButton = page.getByRole('button', { name: /Next/i })
 
     // Question 1: Technology Stack
     await expect(page.getByText('0 / 4')).toBeVisible()
-    await textarea.fill('React + Rust')
+    await page.getByRole('button', { name: 'Rust' }).click()
     await nextButton.click()
     await page.waitForTimeout(300)
 
     // Question 2: Security
     await expect(page.getByText('1 / 4')).toBeVisible()
     await expect(page.getByRole('heading', { name: /security requirements/i })).toBeVisible()
-    await textarea.fill('JWT auth')
+    await page.getByRole('button', { name: 'No secrets in repo' }).click()
     await nextButton.click()
     await page.waitForTimeout(300)
 
     // Question 3: Code Quality
     await expect(page.getByText('2 / 4')).toBeVisible()
-    await textarea.fill('80% coverage')
+    await page.getByRole('button', { name: 'cargo test must pass' }).click()
     await nextButton.click()
     await page.waitForTimeout(300)
 
     // Question 4: Architecture
     await expect(page.getByText('3 / 4')).toBeVisible()
-    await textarea.fill('State-first')
+    await page.getByRole('button', { name: 'State-first (serializable state)' }).click()
     await nextButton.click()
     await page.waitForTimeout(500)
 
@@ -190,15 +189,14 @@ test.describe.skip('Constitution Workflow - Full Integration (LEGACY)', () => {
       await page.waitForTimeout(500)
     }
 
-    const textarea = page.getByPlaceholder('Type your answer...')
     const nextButton = page.getByRole('button', { name: /Next/i })
 
     // Answer 2 questions
-    await textarea.fill('React')
+    await page.getByRole('button', { name: 'Rust' }).click()
     await nextButton.click()
     await page.waitForTimeout(300)
 
-    await textarea.fill('JWT')
+    await page.getByRole('button', { name: 'No secrets in repo' }).click()
     await nextButton.click()
     await page.waitForTimeout(300)
 
@@ -222,14 +220,13 @@ test.describe.skip('Constitution Workflow - Full Integration (LEGACY)', () => {
     }
 
     // Answer 2 questions
-    const textarea = page.getByPlaceholder('Type your answer...')
     const nextButton = page.getByRole('button', { name: /Next/i })
 
-    await textarea.fill('React')
+    await page.getByRole('button', { name: 'Rust' }).click()
     await nextButton.click()
     await page.waitForTimeout(300)
 
-    await textarea.fill('JWT')
+    await page.getByRole('button', { name: 'No secrets in repo' }).click()
     await nextButton.click()
     await page.waitForTimeout(300)
 
@@ -273,15 +270,23 @@ test.describe.skip('Constitution Workflow - Full Integration (LEGACY)', () => {
       await page.waitForTimeout(500)
     }
 
-    const textarea = page.getByPlaceholder('Type your answer...')
     const nextButton = page.getByRole('button', { name: /Next/i })
 
-    const answers = ['React + Rust', 'JWT auth', '80% coverage', 'State-first']
-    for (const answer of answers) {
-      await textarea.fill(answer)
-      await nextButton.click()
-      await page.waitForTimeout(200)
-    }
+    await page.getByRole('button', { name: 'Rust' }).click()
+    await nextButton.click()
+    await page.waitForTimeout(200)
+
+    await page.getByRole('button', { name: 'No secrets in repo' }).click()
+    await nextButton.click()
+    await page.waitForTimeout(200)
+
+    await page.getByRole('button', { name: 'cargo test must pass' }).click()
+    await nextButton.click()
+    await page.waitForTimeout(200)
+
+    await page.getByRole('button', { name: 'State-first (serializable state)' }).click()
+    await nextButton.click()
+    await page.waitForTimeout(200)
 
     // Verify "All questions answered" message appears
     await expect(page.getByText(/All questions answered/i)).toBeVisible({ timeout: 5000 })
@@ -303,7 +308,7 @@ test.describe.skip('Constitution Workflow - Full Integration (LEGACY)', () => {
     console.log('Generate Constitution button verified - skipping actual generation (Claude CLI required)')
   })
 
-  test.skip('should create constitution.md file after generation', async ({ page }) => {
+  test.skip('should create custom.md file after generation', async ({ page }) => {
     // This requires Claude CLI to be installed
     // Skip in automated environments
 

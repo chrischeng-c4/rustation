@@ -1,9 +1,12 @@
 import { useEffect, useCallback, useState, useMemo } from 'react'
-import { RefreshCw, AlertCircle, ChevronDown, ChevronRight, Lock } from 'lucide-react'
+import { RefreshCw, AlertCircle, ChevronDown, ChevronRight, Lock, Container } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
-import { LogPanel } from '@/components/LogPanel'
+import { LogPanel } from '@/components/shared/LogPanel'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { LoadingState } from '@/components/shared/LoadingState'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { DockerServiceCard } from './DockerServiceCard'
 import { PortConflictDialog } from './PortConflictDialog'
 import { useDockersState } from '@/hooks/useAppState'
@@ -143,27 +146,22 @@ export function DockersPage() {
 
   // Initial loading state
   if (isStateLoading || dockerAvailable === null) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <LoadingState message="Checking Docker status..." />
   }
 
   // Docker not available state
   if (dockerAvailable === false) {
     return (
-      <div className="flex h-full flex-col items-center justify-center">
-        <AlertCircle className="h-12 w-12 text-muted-foreground" />
-        <h2 className="mt-4 text-xl font-semibold">Docker Not Available</h2>
-        <p className="mt-2 text-muted-foreground">
-          Please ensure Docker is installed and running.
-        </p>
-        <Button variant="outline" className="mt-4" onClick={handleRetry}>
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Retry
-        </Button>
-      </div>
+      <EmptyState
+        icon={AlertCircle}
+        title="Docker Not Available"
+        description="Please ensure Docker Desktop or Docker Engine is installed and running on your system."
+        action={{
+          label: "Retry Connection",
+          onClick: handleRetry,
+          icon: RefreshCw
+        }}
+      />
     )
   }
 
@@ -178,16 +176,15 @@ export function DockersPage() {
       />
 
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Dockers</h2>
-          <p className="mt-1 text-muted-foreground">Container management dashboard</p>
-        </div>
+      <PageHeader
+        title="Dockers"
+        description="Container management dashboard for shared services"
+      >
         <Button variant="outline" onClick={handleRefreshAll} disabled={isRefreshing}>
           <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
-      </div>
+      </PageHeader>
 
       {/* Two-column layout */}
       <div className="flex flex-1 gap-4 overflow-hidden">
@@ -248,13 +245,16 @@ export function DockersPage() {
                 )
               })}
               {serviceGroups.length === 0 && !isRefreshing && (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <p className="text-muted-foreground">No Docker services found</p>
-                  <Button variant="outline" className="mt-4" onClick={handleRefreshAll}>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Refresh
-                  </Button>
-                </div>
+                <EmptyState
+                  icon={Container}
+                  title="No Services Found"
+                  description="No Docker services were detected on your system."
+                  action={{
+                    label: "Refresh",
+                    onClick: handleRefreshAll,
+                    icon: RefreshCw
+                  }}
+                />
               )}
             </div>
           </ScrollArea>

@@ -90,8 +90,10 @@ rustation/
 │       │   ├── preload/     # IPC bridge
 │       │   └── renderer/    # React frontend
 │       │       ├── src/
-│       │       │   ├── components/  # shadcn/ui
-│       │       │   ├── features/    # Feature modules
+│       │       │   ├── components/  # Shared components
+│       │       │   │   ├── ui/      # shadcn/ui primitives
+│       │       │   │   └── shared/  # Cross-feature composites
+│       │       │   ├── features/    # Feature modules (Domain logic)
 │       │       │   ├── hooks/       # useAppState, etc.
 │       │       │   └── types/       # TypeScript types
 │       └── electron.vite.config.ts

@@ -35,7 +35,7 @@ describe('TasksPage', () => {
 
   it('shows no project message when no project selected', () => {
     render(<TasksPage />)
-    expect(screen.getByText('No project selected')).toBeInTheDocument()
+    expect(screen.getByText('No Project Selected')).toBeInTheDocument()
   })
 })
 

@@ -1,6 +1,15 @@
 import { test, expect } from './electron.fixture'
+import path from 'path'
+import { openProject } from './test-helpers'
 
 test.describe('Environment Management', () => {
+  test.beforeEach(async ({ page }) => {
+    // Use the actual rustation project
+    const testProjectPath = path.resolve(__dirname, '..')
+    await openProject(page, testProjectPath)
+    await page.waitForTimeout(1000)
+  })
+
   test('should navigate to Env page when clicking Env button', async ({ page }) => {
     // Wait for app to load
     await page.waitForSelector('[data-testid="project-tabs"]', { timeout: 10000 }).catch(() => {})
@@ -15,7 +24,7 @@ test.describe('Environment Management', () => {
       await envButton.click()
 
       // Should show Environment heading
-      await expect(page.locator('h2', { hasText: 'Environment' })).toBeVisible({ timeout: 5000 })
+      await expect(page.getByRole('heading', { name: 'Environment' })).toBeVisible({ timeout: 5000 })
     } else {
       // No project open - this is expected in clean state
       test.skip(true, 'No project open - Env button not visible')
@@ -37,7 +46,7 @@ test.describe('Environment Management', () => {
     await envButton.click()
 
     // Verify key UI elements
-    await expect(page.locator('h2', { hasText: 'Environment' })).toBeVisible({ timeout: 5000 })
+    await expect(page.getByRole('heading', { name: 'Environment' })).toBeVisible({ timeout: 5000 })
 
     // Should have Auto-Copy toggle button
     await expect(page.getByRole('button', { name: /Auto-Copy/i })).toBeVisible()

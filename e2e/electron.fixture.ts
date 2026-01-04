@@ -12,11 +12,18 @@ export const test = base.extend<{
 
     // Launch Electron app (headless mode - window won't show)
     const electronApp = await electron.launch({
-      args: [path.join(appPath, 'out/main/index.js')],
+      args: [
+        path.join(appPath, 'out/main/index.js'),
+        '--no-sandbox',
+        '--enable-logging',
+        '--v=1',
+      ],
       cwd: appPath,
       env: {
         ...process.env,
         NODE_ENV: 'test',
+        ELECTRON_ENABLE_LOGGING: '1',
+        ELECTRON_ENABLE_STACK_DUMPING: '1',
         // Enable headless mode (skips mainWindow.show())
         HEADLESS: 'true',
         // Skip auto-open of recent project for clean test environment

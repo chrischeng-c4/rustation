@@ -1,10 +1,10 @@
 import { FileText, Play, Check, X, Clock, Archive, RefreshCw, Rocket, ClipboardCheck, MessageSquare, ThumbsUp, ThumbsDown, ChevronDown, FileCode } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { WorkflowHeader } from '@/components/shared/WorkflowHeader'
 import { useAppState } from '@/hooks/useAppState'
 import { ContextFilesInput } from './ContextFilesInput'
 import type { Change, ReviewSession, ReviewStatus } from '@/types/state'
@@ -180,29 +180,21 @@ export function ChangeDetailView({ change }: ChangeDetailViewProps) {
   const isArchived = change.status === 'archived'
 
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between">
-          <div>
-            <CardTitle className="text-lg">{change.name}</CardTitle>
-            <CardDescription className="mt-1">{change.intent}</CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="capitalize">
-              {change.status}
-            </Badge>
-          </div>
-        </div>
+    <div className="h-full flex flex-col">
+      <WorkflowHeader
+        title={change.name}
+        subtitle={change.intent}
+        status={change.status}
+        statusColor={STATUS_CONFIG[change.status as ChangeStatus]?.color || "bg-gray-500"}
+      >
         {/* Review Status Badges */}
-        {(proposalReviewSession || planReviewSession) && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            <ReviewStatusBadge session={proposalReviewSession} type="proposal" />
-            <ReviewStatusBadge session={planReviewSession} type="plan" />
-          </div>
-        )}
-      </CardHeader>
+        <div className="flex flex-wrap gap-2">
+          {proposalReviewSession && <ReviewStatusBadge session={proposalReviewSession} type="proposal" />}
+          {planReviewSession && <ReviewStatusBadge session={planReviewSession} type="plan" />}
+        </div>
+      </WorkflowHeader>
 
-      <CardContent className="h-[calc(100%-100px)]">
+      <div className="flex-1 overflow-hidden p-4">
         {/* Context Files Section */}
         {worktree?.path && (
           <Collapsible className="mb-4">
@@ -413,7 +405,7 @@ export function ChangeDetailView({ change }: ChangeDetailViewProps) {
             </Button>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

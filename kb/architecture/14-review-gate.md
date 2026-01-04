@@ -254,6 +254,27 @@ Action::Reject {
 //   2. 通知 workflow 終止或回到上一步
 ```
 
+## Review Session State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Reviewing: StartReview / submit_for_review
+
+    Reviewing --> Iterating: SubmitReviewFeedback
+    Iterating --> Reviewing: UpdateReviewContent (iteration++)
+
+    Reviewing --> Approved: ApproveReview
+    Reviewing --> Rejected: RejectReview
+
+    Iterating --> Approved: ApproveReview
+    Iterating --> Rejected: RejectReview
+
+    Approved --> [*]
+    Rejected --> [*]
+```
+
+**Note**: `Pending` is reserved for externally created sessions; if used, it should transition to `Reviewing` via explicit status updates.
+
 ## State Integration
 
 ### 與 Workflow 的關係

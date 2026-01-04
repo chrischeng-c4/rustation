@@ -50,7 +50,7 @@ rstn Tabs:
 
 ### 2.1 Layer 1: Constitution (Governance)
 
-**Path**: `.rstn/constitution.md`
+**Path**: `.rstn/constitutions/*.md` (legacy: `.rstn/constitution.md`)
 
 **Purpose**: Immutable constraints that govern all AI-generated code.
 
@@ -134,8 +134,10 @@ Change Complete → AI extracts key decisions → Update Living Context
 
 **Change Status Lifecycle**:
 ```
-Proposed → Planned → Implementing → Testing → Done → Archived
+Proposed → Planning → Planned → Implementing → Testing → Done → Archived
 ```
+
+**Note**: `Planning` is a transient state for proposal/plan generation and can return to `Proposed` if only the proposal is completed.
 
 **Key Insight**: Changes are **deltas** (incremental). Background context lives in Layer 2.
 
@@ -149,7 +151,9 @@ Proposed → Planned → Implementing → Testing → Done → Archived
 stateDiagram-v2
     [*] --> Proposed: User creates new Change
 
-    Proposed --> Planned: AI generates plan.md
+    Proposed --> Planning: AI generates proposal/plan
+    Planning --> Proposed: Proposal complete
+    Planning --> Planned: Plan complete
     Proposed --> Cancelled: User cancels
 
     Planned --> Implementing: User approves plan
@@ -167,6 +171,7 @@ stateDiagram-v2
     Archived --> [*]
 
     note right of Proposed: proposal.md exists
+    note right of Planning: generating proposal/plan
     note right of Planned: plan.md generated
     note right of Implementing: Code changes in progress
     note right of Testing: Validation phase

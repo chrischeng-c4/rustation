@@ -18,7 +18,7 @@ export type FeatureTab = 'tasks' | 'dockers' | 'settings'
  * - dockers: Global scope
  * - env, agent_rules: Project scope
  */
-export type ActiveView = 'tasks' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal' | 'agent_rules' | 'workflows'
+export type ActiveView = 'tasks' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal' | 'agent_rules' | 'workflows' | 'a2ui'
 
 // ============================================================================
 // Docker State
@@ -188,7 +188,7 @@ export interface TasksState {
   error: string | null
   /** Constitution workflow state (CESDD Phase 1) */
   constitution_workflow: ConstitutionWorkflow | null
-  /** Whether .rstn/constitution.md exists (null = not checked yet) */
+  /** Whether a constitution exists (modular or legacy) */
   constitution_exists: boolean | null
   /** Constitution content (null = not read yet) */
   constitution_content: string | null

@@ -52,6 +52,20 @@ version: 1.0.0
 - `searchQuery`: string
 - `selectedIndex`: number
 
+### Command Palette State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Open: Cmd+K / Ctrl+K
+    Open --> Filtering: Type query
+    Filtering --> Open: Clear query
+    Open --> Executing: Select + Enter
+    Filtering --> Executing: Select + Enter
+    Executing --> Closed: Action dispatched
+    Open --> Closed: Esc / Backdrop
+```
+
 ### Data Sources
 - **Projects**: `appState.projects`
 - **Worktrees**: `appState.active_project.worktrees`

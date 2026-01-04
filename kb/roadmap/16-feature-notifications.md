@@ -52,6 +52,17 @@ pub struct Notification {
 }
 ```
 
+### Notification Lifecycle State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unread: AddNotification
+    Unread --> Read: MarkNotificationRead / MarkAllNotificationsRead
+    Unread --> Removed: DismissNotification / ClearNotifications
+    Read --> Removed: DismissNotification / ClearNotifications
+    Removed --> [*]
+```
+
 ## 5. Actions & API
 
 | Action | Payload | Description |

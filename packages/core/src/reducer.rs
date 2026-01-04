@@ -452,7 +452,7 @@ pub fn reduce(state: &mut AppState, action: Action) {
         }
 
         Action::ReadConstitution => {
-            // Async trigger - the async handler in lib.rs will read file and dispatch SetConstitutionContent
+            // Async trigger - the async handler in lib.rs will read modular/legacy files and dispatch SetConstitutionContent
         }
 
         Action::ReadClaudeMd => {
@@ -460,7 +460,7 @@ pub fn reduce(state: &mut AppState, action: Action) {
         }
 
         Action::ImportClaudeMd => {
-            // Async trigger - the async handler in lib.rs will copy CLAUDE.md to .rstn/constitution.md
+            // Async trigger - the async handler in lib.rs will copy CLAUDE.md to .rstn/constitutions/claude.md
         }
 
         Action::SetConstitutionContent { content } => {

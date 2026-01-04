@@ -8,8 +8,8 @@
 
 import { useState, useCallback } from 'react'
 import { X, Plus, FolderOpen, GitBranch, History, Container, FileCode, Camera, Bot } from 'lucide-react'
-import { Button } from './ui/button'
-import { useActiveProject, useActiveWorktree, useAppState } from '../hooks/useAppState'
+import { Button } from '@/components/ui/button'
+import { useActiveProject, useActiveWorktree, useAppState } from '@/hooks/useAppState'
 import { NotificationDrawer } from '@/features/notifications'
 import { cn } from '@/lib/utils'
 import {
@@ -19,7 +19,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from './ui/dropdown-menu'
+} from '@/components/ui/dropdown-menu'
 import { AddWorktreeDialog } from './AddWorktreeDialog'
 
 export function ProjectTabs() {
@@ -125,7 +125,7 @@ export function ProjectTabs() {
   }, [dispatch])
 
   return (
-    <div className="flex flex-col border-b bg-muted/30">
+    <div className="flex flex-col border-b bg-muted/30" data-testid="project-tabs">
       {/* Project Tabs (Top Row) - Global Features on Right */}
       <div className="flex items-center justify-between px-2 py-1 min-h-[40px]">
         {/* Left side: Project tabs */}

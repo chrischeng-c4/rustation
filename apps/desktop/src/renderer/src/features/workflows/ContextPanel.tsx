@@ -2,18 +2,22 @@ import { useCallback, useEffect } from 'react'
 import {
   FileText,
   RefreshCw,
-  CheckCircle,
-  AlertCircle,
-  Sparkles,
   Clock,
   Wand2,
   Loader2,
+  BookOpen,
+  Plus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { WorkflowHeader } from '@/components/shared/WorkflowHeader'
+import { LoadingState } from '@/components/shared/LoadingState'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { useAppState } from '@/hooks/useAppState'
 import ReactMarkdown from 'react-markdown'
 
@@ -62,40 +66,26 @@ export function ContextPanel() {
 
   // Loading state
   if (isLoading || context?.is_loading) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg border">
-        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-sm text-muted-foreground">Loading context...</span>
-      </div>
-    )
+    return <LoadingState message="Loading project context..." />
   }
 
   // AI Generation in progress
   if (isGenerating) {
     return (
-      <div className="flex h-full flex-col rounded-lg border">
-        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-            <span className="text-sm font-medium">Generating Context with AI...</span>
-          </div>
-        </div>
-        <ScrollArea className="flex-1">
-          <div className="p-4">
+      <div className="flex h-full flex-col">
+        <WorkflowHeader
+          title="Generating Context"
+          subtitle="Analyzing codebase"
+          icon={<Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
+        />
+        <ScrollArea className="flex-1 p-4 pt-0">
+          <div className="space-y-4">
             <Card className="p-4 bg-muted/30">
               <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground">
                 {generationOutput || 'Analyzing codebase...'}
               </pre>
             </Card>
-            {generationError && (
-              <Card className="mt-4 p-4 border-red-500/50 bg-red-50 dark:bg-red-950/20">
-                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                  <AlertCircle className="h-4 w-4" />
-                  <span className="text-sm font-medium">Generation Error</span>
-                </div>
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{generationError}</p>
-              </Card>
-            )}
+            {generationError && <ErrorBanner error={generationError} />}
           </div>
         </ScrollArea>
       </div>
@@ -105,47 +95,37 @@ export function ContextPanel() {
   // Context Sync in progress
   if (isSyncing) {
     return (
-      <div className="flex h-full flex-col rounded-lg border">
-        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-green-500" />
-            <span className="text-sm font-medium">Syncing Context...</span>
-          </div>
-        </div>
-        <ScrollArea className="flex-1">
-          <div className="p-4">
+      <div className="flex h-full flex-col">
+        <WorkflowHeader
+          title="Syncing Context"
+          subtitle="Extracting latest changes"
+          icon={<Loader2 className="h-4 w-4 animate-spin text-green-500" />}
+        />
+        <ScrollArea className="flex-1 p-4 pt-0">
+          <div className="space-y-4">
             <Card className="p-4 bg-muted/30">
               <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground">
                 {syncOutput || 'Extracting context updates...'}
               </pre>
             </Card>
-            {syncError && (
-              <Card className="mt-4 p-4 border-red-500/50 bg-red-50 dark:bg-red-950/20">
-                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                  <AlertCircle className="h-4 w-4" />
-                  <span className="text-sm font-medium">Sync Error</span>
-                </div>
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{syncError}</p>
-              </Card>
-            )}
+            {syncError && <ErrorBanner error={syncError} />}
           </div>
         </ScrollArea>
       </div>
     )
   }
 
-  // Context not initialized - show single card with two options (consistent with other panels)
+  // Context not initialized
   if (!isInitialized) {
     return (
-      <div className="flex h-full flex-col rounded-lg border">
-        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-500" />
-            <span className="text-sm font-medium">No Living Context</span>
-          </div>
-        </div>
-        <div className="flex flex-1 items-center justify-center p-4">
-          <div className="max-w-md space-y-4">
+      <div className="flex h-full flex-col">
+        <PageHeader
+          title="Living Context"
+          description="Source of truth for project knowledge"
+          icon={<BookOpen className="h-5 w-5 text-blue-500" />}
+        />
+        <div className="flex-1 px-4 pb-4">
+          <div className="max-w-md mx-auto h-full flex flex-col justify-center gap-4">
             <Card className="p-6 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
               <h3 className="text-lg font-medium mb-2">Initialize Living Context</h3>
               <p className="text-sm text-muted-foreground mb-4">
@@ -154,7 +134,7 @@ export function ContextPanel() {
 
               <div className="space-y-3">
                 <Button className="w-full" onClick={handleGenerateContext}>
-                  <Sparkles className="mr-2 h-4 w-4" />
+                  <Wand2 className="mr-2 h-4 w-4" />
                   Generate with AI
                 </Button>
                 <p className="text-xs text-center text-muted-foreground">
@@ -179,7 +159,6 @@ export function ContextPanel() {
                 </p>
               </div>
             </Card>
-
             <p className="text-xs text-center text-muted-foreground">
               Context files are stored in <code>.rstn/context/</code>
             </p>
@@ -191,97 +170,97 @@ export function ContextPanel() {
 
   // Context exists - show files
   return (
-    <div className="flex h-full flex-col rounded-lg border">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <CheckCircle className="h-4 w-4 text-green-500" />
-          <span className="text-sm font-medium">Living Context</span>
-          <Badge variant="outline" className="text-xs">
-            {contextFiles.length} files
-          </Badge>
-        </div>
+    <div className="flex h-full flex-col">
+      <WorkflowHeader
+        title="Living Context"
+        subtitle="Project memory and architectural source of truth"
+        icon={<BookOpen className="h-4 w-4 text-blue-500" />}
+        status={`${contextFiles.length} files`}
+        statusColor="bg-blue-500/10 text-blue-600"
+      >
         <div className="flex items-center gap-2">
           {lastRefreshed && (
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
+            <span className="text-[10px] text-muted-foreground flex items-center gap-1 bg-muted px-2 py-1 rounded-full mr-2">
               <Clock className="h-3 w-3" />
               {new Date(lastRefreshed).toLocaleTimeString()}
             </span>
           )}
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={handleGenerateContext}
             title="Regenerate context with AI"
+            className="h-8 gap-1.5"
           >
-            <Wand2 className="h-4 w-4" />
+            <Wand2 className="h-3.5 w-3.5" />
+            AI Refresh
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleRefresh} title="Refresh">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRefresh} title="Refresh">
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
-      </div>
+      </WorkflowHeader>
 
-      {/* Content */}
-      {contextFiles.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center p-4">
-          <Card className="p-6 text-center">
-            <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Context Files</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Context files will appear here after initialization or context sync.
-            </p>
-            <Button variant="outline" onClick={handleRefresh}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Refresh
-            </Button>
-          </Card>
-        </div>
-      ) : (
-        <Tabs defaultValue={contextFiles[0]?.name} className="flex-1 flex flex-col">
-          <div className="border-b px-4 py-2">
-            <TabsList className="h-auto flex-wrap gap-1">
-              {contextFiles.map((file) => (
-                <TabsTrigger key={file.name} value={file.name} className="text-xs gap-1">
-                  <FileText className="h-3 w-3" />
-                  {formatContextName(file.name)}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
+      <div className="flex-1 flex flex-col overflow-hidden px-4 pb-4 pt-4">
+        {contextFiles.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title="No Context Files"
+            description="No context files found in .rstn/context/ directory."
+            action={{
+              label: "Initialize Templates",
+              onClick: handleInitialize,
+              icon: Plus
+            }}
+          />
+        ) : (
+          <Tabs defaultValue={contextFiles[0]?.name} className="flex-1 flex flex-col border rounded-lg bg-background overflow-hidden">
+            <div className="border-b bg-muted/20 px-2 py-1">
+              <TabsList className="h-9 bg-transparent w-full justify-start gap-1 p-0">
+                {contextFiles.map((file) => (
+                  <TabsTrigger
+                    key={file.name}
+                    value={file.name}
+                    className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                    {formatContextName(file.name)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
 
-          {contextFiles.map((file) => (
-            <TabsContent key={file.name} value={file.name} className="flex-1 m-0">
-              <ScrollArea className="h-full">
-                <div className="p-4">
-                  {/* File metadata */}
-                  <div className="mb-4 flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Badge variant="secondary" className="text-xs">
-                        {file.context_type}
-                      </Badge>
-                    </span>
-                    {file.last_updated && (
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        Updated: {formatDate(file.last_updated)}
+            {contextFiles.map((file) => (
+              <TabsContent key={file.name} value={file.name} className="flex-1 m-0 overflow-hidden">
+                <ScrollArea className="h-full">
+                  <div className="p-6">
+                    {/* File metadata */}
+                    <div className="mb-6 flex items-center gap-4 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">
+                      <span className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="text-[10px] px-1.5 h-5 bg-muted/50 border-none">
+                          {file.context_type}
+                        </Badge>
                       </span>
-                    )}
-                    <span>~{file.token_estimate} tokens</span>
-                  </div>
+                      {file.last_updated && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          Updated {formatDate(file.last_updated)}
+                        </span>
+                      )}
+                      <span>~{file.token_estimate} tokens</span>
+                    </div>
 
-                  {/* File content */}
-                  <Card className="p-4">
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                    {/* File content */}
+                    <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base">
                       <ReactMarkdown>{file.content}</ReactMarkdown>
                     </div>
-                  </Card>
-                </div>
-              </ScrollArea>
-            </TabsContent>
-          ))}
-        </Tabs>
-      )}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            ))}
+          </Tabs>
+        )}
+      </div>
     </div>
   )
 }

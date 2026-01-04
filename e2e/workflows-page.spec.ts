@@ -58,7 +58,7 @@ test.describe('Workflows Page - Constitution Panel via Workflows Tab', () => {
       })
       await expect(page.getByRole('button', { name: /Create with Q&A/i })).toBeVisible()
     } else if (constitutionExists === true) {
-      await expect(page.getByText(/Constitution Exists/i)).toBeVisible({ timeout: 5000 })
+      await expect(page.getByRole('heading', { name: /Constitution/i })).toBeVisible({ timeout: 5000 })
     } else {
       // Still loading or checking
       console.log('Constitution status still loading')
@@ -95,8 +95,8 @@ test.describe('Workflows Page - Constitution Panel via Workflows Tab', () => {
       await page.waitForTimeout(500)
 
       // Should show first question
-      await expect(page.getByPlaceholder('Type your answer...')).toBeVisible()
-      await expect(page.getByText('0 / 4')).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Rust' })).toBeVisible()
+      await expect(page.getByText('0 / 4 questions answered')).toBeVisible()
 
       // Verify workflow state
       const stateAfter = await getAppState(page)
@@ -106,13 +106,13 @@ test.describe('Workflows Page - Constitution Panel via Workflows Tab', () => {
       expect(worktreeAfter?.tasks?.constitution_workflow?.status).toBe('collecting')
     } else if (worktree?.tasks?.constitution_exists === true) {
       // Click "Regenerate with Q&A"
-      const regenButton = page.getByRole('button', { name: /Regenerate with Q&A/i })
+      const regenButton = page.getByRole('button', { name: /Regenerate/i })
       if (await regenButton.isVisible()) {
         await regenButton.click()
         await page.waitForTimeout(500)
 
         // Should show first question
-        await expect(page.getByPlaceholder('Type your answer...')).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Rust' })).toBeVisible()
       }
     }
   })
@@ -123,14 +123,14 @@ test.describe('Workflows Page - Constitution Panel via Workflows Tab', () => {
     await page.waitForTimeout(300)
 
     // Should show Living Context panel content
-    await expect(page.getByText(/Project Context/i)).toBeVisible({ timeout: 3000 })
+    await expect(page.getByRole('heading', { name: /Living Context/i }).first()).toBeVisible({ timeout: 3000 })
 
     // Click on Change Management
     await page.getByText('Change Management').click()
     await page.waitForTimeout(300)
 
     // Should show Change Management panel content (use heading to be specific)
-    await expect(page.getByRole('heading', { name: 'Changes' })).toBeVisible({ timeout: 3000 })
+    await expect(page.getByRole('heading', { name: 'Change Management' }).first()).toBeVisible({ timeout: 3000 })
 
     // Click back on Constitution Setup
     await page.getByText('Constitution Setup').click()
@@ -143,7 +143,7 @@ test.describe('Workflows Page - Constitution Panel via Workflows Tab', () => {
     if (worktree?.tasks?.constitution_exists === false) {
       await expect(page.getByRole('button', { name: /Apply Default Template/i })).toBeVisible()
     } else {
-      await expect(page.getByText(/Constitution/i)).toBeVisible()
+      await expect(page.getByRole('heading', { name: /Constitution/i })).toBeVisible()
     }
   })
 
@@ -164,13 +164,12 @@ test.describe('Workflows Page - Constitution Panel via Workflows Tab', () => {
     await page.waitForTimeout(500)
 
     // Answer first question
-    const textarea = page.getByPlaceholder('Type your answer...')
-    await textarea.fill('React + Rust')
+    await page.getByRole('button', { name: 'Rust' }).click()
     await page.getByRole('button', { name: /Next/i }).click()
     await page.waitForTimeout(300)
 
     // Should be on question 2
-    await expect(page.getByText('1 / 4')).toBeVisible()
+    await expect(page.getByText('1 / 4 questions answered')).toBeVisible()
 
     // Navigate to Living Context
     await page.getByText('Living Context').click()
@@ -183,7 +182,7 @@ test.describe('Workflows Page - Constitution Panel via Workflows Tab', () => {
     // Workflow state should be preserved - should still be on question 2
     // Note: Because of useEffect clearing workflow on mount, this behavior may differ
     // If workflow is cleared, we'll see the options again
-    const hasProgress = await page.getByText('1 / 4').isVisible().catch(() => false)
+    const hasProgress = await page.getByText('1 / 4 questions answered').isVisible().catch(() => false)
     const hasOptions = await page
       .getByRole('button', { name: /Apply Default Template/i })
       .isVisible()
@@ -208,16 +207,24 @@ test.describe('Workflows Page - Constitution Panel via Workflows Tab', () => {
     await page.getByRole('button', { name: /Create with Q&A/i }).click()
     await page.waitForTimeout(500)
 
-    const textarea = page.getByPlaceholder('Type your answer...')
     const nextButton = page.getByRole('button', { name: /Next/i })
 
-    // Answer all 4 questions
-    const answers = ['React + Rust', 'JWT auth', '80% coverage', 'State-first']
-    for (const answer of answers) {
-      await textarea.fill(answer)
-      await nextButton.click()
-      await page.waitForTimeout(200)
-    }
+    // Answer all 4 questions with guided selections
+    await page.getByRole('button', { name: 'Rust' }).click()
+    await nextButton.click()
+    await page.waitForTimeout(200)
+
+    await page.getByRole('button', { name: 'No secrets in repo' }).click()
+    await nextButton.click()
+    await page.waitForTimeout(200)
+
+    await page.getByRole('button', { name: 'cargo test must pass' }).click()
+    await nextButton.click()
+    await page.waitForTimeout(200)
+
+    await page.getByRole('button', { name: 'State-first (serializable state)' }).click()
+    await nextButton.click()
+    await page.waitForTimeout(200)
 
     // Should show "All questions answered"
     await expect(page.getByText(/All questions answered/i)).toBeVisible({ timeout: 5000 })
