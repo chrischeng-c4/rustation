@@ -1,17 +1,36 @@
 import { useState, useCallback, useEffect } from 'react'
-import { FileText, RefreshCw, CheckCircle, ChevronRight, Sparkles, FileCode, ChevronDown, Scroll, AlertCircle, XCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import {
+  Description as FileTextIcon,
+  Refresh as RefreshIcon,
+  CheckCircle as CheckCircleIcon,
+  ChevronRight as ChevronRightIcon,
+  AutoAwesome as SparklesIcon,
+  Code as FileCodeIcon,
+  ExpandMore as ExpandMoreIcon,
+  ErrorOutline as AlertCircleIcon,
+  Cancel as XCircleIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Card,
+  CardContent,
+  Box,
+  Stack,
+  Typography,
+  Checkbox,
+  Collapse,
+  TextField,
+  FormControlLabel,
+  IconButton,
+  Chip,
+  Paper,
+  Divider
+} from '@mui/material'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { WorkflowHeader } from '@/components/shared/WorkflowHeader'
 import { LoadingState } from '@/components/shared/LoadingState'
-import { EmptyState } from '@/components/shared/EmptyState'
 import { useAppState } from '@/hooks/useAppState'
 import ReactMarkdown from 'react-markdown'
-import { Textarea } from '@/components/ui/textarea'
 
 const QUESTION_CONFIGS = [
   {
@@ -85,19 +104,12 @@ const QUESTION_CONFIGS = [
 
 /**
  * Constitution initialization workflow panel.
- * Guides user through questions and generates .rstn/constitutions/custom.md via Claude.
- * Also supports one-click default constitution application.
- *
- * Flow:
- * 1. Check if constitution exists (.rstn/constitutions/ or legacy)
- * 2. Check if CLAUDE.md exists in project root
- * 3. If CLAUDE.md exists but no constitution → show preview with import option
- * 4. If neither exists → show "Apply Default" / "Create with Q&A" options
  */
 export function ConstitutionPanel() {
   const { state, dispatch, isLoading } = useAppState()
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({})
   const [customNotes, setCustomNotes] = useState<Record<string, string>>({})
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   // Note: active_project is not serialized, use projects[active_project_index]
   const activeProject = state?.projects?.[state?.active_project_index ?? 0]
@@ -214,385 +226,395 @@ export function ConstitutionPanel() {
   return renderRulesContent()
 
   function renderRulesContent() {
+    // Found CLAUDE.md but no constitution - show import option with preview
+    if (claudeMdExists === true && constitutionExists === false && !claudeMdSkipped && !workflow) {
+      return (
+        <Stack sx={{ height: '100%' }}>
+          <PageHeader
+            title="Found CLAUDE.md"
+            description="Existing project instructions detected"
+            icon={<FileCodeIcon sx={{ color: 'primary.main' }} />}
+          />
+          <Box sx={{ flex: 1, p: 3, pt: 0, display: 'flex', flexDirection: 'column' }}>
+            <Paper variant="outlined" sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'primary.container', borderColor: 'primary.main' }}>
+              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'primary.main' }}>
+                <Typography variant="subtitle2" gutterBottom>Use existing instructions?</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Your project has a <Typography component="span" variant="caption" sx={{ fontFamily: 'monospace', bgcolor: 'action.hover', px: 0.5 }}>CLAUDE.md</Typography> file.
+                  Would you like to use it as your constitution?
+                </Typography>
+              </Box>
 
-  // Found CLAUDE.md but no constitution - show import option with preview
-  if (claudeMdExists === true && constitutionExists === false && !claudeMdSkipped && !workflow) {
-    return (
-      <div className="flex h-full flex-col">
-        <PageHeader
-          title="Found CLAUDE.md"
-          description="Existing project instructions detected"
-          icon={<FileCode className="h-5 w-5 text-blue-500" />}
-        />
-        <div className="flex min-h-0 flex-1 flex-col p-4 pt-0">
-          <Card className="flex min-h-0 flex-1 flex-col border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20">
-            <div className="p-4 border-b">
-              <h3 className="text-sm font-medium mb-1">Use existing instructions?</h3>
-              <p className="text-xs text-muted-foreground">
-                Your project has a <code className="text-xs bg-muted px-1 rounded">CLAUDE.md</code> file.
-                Would you like to use it as your constitution?
-              </p>
-            </div>
-
-            {/* Preview */}
-            <ScrollArea className="flex min-h-0 flex-1 p-4">
-              {claudeMdContent ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <ReactMarkdown>{claudeMdContent}</ReactMarkdown>
-                </div>
-              ) : (
-                <LoadingState message="Loading preview..." className="h-full" />
-              )}
-            </ScrollArea>
-
-            {/* Actions */}
-            <div className="p-4 border-t bg-muted/20 flex gap-2">
-              <Button className="flex-1" onClick={handleImportClaudeMd}>
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Use This
-              </Button>
-              <Button variant="outline" className="flex-1" onClick={handleSkipClaudeMd}>
-                Skip, Create New
-              </Button>
-            </div>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
-  // Constitution exists - show content (only when no active workflow)
-  if (constitutionExists === true && !workflow) {
-    return (
-      <div className="flex h-full flex-col">
-        <PageHeader
-          title="Constitution"
-          description="Governance rules for AI development"
-          icon={<CheckCircle className="h-5 w-5 text-green-500" />}
-        >
-          <Button variant="outline" size="sm" onClick={handleStartQA}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Regenerate
-          </Button>
-        </PageHeader>
-        <ScrollArea className="flex-1 px-4 pb-4">
-          {constitutionContent ? (
-            <Card className="p-4">
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown>{constitutionContent}</ReactMarkdown>
-              </div>
-            </Card>
-          ) : (
-            <LoadingState message="Loading constitution..." />
-          )}
-        </ScrollArea>
-      </div>
-    )
-  }
-
-  // Constitution missing - show initial options (only when no active workflow)
-  if (constitutionExists === false && !workflow) {
-    return (
-      <div className="flex h-full flex-col">
-        <PageHeader
-          title="Constitution Management"
-          description="Initialize Constitution - Define development standards for AI-assisted coding"
-          icon={<Scroll className="h-5 w-5" />}
-        />
-        <div className="flex flex-1 items-center justify-center p-4">
-          <div className="max-w-md w-full space-y-4">
-            <Card className="p-6 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
-              <div className="space-y-3">
-                <Button className="w-full" onClick={handleApplyDefault}>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Apply Default Template
-                </Button>
-                <p className="text-xs text-center text-muted-foreground">
-                  Auto-detects languages and creates modular rules
-                </p>
-
-                <div className="relative py-2">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs">
-                    <span className="bg-background px-2 text-muted-foreground">or</span>
-                  </div>
-                </div>
-
-                <Button variant="outline" className="w-full" onClick={handleStartQA}>
-                  <FileText className="mr-2 h-4 w-4" />
-                  Create with Q&A
-                </Button>
-                <p className="text-xs text-center text-muted-foreground">
-                  Answer questions to generate a custom module
-                </p>
-              </div>
-            </Card>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Workflow active - show workflow phases
-  if (!workflow) {
-    return <LoadingState />
-  }
-
-  const currentQuestionIndex = workflow.current_question
-  const status = workflow.status
-  const output = workflow.output
-  const error = workflow.error
-
-  // Collecting answers phase
-  if (status === 'collecting') {
-    const allQuestionsAnswered = currentQuestionIndex >= questions.length
-    const currentQ = questions[currentQuestionIndex]
-    const currentSelections = currentQ ? selectedOptions[currentQ.key] ?? [] : []
-    const currentNotes = currentQ ? customNotes[currentQ.key] ?? '' : ''
-    const hasCurrentAnswer =
-      currentSelections.length > 0 || currentNotes.trim().length > 0
-
-    return (
-      <div className="flex h-full flex-col">
-        <WorkflowHeader
-          title="Initialize Constitution"
-          subtitle={`${currentQuestionIndex} / ${questions.length} questions answered`}
-          icon={<FileText className="h-4 w-4 text-blue-500" />}
-        />
-
-        <ScrollArea className="flex-1 p-4 pt-0">
-          {/* CLAUDE.md Reference Option */}
-          {claudeMdExists && (
-            <Card className="mb-4 p-3 border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/20">
-              <div className="flex items-start gap-3">
-                <Checkbox
-                  id="use-claude-md"
-                  checked={workflow.use_claude_md_reference}
-                  onCheckedChange={(checked) =>
-                    handleToggleClaudeMdReference(!!checked)
-                  }
-                  className="mt-0.5"
-                />
-                <div className="flex-1 min-w-0">
-                  <label htmlFor="use-claude-md" className="text-sm font-medium cursor-pointer">
-                    Reference existing CLAUDE.md
-                  </label>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Include your project's CLAUDE.md as context for generation
-                  </p>
-                  {claudeMdContent && (
-                    <Collapsible>
-                      <CollapsibleTrigger className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 mt-2 hover:underline">
-                        <ChevronDown className="h-3 w-3" />
-                        Preview
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <ScrollArea className="h-32 mt-2 rounded border bg-muted/30 p-2">
-                          <div className="prose prose-xs dark:prose-invert max-w-none">
-                            <ReactMarkdown>{claudeMdContent}</ReactMarkdown>
-                          </div>
-                        </ScrollArea>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* Progress */}
-          <div className="mb-4 space-y-2">
-            {questions.map((q, idx) => (
-              <div
-                key={q.key}
-                className={`flex items-center gap-2 text-xs ${
-                  idx < currentQuestionIndex
-                    ? 'text-muted-foreground'
-                    : idx === currentQuestionIndex
-                      ? 'text-foreground'
-                      : 'text-muted-foreground/50'
-                }`}
-              >
-                {idx < currentQuestionIndex ? (
-                  <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+              {/* Preview */}
+              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+                {claudeMdContent ? (
+                  <Typography component="div" variant="body2" sx={{ '& pre': { overflow: 'auto' } }}>
+                    <ReactMarkdown>{claudeMdContent}</ReactMarkdown>
+                  </Typography>
                 ) : (
-                  <div className="h-3.5 w-3.5 rounded-full border" />
+                  <LoadingState message="Loading preview..." />
                 )}
-                <span>{q.question}</span>
-              </div>
-            ))}
-          </div>
+              </Box>
 
-          {/* Current Question */}
-          {!allQuestionsAnswered && currentQ && (
-            <Card className="p-4">
-              <h3 className="text-sm font-medium mb-1">{currentQ.question}</h3>
-              <p className="text-xs text-muted-foreground mb-3">{currentQ.hint}</p>
+              {/* Actions */}
+              <Stack direction="row" spacing={2} sx={{ p: 2, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  onClick={handleImportClaudeMd}
+                  startIcon={<CheckCircleIcon />}
+                >
+                  Use This
+                </Button>
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  onClick={handleSkipClaudeMd}
+                >
+                  Skip, Create New
+                </Button>
+              </Stack>
+            </Paper>
+          </Box>
+        </Stack>
+      )
+    }
 
-              <div className="flex flex-wrap gap-2 mb-4">
-                {currentQ.options.map((option) => {
-                  const isSelected = currentSelections.includes(option)
-                  return (
-                    <Button
-                      key={option}
-                      type="button"
-                      size="sm"
-                      variant={isSelected ? 'default' : 'secondary'}
-                      className="h-7 px-2 text-xs"
-                      onClick={() => toggleOption(currentQ.key, option)}
-                    >
-                      {option}
-                    </Button>
-                  )
-                })}
-              </div>
+    // Constitution exists - show content (only when no active workflow)
+    if (constitutionExists === true && !workflow) {
+      return (
+        <Stack sx={{ height: '100%' }}>
+          <PageHeader
+            title="Constitution"
+            description="Governance rules for AI development"
+            icon={<CheckCircleIcon color="success" />}
+          >
+            <Button variant="outlined" size="small" onClick={handleStartQA} startIcon={<RefreshIcon />}>
+              Regenerate
+            </Button>
+          </PageHeader>
+          <Box sx={{ flex: 1, overflow: 'auto', px: 3, pb: 3 }}>
+            {constitutionContent ? (
+              <Card elevation={0} variant="outlined">
+                <CardContent>
+                  <Typography component="div" variant="body2" sx={{ '& h1, & h2, & h3': { mt: 2, mb: 1, fontWeight: 600 }, '& ul': { pl: 2 }, '& pre': { bgcolor: 'action.hover', p: 1, borderRadius: 1, overflow: 'auto' } }}>
+                    <ReactMarkdown>{constitutionContent}</ReactMarkdown>
+                  </Typography>
+                </CardContent>
+              </Card>
+            ) : (
+              <LoadingState message="Loading constitution..." />
+            )}
+          </Box>
+        </Stack>
+      )
+    }
 
-              <Textarea
-                value={currentNotes}
-                onChange={(e) =>
-                  setCustomNotes((prev) => ({
-                    ...prev,
-                    [currentQ.key]: e.target.value,
-                  }))
-                }
-                placeholder="Optional notes (keep it short)"
-                className="min-h-[90px] resize-none text-sm mb-3"
-              />
+    // Constitution missing - show initial options (only when no active workflow)
+    if (constitutionExists === false && !workflow) {
+      return (
+        <Stack sx={{ height: '100%' }}>
+          <PageHeader
+            title="Constitution Management"
+            description="Initialize Constitution - Define development standards for AI-assisted coding"
+            icon={<FileTextIcon />}
+          />
+          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
+            <Paper variant="outlined" sx={{ maxWidth: 480, width: '100%', p: 4, bgcolor: 'surfaceContainerHigh.main' }}>
+              <Stack spacing={3}>
+                <Box>
+                  <Button variant="contained" fullWidth onClick={handleApplyDefault} startIcon={<SparklesIcon />}>
+                    Apply Default Template
+                  </Button>
+                  <Typography variant="caption" display="block" align="center" color="text.secondary" sx={{ mt: 1 }}>
+                    Auto-detects languages and creates modular rules
+                  </Typography>
+                </Box>
 
-              <Button
-                onClick={() => handleAnswerSubmit(currentQ.key)}
-                disabled={!hasCurrentAnswer}
-                className="w-full"
-                size="sm"
-              >
-                Next
-                <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
+                <Divider>
+                  <Typography variant="caption" color="text.secondary">OR</Typography>
+                </Divider>
+
+                <Box>
+                  <Button variant="outlined" fullWidth onClick={handleStartQA} startIcon={<FileTextIcon />}>
+                    Create with Q&A
+                  </Button>
+                  <Typography variant="caption" display="block" align="center" color="text.secondary" sx={{ mt: 1 }}>
+                    Answer questions to generate a custom module
+                  </Typography>
+                </Box>
+              </Stack>
+            </Paper>
+          </Box>
+        </Stack>
+      )
+    }
+
+    // Workflow active - show workflow phases
+    if (!workflow) {
+      return <LoadingState />
+    }
+
+    const currentQuestionIndex = workflow.current_question
+    const status = workflow.status
+    const output = workflow.output
+    const error = workflow.error
+
+    // Collecting answers phase
+    if (status === 'collecting') {
+      const allQuestionsAnswered = currentQuestionIndex >= questions.length
+      const currentQ = questions[currentQuestionIndex]
+      const currentSelections = currentQ ? selectedOptions[currentQ.key] ?? [] : []
+      const currentNotes = currentQ ? customNotes[currentQ.key] ?? '' : ''
+      const hasCurrentAnswer = currentSelections.length > 0 || currentNotes.trim().length > 0
+
+      return (
+        <Stack sx={{ height: '100%' }}>
+          <WorkflowHeader
+            title="Initialize Constitution"
+            subtitle={`${currentQuestionIndex} / ${questions.length} questions answered`}
+            icon={<FileTextIcon color="primary" />}
+          />
+
+          <Box sx={{ flex: 1, overflow: 'auto', p: 3, pt: 0 }}>
+            {/* CLAUDE.md Reference Option */}
+            {claudeMdExists && (
+              <Paper variant="outlined" sx={{ mb: 3, p: 2, bgcolor: 'secondary.container', borderColor: 'secondary.main' }}>
+                <Stack spacing={1}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={workflow.use_claude_md_reference}
+                        onChange={(e) => handleToggleClaudeMdReference(e.target.checked)}
+                      />
+                    }
+                    label={<Typography variant="subtitle2">Reference existing CLAUDE.md</Typography>}
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ pl: 4, display: 'block', mt: -1 }}>
+                    Include your project's CLAUDE.md as context for generation
+                  </Typography>
+
+                  {claudeMdContent && (
+                    <Box sx={{ pl: 4 }}>
+                      <Button
+                        size="small"
+                        onClick={() => setPreviewOpen(!previewOpen)}
+                        endIcon={<ExpandMoreIcon sx={{ transform: previewOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />}
+                        sx={{ textTransform: 'none', p: 0, minWidth: 0, color: 'primary.main' }}
+                      >
+                        Preview
+                      </Button>
+                      <Collapse in={previewOpen}>
+                        <Paper variant="outlined" sx={{ mt: 1, p: 2, maxHeight: 150, overflow: 'auto', bgcolor: 'background.paper' }}>
+                          <Typography component="div" variant="caption">
+                            <ReactMarkdown>{claudeMdContent}</ReactMarkdown>
+                          </Typography>
+                        </Paper>
+                      </Collapse>
+                    </Box>
+                  )}
+                </Stack>
+              </Paper>
+            )}
+
+            {/* Progress */}
+            <Stack spacing={1} sx={{ mb: 4 }}>
+              {questions.map((q, idx) => (
+                <Stack
+                  key={q.key}
+                  direction="row"
+                  alignItems="center"
+                  spacing={1}
+                  sx={{
+                    color: idx < currentQuestionIndex ? 'text.secondary' : idx === currentQuestionIndex ? 'text.primary' : 'action.disabled'
+                  }}
+                >
+                  {idx < currentQuestionIndex ? (
+                    <CheckCircleIcon fontSize="small" color="success" />
+                  ) : (
+                    <Box sx={{ width: 14, height: 14, borderRadius: '50%', border: 1, borderColor: 'currentColor' }} />
+                  )}
+                  <Typography variant="caption">{q.question}</Typography>
+                </Stack>
+              ))}
+            </Stack>
+
+            {/* Current Question */}
+            {!allQuestionsAnswered && currentQ && (
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="subtitle1" gutterBottom fontWeight={600}>{currentQ.question}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>{currentQ.hint}</Typography>
+
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
+                    {currentQ.options.map((option) => {
+                      const isSelected = currentSelections.includes(option)
+                      return (
+                        <Chip
+                          key={option}
+                          label={option}
+                          onClick={() => toggleOption(currentQ.key, option)}
+                          color={isSelected ? 'primary' : 'default'}
+                          variant={isSelected ? 'filled' : 'outlined'}
+                          sx={{ borderRadius: 1 }}
+                        />
+                      )
+                    })}
+                  </Box>
+
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={3}
+                    placeholder="Optional notes (keep it short)"
+                    value={currentNotes}
+                    onChange={(e) => setCustomNotes((prev) => ({ ...prev, [currentQ.key]: e.target.value }))}
+                    sx={{ mb: 3 }}
+                  />
+
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    disabled={!hasCurrentAnswer}
+                    onClick={() => handleAnswerSubmit(currentQ.key)}
+                    endIcon={<ChevronRightIcon />}
+                  >
+                    Next
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* All questions answered - ready to generate */}
+            {allQuestionsAnswered && (
+              <Paper variant="outlined" sx={{ p: 3, bgcolor: 'success.container', borderColor: 'success.main' }}>
+                <Stack spacing={2} alignItems="center">
+                  <CheckCircleIcon color="success" fontSize="large" />
+                  <Typography variant="h6" align="center">All questions answered!</Typography>
+                  <Typography variant="body2" color="text.secondary" align="center">
+                    Ready to generate your project constitution using Claude.
+                  </Typography>
+                  <Button variant="contained" color="success" fullWidth onClick={handleGenerate}>
+                    Generate Constitution
+                  </Button>
+                </Stack>
+              </Paper>
+            )}
+          </Box>
+        </Stack>
+      )
+    }
+
+    // Generating phase
+    if (status === 'generating') {
+      return (
+        <Stack sx={{ height: '100%' }}>
+          <WorkflowHeader
+            title="Generating Constitution"
+            subtitle="Claude is creating your rules"
+            icon={<RefreshIcon sx={{ animation: 'spin 2s linear infinite' }} color="primary" />}
+          />
+
+          <Box sx={{ flex: 1, overflow: 'auto', p: 3, pt: 0 }}>
+            <Card variant="outlined">
+              <CardContent>
+                <Typography component="div" variant="body2">
+                  <ReactMarkdown>{output || 'Waiting for Claude...'}</ReactMarkdown>
+                </Typography>
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 2, color: 'text.secondary' }}>
+                  <RefreshIcon fontSize="small" sx={{ animation: 'spin 2s linear infinite' }} />
+                  <Typography variant="caption">Streaming from Claude Code...</Typography>
+                </Stack>
+              </CardContent>
             </Card>
-          )}
+          </Box>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </Stack>
+      )
+    }
 
-          {/* All questions answered - ready to generate */}
-          {allQuestionsAnswered && (
-            <Card className="p-4 border-green-500/50 bg-green-50 dark:bg-green-950/20">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle className="h-5 w-5 text-green-500" />
-                <h3 className="text-sm font-medium">All questions answered!</h3>
-              </div>
-              <p className="text-xs text-muted-foreground mb-4">
-                Ready to generate your project constitution using Claude.
-              </p>
-              <Button onClick={handleGenerate} className="w-full" size="sm">
-                Generate Constitution
-              </Button>
-            </Card>
-          )}
-        </ScrollArea>
-      </div>
-    )
-  }
+    // Error phase
+    if (status === 'error') {
+      return (
+        <Stack sx={{ height: '100%' }}>
+          <WorkflowHeader
+            title="Generation Failed"
+            subtitle="An error occurred while generating"
+            icon={<XCircleIcon color="error" />}
+          />
 
-  // Generating phase
-  if (status === 'generating') {
-    return (
-      <div className="flex h-full flex-col">
-        <WorkflowHeader
-          title="Generating Constitution"
-          subtitle="Claude is creating your rules"
-          icon={<RefreshCw className="h-4 w-4 animate-spin text-blue-500" />}
-        />
+          <Box sx={{ flex: 1, overflow: 'auto', p: 3, pt: 0 }}>
+            <Paper variant="outlined" sx={{ mb: 2, p: 2, bgcolor: 'error.container', borderColor: 'error.main' }}>
+              <Stack direction="row" spacing={2}>
+                <AlertCircleIcon color="error" />
+                <Box>
+                  <Typography variant="subtitle2" color="error.main">Error</Typography>
+                  <Typography variant="body2" color="error.dark">{error || 'Unknown error occurred'}</Typography>
+                </Box>
+              </Stack>
+            </Paper>
 
-        <ScrollArea className="flex-1 p-4 pt-0">
-          <Card className="p-4">
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown>{output || 'Waiting for Claude...'}</ReactMarkdown>
-            </div>
-            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-              <RefreshCw className="h-3 w-3 animate-spin" />
-              <span>Streaming from Claude Code...</span>
-            </div>
-          </Card>
-        </ScrollArea>
-      </div>
-    )
-  }
+            {output && (
+              <Card variant="outlined" sx={{ mt: 2 }}>
+                <CardContent>
+                  <Typography variant="caption" color="text.secondary" gutterBottom>Partial output before failure:</Typography>
+                  <Typography component="div" variant="body2">
+                    <ReactMarkdown>{output}</ReactMarkdown>
+                  </Typography>
+                </CardContent>
+              </Card>
+            )}
 
-  // Error phase
-  if (status === 'error') {
-    return (
-      <div className="flex h-full flex-col">
-        <WorkflowHeader
-          title="Generation Failed"
-          subtitle="An error occurred while generating"
-          icon={<XCircle className="h-4 w-4 text-red-500" />}
-        />
-
-        <ScrollArea className="flex-1 p-4 pt-0">
-          <Card className="p-4 mb-3 border-red-500/50 bg-red-50 dark:bg-red-950/20">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-red-700 dark:text-red-400">Error</p>
-                <p className="text-xs text-red-600 dark:text-red-300 mt-1">{error || 'Unknown error occurred'}</p>
-              </div>
-            </div>
-          </Card>
-
-          {output && (
-            <Card className="p-4 mt-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Partial output before failure:</p>
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown>{output}</ReactMarkdown>
-              </div>
-            </Card>
-          )}
-
-          <div className="mt-4 flex gap-2">
             <Button
+              variant="outlined"
               onClick={() => dispatch({ type: 'ClearConstitutionWorkflow' })}
-              variant="outline"
-              size="sm"
+              sx={{ mt: 2 }}
             >
               Start Over
             </Button>
-          </div>
-        </ScrollArea>
-      </div>
-    )
-  }
+          </Box>
+        </Stack>
+      )
+    }
 
-  // Complete phase
-  if (status === 'complete') {
-    return (
-      <div className="flex h-full flex-col">
-        <WorkflowHeader
-          title="Constitution Generated"
-          subtitle="Saved to .rstn/constitutions/custom.md"
-          icon={<CheckCircle className="h-4 w-4 text-green-500" />}
-        />
+    // Complete phase
+    if (status === 'complete') {
+      return (
+        <Stack sx={{ height: '100%' }}>
+          <WorkflowHeader
+            title="Constitution Generated"
+            subtitle="Saved to .rstn/constitutions/custom.md"
+            icon={<CheckCircleIcon color="success" />}
+          />
 
-        <ScrollArea className="flex-1 p-4 pt-0">
-          <Card className="p-4 mb-3 border-green-500/50 bg-green-50 dark:bg-green-950/20">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="text-xs font-medium">
-                Constitution saved to <code className="text-xs">.rstn/constitutions/custom.md</code>
-              </span>
-            </div>
-          </Card>
+          <Box sx={{ flex: 1, overflow: 'auto', p: 3, pt: 0 }}>
+            <Paper variant="outlined" sx={{ mb: 2, p: 2, bgcolor: 'success.container', borderColor: 'success.main' }}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <CheckCircleIcon color="success" fontSize="small" />
+                <Typography variant="caption" fontWeight={500}>
+                  Constitution saved to .rstn/constitutions/custom.md
+                </Typography>
+              </Stack>
+            </Paper>
 
-          <Card className="p-4">
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown>{output}</ReactMarkdown>
-            </div>
-          </Card>
-        </ScrollArea>
-      </div>
-    )
-  }
+            <Card variant="outlined">
+              <CardContent>
+                <Typography component="div" variant="body2">
+                  <ReactMarkdown>{output}</ReactMarkdown>
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
+        </Stack>
+      )
+    }
 
     // Fallback
-    return <EmptyState icon={AlertCircle} title="Unknown State" description="The workflow entered an invalid state." />
+    return <EmptyState title="Unknown State" description="The workflow entered an invalid state." />
   }
 }

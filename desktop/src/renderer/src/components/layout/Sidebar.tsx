@@ -1,24 +1,25 @@
 import { useCallback } from 'react'
-import { 
-  ListAlt as TasksIcon, 
-  Settings as SettingsIcon, 
-  Storage as ServerIcon, 
-  Chat as ChatIcon, 
-  Terminal as TerminalIcon, 
+import {
+  ListAlt as TasksIcon,
+  Settings as SettingsIcon,
+  Storage as ServerIcon,
+  Chat as ChatIcon,
+  Terminal as TerminalIcon,
   AccountTree as WorkflowIcon,
   SmartToy as ClaudeIcon,
   Code as A2UIIcon,
   FolderOpen as ExplorerIcon
 } from '@mui/icons-material'
-import { 
-  Box, 
-  List, 
-  ListItem, 
-  ListItemButton, 
-  ListItemIcon, 
-  ListItemText, 
+import {
+  Box,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
   Divider,
-  Tooltip 
+  Tooltip,
+  useTheme
 } from '@mui/material'
 import { useAppState } from '@/hooks/useAppState'
 import type { ActiveView } from '@/types/state'
@@ -26,11 +27,11 @@ import type { ActiveView } from '@/types/state'
 const NAV_ITEMS = [
   { value: 'explorer', label: 'Explorer', icon: <ExplorerIcon /> },
   { value: 'workflows', label: 'Flows', icon: <WorkflowIcon /> },
-  { value: 'claude-code', label: 'Claude', icon: <ClaudeIcon color="secondary" /> },
+  { value: 'claude-code', label: 'Claude', icon: <ClaudeIcon /> },
   { value: 'tasks', label: 'Tasks', icon: <TasksIcon /> },
   { value: 'mcp', label: 'rstn', icon: <ServerIcon /> },
   { value: 'chat', label: 'Chat', icon: <ChatIcon /> },
-  { value: 'a2ui', label: 'A2UI', icon: <A2UIIcon color="secondary" /> },
+  { value: 'a2ui', label: 'A2UI', icon: <A2UIIcon /> },
   { value: 'terminal', label: 'Term', icon: <TerminalIcon /> },
 ] as const
 
@@ -41,6 +42,7 @@ const BOTTOM_ITEMS = [
 export function Sidebar() {
   const { state, dispatch } = useAppState()
   const activeView = state?.active_view ?? 'tasks'
+  const theme = useTheme()
 
   const handleNavClick = useCallback(
     (view: string) => {
@@ -51,9 +53,9 @@ export function Sidebar() {
 
   const renderNavItem = (item: { value: string; label: string; icon: React.ReactNode }) => {
     const isSelected = activeView === item.value
-    
+
     return (
-      <ListItem key={item.value} disablePadding sx={{ display: 'block' }}>
+      <ListItem key={item.value} disablePadding sx={{ display: 'block', mb: 1.5 }}>
         <Tooltip title={item.label} placement="right">
           <ListItemButton
             selected={isSelected}
@@ -61,33 +63,46 @@ export function Sidebar() {
             sx={{
               minHeight: 56,
               justifyContent: 'center',
-              px: 2.5,
+              px: 1,
               flexDirection: 'column',
+              backgroundColor: 'transparent !important', // Handle selection via inner box
               gap: 0.5,
-              '&.Mui-selected': {
-                color: 'primary.main',
-                '& .MuiListItemIcon-root': {
-                  color: 'primary.main',
-                },
-              },
             }}
           >
-            <ListItemIcon
+            {/* Active Indicator Pill */}
+            <Box
               sx={{
-                minWidth: 0,
-                mr: 0,
+                width: 56,
+                height: 32,
+                borderRadius: 4, // 16px (Pill shape)
+                display: 'flex',
+                alignItems: 'center',
                 justifyContent: 'center',
-                color: isSelected ? 'primary.main' : 'text.secondary',
+                bgcolor: isSelected ? 'secondary.container' : 'transparent',
+                color: isSelected ? 'onSecondaryContainer' : 'onSurfaceVariant',
+                transition: theme.transitions.create(['background-color', 'color']),
+                '& .MuiSvgIcon-root': {
+                  fontSize: 24,
+                  color: 'inherit',
+                },
               }}
             >
               {item.icon}
-            </ListItemIcon>
-            <ListItemText 
-              primary={item.label} 
-              primaryTypographyProps={{ 
-                variant: 'caption', 
-                sx: { fontSize: '0.65rem', fontWeight: isSelected ? 600 : 400 } 
-              }} 
+            </Box>
+
+            {/* Label */}
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{
+                variant: 'caption',
+                sx: {
+                  fontSize: '0.75rem', // 12px
+                  fontWeight: 500,
+                  textAlign: 'center',
+                  color: 'onSurfaceVariant',
+                }
+              }}
+              sx={{ m: 0 }}
             />
           </ListItemButton>
         </Tooltip>
@@ -99,25 +114,26 @@ export function Sidebar() {
     <Box
       component="nav"
       sx={{
-        width: 72,
+        width: 80, // M3 Navigation Rail width
         flexShrink: 0,
-        bgcolor: 'background.paper',
+        bgcolor: 'surface.main', // Should be Surface
         borderRight: 1,
-        borderColor: 'divider',
+        borderColor: 'outlineVariant',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
         overflowY: 'auto',
         overflowX: 'hidden',
+        pt: 2,
       }}
     >
-      <List sx={{ pt: 1 }}>
+      <List>
         {NAV_ITEMS.map(renderNavItem)}
       </List>
-      
+
       <Box sx={{ flexGrow: 1 }} />
-      
-      <Divider />
+
+      <Divider sx={{ mx: 2, my: 1 }} />
       <List>
         {BOTTOM_ITEMS.map(renderNavItem)}
       </List>

@@ -1,6 +1,22 @@
 import { useState } from 'react'
-import { Scroll, ChevronRight, GitBranch, BookOpen, Workflow } from 'lucide-react'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Description as DescriptionIcon,
+  MenuBook as BookIcon,
+  AccountTree as GitIcon,
+  ChevronRight
+} from '@mui/icons-material'
+import {
+  Box,
+  Typography,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Paper,
+  Stack,
+  useTheme
+} from '@mui/material'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ConstitutionPanel } from './ConstitutionPanel'
 import { ChangeManagementPanel } from './ChangeManagementPanel'
@@ -8,38 +24,34 @@ import { ContextPanel } from './ContextPanel'
 
 /**
  * Available workflow definitions.
- * ReviewGate is NOT a separate workflow - it's integrated into Change Management.
  */
 const WORKFLOWS = [
   {
     id: 'constitution-management',
     name: 'Constitution Management',
     description: 'Initialize or update project constitution for AI-assisted development',
-    icon: Scroll,
+    icon: <DescriptionIcon />,
   },
   {
     id: 'context-management',
     name: 'Context Management',
     description: 'View and manage project context - tech stack, architecture, recent changes',
-    icon: BookOpen,
+    icon: <BookIcon />,
   },
   {
     id: 'change-management',
     name: 'Change Management',
     description: 'Create and manage changes with proposal, plan generation, and review',
-    icon: GitBranch,
+    icon: <GitIcon />,
   },
 ]
 
 /**
  * WorkflowsPage - State machine driven guided workflows.
- *
- * Unlike Tasks (simple fire-and-forget justfile commands),
- * Workflows are multi-step, stateful processes that may invoke
- * Claude Code at various nodes.
  */
 export function WorkflowsPage() {
   const [selectedWorkflow, setSelectedWorkflow] = useState<string | null>('constitution-management')
+  const theme = useTheme()
 
   const renderWorkflowPanel = () => {
     switch (selectedWorkflow) {
@@ -50,9 +62,9 @@ export function WorkflowsPage() {
       case 'change-management':
         return <ChangeManagementPanel />
       default:
+        // Use a generic icon for empty state
         return (
           <EmptyState
-            icon={Workflow}
             title="Select a Workflow"
             description="Choose a workflow from the list on the left to begin."
           />
@@ -61,47 +73,115 @@ export function WorkflowsPage() {
   }
 
   return (
-    <div className="flex h-full gap-4">
-      {/* Workflow List (Left Column) */}
-      <div className="w-64 flex-shrink-0 space-y-2 overflow-y-auto">
-        <h2 className="mb-3 text-lg font-semibold px-1">Workflows</h2>
-        {WORKFLOWS.map((workflow) => {
-          const Icon = workflow.icon
-          const isSelected = selectedWorkflow === workflow.id
+    <Box sx={{ display: 'flex', height: '100%', gap: 3 }}>
+      {/* Workflow List (Left Column) - M3 Navigation Drawer style */}
+      <Paper
+        elevation={0}
+        sx={{
+          width: 320,
+          flexShrink: 0,
+          bgcolor: 'surfaceContainerLow.main', // M3 Surface Container Low
+          borderRadius: 4,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
+        <Box sx={{ p: 3, pb: 2 }}>
+          <Typography variant="h6" fontWeight={500}>
+            Workflows
+          </Typography>
+        </Box>
 
-          return (
-            <Card
-              key={workflow.id}
-              className={`cursor-pointer transition-colors hover:bg-accent ${
-                isSelected ? 'border-primary bg-accent shadow-sm' : ''
-              }`}
-              onClick={() => setSelectedWorkflow(workflow.id)}
-            >
-              <CardHeader className="p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Icon className={`h-4 w-4 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
-                    <CardTitle className="text-sm">{workflow.name}</CardTitle>
-                  </div>
-                  <ChevronRight
-                    className={`h-4 w-4 text-muted-foreground transition-transform ${
-                      isSelected ? 'rotate-90 text-primary' : ''
-                    }`}
+        <List sx={{ px: 2, pb: 2, overflowY: 'auto' }}>
+          {WORKFLOWS.map((workflow) => {
+            const isSelected = selectedWorkflow === workflow.id
+
+            return (
+              <ListItem key={workflow.id} disablePadding sx={{ mb: 1 }}>
+                <ListItemButton
+                  selected={isSelected}
+                  onClick={() => setSelectedWorkflow(workflow.id)}
+                  sx={{
+                    borderRadius: 4, // M3 shape
+                    minHeight: 88, // Allow height for 3 lines if needed, generally tall
+                    alignItems: 'flex-start',
+                    gap: 2,
+                    py: 2,
+                    // Active state colors
+                    '&.Mui-selected': {
+                      bgcolor: 'secondary.container',
+                      color: 'onSecondaryContainer',
+                      '&:hover': {
+                        bgcolor: 'secondary.container', // maintain color on hover
+                        filter: 'brightness(0.95)',
+                      },
+                      '& .MuiListItemIcon-root': {
+                        color: 'onSecondaryContainer',
+                      },
+                      '& .MuiTypography-body2': {
+                        color: 'onSecondaryContainer', // Description color
+                        opacity: 0.8,
+                      }
+                    },
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 0,
+                      mt: 0.5,
+                      color: isSelected ? 'inherit' : 'onSurfaceVariant',
+                    }}
+                  >
+                    {workflow.icon}
+                  </ListItemIcon>
+
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          {workflow.name}
+                        </Typography>
+                        {isSelected && <ChevronRight sx={{ fontSize: 16, ml: 1, opacity: 0.5 }} />}
+                      </Box>
+                    }
+                    secondary={workflow.description}
+                    primaryTypographyProps={{ component: 'div' }}
+                    secondaryTypographyProps={{
+                      variant: 'body2',
+                      sx: {
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        mt: 0.5,
+                        color: isSelected ? 'inherit' : 'onSurfaceVariant',
+                      }
+                    }}
                   />
-                </div>
-                <CardDescription className="text-xs line-clamp-2">{workflow.description}</CardDescription>
-              </CardHeader>
-            </Card>
-          )
-        })}
-      </div>
+                </ListItemButton>
+              </ListItem>
+            )
+          })}
+        </List>
+      </Paper>
 
       {/* Workflow Execution Panel (Right Column) */}
-      <div className="flex-1 overflow-hidden">
-        <Card className="h-full flex flex-col overflow-hidden">
-          {renderWorkflowPanel()}
-        </Card>
-      </div>
-    </div>
+      <Paper
+        elevation={0}
+        sx={{
+          flex: 1,
+          bgcolor: 'background.paper', // Surface
+          borderRadius: 4,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          border: 1,
+          borderColor: 'outlineVariant',
+        }}
+      >
+        {renderWorkflowPanel()}
+      </Paper>
+    </Box>
   )
 }

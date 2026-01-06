@@ -1,14 +1,7 @@
-import { SyntheticEvent, useCallback, useEffect, useState } from 'react'
-import { Box, Button, CircularProgress, Stack, Tab, Tabs, Typography } from '@mui/material'
+import { SyntheticEvent, useEffect, useState } from 'react'
+import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material'
 import {
-  AccountTree,
-  Chat,
-  Code,
   FolderOpen,
-  ListAlt,
-  Psychology,
-  Settings,
-  Storage,
 } from '@mui/icons-material'
 import { DockersPage } from '@/features/dockers/DockersPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
@@ -24,10 +17,7 @@ import { Toaster } from '@/features/notifications'
 import { CommandPalette } from '@/features/command-palette'
 import { DevLogPanel } from '@/components/shared/DevLogPanel'
 import { RightIconBar } from '@/components/layout/RightIconBar'
-import { LogPanel } from '@/components/layout/LogPanel'
-import { useActiveWorktree, useAppState } from '@/hooks/useAppState'
-import { ProjectTabs } from '@/features/projects/components/ProjectTabs'
-import type { ActiveView } from '@/types/state'
+import { Sidebar } from '@/components/layout/Sidebar'
 
 // Dev mode check - only show DevLogPanel in development
 const IS_DEV = import.meta.env.DEV
@@ -160,76 +150,7 @@ function App() {
         ) : worktree ? (
           /* Sidebar + Content when project is open */
           <Box sx={{ display: 'flex', width: '100%', height: '100%' }}>
-            <Tabs
-              orientation="vertical"
-              value={getSidebarValue()}
-              onChange={handleSidebarChange}
-              variant="scrollable"
-              sx={{
-                minWidth: 72,
-                borderRight: 1,
-                borderColor: 'divider',
-                bgcolor: 'background.paper',
-                py: 1,
-              }}
-            >
-              <Tab
-                value="workflows"
-                icon={<AccountTree fontSize="small" />}
-                iconPosition="top"
-                label="Flows"
-                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
-              />
-              <Tab
-                value="claude-code"
-                icon={<Psychology fontSize="small" />}
-                iconPosition="top"
-                label="Claude"
-                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
-              />
-              <Tab
-                value="tasks"
-                icon={<ListAlt fontSize="small" />}
-                iconPosition="top"
-                label="Tasks"
-                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
-              />
-              <Tab
-                value="mcp"
-                icon={<Storage fontSize="small" />}
-                iconPosition="top"
-                label="rstn"
-                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
-              />
-              <Tab
-                value="chat"
-                icon={<Chat fontSize="small" />}
-                iconPosition="top"
-                label="Chat"
-                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
-              />
-              <Tab
-                value="a2ui"
-                icon={<Code fontSize="small" />}
-                iconPosition="top"
-                label="A2UI"
-                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
-              />
-              <Tab
-                value="terminal"
-                icon={<Code fontSize="small" />}
-                iconPosition="top"
-                label="Term"
-                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
-              />
-              <Tab
-                value="settings"
-                icon={<Settings fontSize="small" />}
-                iconPosition="top"
-                label="Settings"
-                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem', mt: 'auto' }}
-              />
-            </Tabs>
+            <Sidebar />
 
             <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>{renderContent()}</Box>
           </Box>
