@@ -304,18 +304,3 @@ function formatDate(isoDate: string): string {
   }
 }
 
-/** Format context file name for display */
-function formatContextName(name: string): string {
-  return name
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-/** Format ISO date string for display */
-function formatDate(isoDate: string): string {
-  try {
-    return new Date(isoDate).toLocaleDateString()
-  } catch {
-    return isoDate
-  }
-}
