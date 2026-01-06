@@ -1,12 +1,20 @@
-import { useMemo } from 'react'
-import { ChevronDown, GitBranch } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { useMemo, useState } from 'react'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+  ExpandMore as ChevronDownIcon,
+  AccountTree as GitBranchIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Typography,
+  Box,
+  Stack,
+  Divider,
+  alpha
+} from '@mui/material'
 import type { WorktreeState } from '@/types/state'
 
 interface WorktreeSelectorProps {
@@ -28,7 +36,6 @@ interface WorktreeSelectorProps {
 
 /**
  * Dropdown selector for choosing a worktree.
- * Displays branch name with path as secondary info.
  */
 export function WorktreeSelector({
   worktrees,
@@ -39,6 +46,9 @@ export function WorktreeSelector({
   placeholder = 'Select worktree',
   disabled = false,
 }: WorktreeSelectorProps) {
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const open = Boolean(anchorEl)
+
   const filteredWorktrees = useMemo(
     () => worktrees.filter((w) => !excludePaths.includes(w.path)),
     [worktrees, excludePaths]
@@ -49,51 +59,81 @@ export function WorktreeSelector({
     [worktrees, value]
   )
 
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAnchorEl(event.currentTarget)
+  }
+
+  const handleClose = () => {
+    setAnchorEl(null)
+  }
+
+  const handleItemClick = (path: string) => {
+    onChange(path)
+    handleClose()
+  }
+
   return (
-    <div className="flex flex-col gap-1.5">
-      {label && <span className="text-sm font-medium">{label}</span>}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            className="w-full justify-between"
-            disabled={disabled || filteredWorktrees.length === 0}
+    <Stack spacing={1}>
+      {label && <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase' }}>{label}</Typography>}
+      
+      <Button
+        variant="outlined"
+        fullWidth
+        disabled={disabled || filteredWorktrees.length === 0}
+        onClick={handleClick}
+        endIcon={<ChevronDownIcon />}
+        sx={{ 
+          justifyContent: 'space-between', 
+          height: 48, 
+          px: 2, 
+          borderRadius: 2,
+          borderColor: 'outlineVariant',
+          bgcolor: 'background.paper',
+          textTransform: 'none'
+        }}
+      >
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+          <GitBranchIcon fontSize="small" color={selectedWorktree ? 'primary' : 'inherit'} />
+          <Typography variant="body2" fontWeight={selectedWorktree ? 700 : 400} noWrap sx={{ color: selectedWorktree ? 'text.primary' : 'text.disabled' }}>
+            {selectedWorktree ? selectedWorktree.branch : placeholder}
+          </Typography>
+        </Stack>
+      </Button>
+
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleClose}
+        PaperProps={{ sx: { width: 320, mt: 1 } }}
+      >
+        {filteredWorktrees.map((worktree) => (
+          <MenuItem 
+            key={worktree.path} 
+            onClick={() => handleItemClick(worktree.path)}
+            selected={value === worktree.path}
+            sx={{ py: 1.5 }}
           >
-            <span className="flex items-center gap-2 truncate">
-              <GitBranch className="h-4 w-4 shrink-0" />
-              {selectedWorktree ? (
-                <span className="truncate">{selectedWorktree.branch}</span>
-              ) : (
-                <span className="text-muted-foreground">{placeholder}</span>
-              )}
-            </span>
-            <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-[300px]">
-          {filteredWorktrees.map((worktree) => (
-            <DropdownMenuItem
-              key={worktree.path}
-              onClick={() => onChange(worktree.path)}
-              className="flex flex-col items-start gap-0.5"
-            >
-              <span className="flex items-center gap-2 font-medium">
-                <GitBranch className="h-3.5 w-3.5" />
-                {worktree.branch}
-                {worktree.is_main && (
-                  <span className="text-xs text-muted-foreground">(main)</span>
-                )}
-              </span>
-              <span className="text-xs text-muted-foreground truncate max-w-[280px]">
-                {worktree.path}
-              </span>
-            </DropdownMenuItem>
-          ))}
-          {filteredWorktrees.length === 0 && (
-            <DropdownMenuItem disabled>No worktrees available</DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+            <ListItemIcon>
+              <GitBranchIcon fontSize="small" color={value === worktree.path ? 'primary' : 'inherit'} />
+            </ListItemIcon>
+            <ListItemText
+              primary={
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="body2" fontWeight={value === worktree.path ? 700 : 500}>{worktree.branch}</Typography>
+                  {worktree.is_main && <Typography variant="caption" sx={{ opacity: 0.5, fontSize: '0.65rem' }}>(main)</Typography>}
+                </Stack>
+              }
+              secondary={worktree.path}
+              secondaryTypographyProps={{ variant: 'caption', noWrap: true, sx: { maxWidth: 240, display: 'block' } }}
+            />
+          </MenuItem>
+        ))}
+        {filteredWorktrees.length === 0 && (
+          <MenuItem disabled>
+            <Typography variant="body2" color="text.secondary">No worktrees available</Typography>
+          </MenuItem>
+        )}
+      </Menu>
+    </Stack>
   )
 }

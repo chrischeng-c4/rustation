@@ -2,8 +2,14 @@ import { useState } from 'react'
 import { A2UIRenderer } from './components/A2UIRenderer'
 import { PageHeader } from '@/components/shared/PageHeader'
 import type { A2UINode, A2UIAction } from './types'
-import { Card } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Box,
+  Typography,
+  Paper,
+  Stack,
+  Divider
+} from '@mui/material'
+import { Code as CodeIcon, BugReport as DebugIcon } from '@mui/icons-material'
 
 // Example Payload simulating what an Agent via MCP might send
 const SAMPLE_PAYLOAD: A2UINode = {
@@ -106,41 +112,82 @@ export function A2UIPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="p-4">
-        <PageHeader 
-          title="A2UI Renderer" 
-          description="Dynamic UI generation from JSON (Simulated Agent Output)"
-        />
+    <Box sx={{ display: 'flex', height: '100%', flexDirection: 'column', p: 3 }}>
+      <PageHeader 
+        title="A2UI Renderer" 
+        description="Dynamic UI generation from JSON (Simulated Agent Output)"
+        icon={<CodeIcon />}
+      />
 
-        <div className="flex gap-6 h-[calc(100vh-200px)]">
-          {/* Left: The Rendered UI */}
-          <div className="flex-1">
-            <ScrollArea className="h-full border rounded-md p-4 bg-slate-50/50">
-              <A2UIRenderer node={SAMPLE_PAYLOAD} onAction={handleAction} />
-            </ScrollArea>
-          </div>
+      <Stack direction="row" spacing={3} sx={{ flex: 1, minHeight: 0 }}>
+        {/* Left: The Rendered UI */}
+        <Paper 
+          variant="outlined" 
+          sx={{ 
+            flex: 1, 
+            p: 4, 
+            bgcolor: 'surfaceContainerLow.main', 
+            borderRadius: 4,
+            overflow: 'auto' 
+          }}
+        >
+          <A2UIRenderer node={SAMPLE_PAYLOAD} onAction={handleAction} />
+        </Paper>
 
-          {/* Right: Debug Info */}
-          <div className="w-80 flex flex-col gap-4">
-            <Card className="p-4">
-              <h3 className="font-semibold mb-2">Last Action</h3>
-              <pre className="text-xs font-mono bg-muted p-2 rounded">
+        {/* Right: Debug Info */}
+        <Stack spacing={3} sx={{ width: 360, flexShrink: 0 }}>
+          <Card variant="outlined" sx={{ borderRadius: 4 }}>
+            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'outlineVariant' }}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <DebugIcon fontSize="small" color="primary" />
+                <Typography variant="subtitle2" fontWeight={600}>Last Action</Typography>
+              </Stack>
+            </Box>
+            <Box sx={{ p: 2 }}>
+              <Box 
+                component="pre" 
+                sx={{ 
+                  m: 0, 
+                  p: 1.5, 
+                  bgcolor: 'background.default', 
+                  borderRadius: 1, 
+                  fontSize: '0.7rem', 
+                  fontFamily: 'monospace',
+                  overflowX: 'auto',
+                  border: 1,
+                  borderColor: 'outlineVariant'
+                }}
+              >
                 {lastAction ? JSON.stringify(lastAction, null, 2) : 'None'}
-              </pre>
-            </Card>
+              </Box>
+            </Box>
+          </Card>
 
-            <Card className="p-4 flex-1 overflow-hidden flex flex-col">
-              <h3 className="font-semibold mb-2">Source JSON</h3>
-              <ScrollArea className="flex-1">
-                <pre className="text-xs font-mono text-muted-foreground">
-                  {JSON.stringify(SAMPLE_PAYLOAD, null, 2)}
-                </pre>
-              </ScrollArea>
-            </Card>
-          </div>
-        </div>
-      </div>
-    </div>
+          <Card variant="outlined" sx={{ flex: 1, borderRadius: 4, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'outlineVariant' }}>
+              <Typography variant="subtitle2" fontWeight={600}>Source JSON</Typography>
+            </Box>
+            <Box sx={{ flex: 1, p: 2, overflow: 'auto' }}>
+              <Box 
+                component="pre" 
+                sx={{ 
+                  m: 0, 
+                  p: 1.5, 
+                  bgcolor: 'background.default', 
+                  borderRadius: 1, 
+                  fontSize: '0.7rem', 
+                  fontFamily: 'monospace',
+                  color: 'onSurfaceVariant.main',
+                  border: 1,
+                  borderColor: 'outlineVariant'
+                }}
+              >
+                {JSON.stringify(SAMPLE_PAYLOAD, null, 2)}
+              </Box>
+            </Box>
+          </Card>
+        </Stack>
+      </Stack>
+    </Box>
   )
 }

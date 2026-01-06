@@ -1,33 +1,37 @@
 import * as React from 'react'
 import { useState, useCallback } from 'react'
-import { Plus, X, Eye, FileCode, AlertCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+  Add as PlusIcon,
+  Close as XIcon,
+  Visibility as EyeIcon,
+  Code as FileCodeIcon,
+  ErrorOutline as AlertCircleIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  TextField,
+  Chip,
+  Box,
+  Typography,
+  Drawer,
+  IconButton,
+  Stack,
+  Alert,
+  Paper,
+  Divider,
+  CircularProgress
+} from '@mui/material'
 import { SourceCodeViewer } from '@/components/shared/SourceCodeViewer'
 import { useAppState } from '@/hooks/useAppState'
 
 interface ContextFilesInputProps {
-  /** Change ID to manage context files for */
   changeId: string
-  /** Current list of context file paths */
   files: string[]
-  /** Project root for file reading */
   projectRoot: string
 }
 
 /**
  * Component for managing source file selection for Claude context injection.
- * Allows adding/removing file paths that will be included when generating proposals/plans.
  */
 export function ContextFilesInput({
   changeId,
@@ -44,7 +48,6 @@ export function ContextFilesInput({
     const path = inputValue.trim()
     if (!path) return
 
-    // Check if already added
     if (files.includes(path)) {
       setError('File already added')
       return
@@ -54,15 +57,9 @@ export function ContextFilesInput({
     setIsValidating(true)
 
     try {
-      // Build absolute path if relative
-      const absPath = path.startsWith('/')
-        ? path
-        : `${projectRoot}/${path}`
-
-      // Validate by attempting to read the file
+      const absPath = path.startsWith('/') ? path : `${projectRoot}/${path}`
       await window.api.file.read(absPath, projectRoot)
 
-      // File exists and is readable - add it
       await dispatch({
         type: 'AddContextFile',
         change_id: changeId,
@@ -73,25 +70,15 @@ export function ContextFilesInput({
       setError(null)
     } catch (err) {
       const errorStr = err instanceof Error ? err.message : String(err)
-      // Parse error code
       const colonIndex = errorStr.indexOf(':')
       const code = colonIndex > 0 ? errorStr.substring(0, colonIndex).trim() : 'UNKNOWN'
 
       switch (code) {
-        case 'FILE_NOT_FOUND':
-          setError(`File not found: ${path}`)
-          break
-        case 'SECURITY_VIOLATION':
-          setError('File is outside project scope')
-          break
-        case 'FILE_TOO_LARGE':
-          setError('File too large (max 10MB)')
-          break
-        case 'NOT_UTF8':
-          setError('File is not text (binary files not supported)')
-          break
-        default:
-          setError(`Cannot read file: ${path}`)
+        case 'FILE_NOT_FOUND': setError(`File not found: ${path}`); break
+        case 'SECURITY_VIOLATION': setError('File is outside project scope'); break
+        case 'FILE_TOO_LARGE': setError('File too large (max 10MB)'); break
+        case 'NOT_UTF8': setError('File is not text (binary files not supported)'); break
+        default: setError(`Cannot read file: ${path}`)
       }
     } finally {
       setIsValidating(false)
@@ -114,10 +101,10 @@ export function ContextFilesInput({
   }, [handleAddFile])
 
   return (
-    <div className="space-y-3">
-      {/* Input for adding files */}
-      <div className="flex gap-2">
-        <Input
+    <Stack spacing={2.5}>
+      {/* Input area */}
+      <Stack direction="row" spacing={1}>
+        <TextField
           placeholder="Enter file path (e.g., src/lib/utils.ts)"
           value={inputValue}
           onChange={(e) => {
@@ -125,103 +112,109 @@ export function ContextFilesInput({
             setError(null)
           }}
           onKeyDown={handleKeyDown}
-          className="font-mono text-sm"
+          fullWidth
+          size="small"
+          InputProps={{ sx: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
         />
         <Button
-          size="sm"
+          variant="contained"
+          size="small"
           onClick={handleAddFile}
           disabled={!inputValue.trim() || isValidating}
+          startIcon={isValidating ? <CircularProgress size={16} /> : <PlusIcon />}
+          sx={{ borderRadius: 1.5, px: 2, minWidth: 80 }}
         >
-          {isValidating ? (
-            <span className="animate-pulse">...</span>
-          ) : (
-            <>
-              <Plus className="h-4 w-4 mr-1" />
-              Add
-            </>
-          )}
+          Add
         </Button>
-      </div>
+      </Stack>
 
-      {/* Error message */}
       {error && (
-        <Alert variant="destructive" className="py-2">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-sm">{error}</AlertDescription>
+        <Alert severity="error" sx={{ py: 0, borderRadius: 1 }}>
+          {error}
         </Alert>
       )}
 
       {/* List of added files */}
       {files.length > 0 ? (
-        <div className="space-y-2">
+        <Stack spacing={1}>
           {files.map((path) => (
-            <div
+            <Paper
               key={path}
-              className="flex items-center gap-2 p-2 rounded-md bg-muted/50 border"
+              variant="outlined"
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                p: 1,
+                px: 1.5,
+                bgcolor: 'background.paper',
+                borderColor: 'outlineVariant'
+              }}
             >
-              <FileCode className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <span className="flex-1 font-mono text-sm truncate" title={path}>
+              <FileCodeIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <Typography variant="caption" sx={{ flex: 1, fontFamily: 'monospace', color: 'primary.main', fontWeight: 600 }} noWrap>
                 {path}
-              </span>
+              </Typography>
 
-              {/* Preview button */}
-              <Sheet
-                open={previewPath === path}
-                onOpenChange={(open) => setPreviewPath(open ? path : null)}
-              >
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-[600px] sm:max-w-[600px]">
-                  <SheetHeader>
-                    <SheetTitle className="flex items-center gap-2">
-                      <FileCode className="h-5 w-5" />
-                      <span className="font-mono text-sm">{path}</span>
-                    </SheetTitle>
-                    <SheetDescription>
-                      Preview of source file content
-                    </SheetDescription>
-                  </SheetHeader>
-                  <div className="mt-4">
-                    <SourceCodeViewer
-                      path={path}
-                      projectRoot={projectRoot}
-                      maxHeight="calc(100vh - 200px)"
-                    />
-                  </div>
-                </SheetContent>
-              </Sheet>
-
-              {/* Remove button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                onClick={() => handleRemoveFile(path)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+              <Stack direction="row" spacing={0.5}>
+                <Tooltip title="Preview file">
+                  <IconButton size="small" onClick={() => setPreviewPath(path)}>
+                    <EyeIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Remove">
+                  <IconButton size="small" onClick={() => handleRemoveFile(path)} sx={{ '&:hover': { color: 'error.main' } }}>
+                    <XIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            </Paper>
           ))}
-        </div>
+        </Stack>
       ) : (
-        <p className="text-sm text-muted-foreground py-2">
+        <Typography variant="body2" color="text.secondary" sx={{ py: 1, fontStyle: 'italic' }}>
           No files selected. Add source files to include as context for Claude.
-        </p>
+        </Typography>
       )}
 
-      {/* File count badge */}
       {files.length > 0 && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Badge variant="secondary" className="font-mono">
-            {files.length} file{files.length !== 1 ? 's' : ''}
-          </Badge>
-          <span>will be included as context</span>
-        </div>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Chip label={`${files.length} files`} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 700, borderRadius: 0.5 }} />
+          <Typography variant="caption" color="text.secondary">will be included as context</Typography>
+        </Stack>
       )}
-    </div>
+
+      {/* Preview Drawer */}
+      <Drawer
+        anchor="right"
+        open={!!previewPath}
+        onClose={() => setPreviewPath(null)}
+        PaperProps={{ sx: { width: 600, bgcolor: 'background.default' } }}
+      >
+        <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <FileCodeIcon color="primary" />
+              <Box>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ fontFamily: 'monospace' }}>{previewPath}</Typography>
+                <Typography variant="caption" color="text.secondary">Source File Preview</Typography>
+              </Box>
+            </Stack>
+            <IconButton onClick={() => setPreviewPath(null)}><XIcon /></IconButton>
+          </Stack>
+          <Divider sx={{ mb: 3 }} />
+          <Box sx={{ flex: 1, overflow: 'hidden' }}>
+            {previewPath && (
+              <SourceCodeViewer
+                path={previewPath}
+                projectRoot={projectRoot}
+                maxHeight="100%"
+              />
+            )}
+          </Box>
+        </Box>
+      </Drawer>
+    </Stack>
   )
 }
 

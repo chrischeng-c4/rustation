@@ -1,6 +1,19 @@
-import { Pencil, Trash2, Star } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import {
+  Edit as PencilIcon,
+  Delete as Trash2Icon,
+  Star as StarIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Card,
+  CardContent,
+  Typography,
+  Box,
+  Stack,
+  IconButton,
+  Chip,
+  Paper
+} from '@mui/material'
 import type { AgentProfile } from '@/types/state'
 
 interface ProfileListProps {
@@ -18,7 +31,6 @@ interface ProfileListProps {
 
 /**
  * List view of all agent profiles with edit/delete actions.
- * Built-in profiles show a star badge and cannot be edited/deleted.
  */
 export function ProfileList({
   profiles,
@@ -29,99 +41,105 @@ export function ProfileList({
 }: ProfileListProps) {
   if (profiles.length === 0) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
-        No profiles available. Create your first custom profile!
-      </div>
+      <Paper variant="outlined" sx={{ py: 6, textAlign: 'center', bgcolor: 'surfaceContainerLow.main', borderStyle: 'dashed' }}>
+        <Typography variant="body2" color="text.secondary">
+          No profiles available. Create your first custom profile!
+        </Typography>
+      </Paper>
     )
   }
 
   const builtinProfiles = profiles.filter((p) => p.is_builtin)
   const customProfiles = profiles.filter((p) => !p.is_builtin)
 
+  const renderProfileItem = (profile: AgentProfile) => {
+    const isSelected = activeProfileId === profile.id
+    return (
+      <Paper
+        key={profile.id}
+        variant="outlined"
+        onClick={() => onSelect(profile.id)}
+        sx={{
+          p: 2,
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          borderColor: isSelected ? 'primary.main' : 'outlineVariant',
+          bgcolor: isSelected ? 'action.selected' : 'background.paper',
+          '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' }
+        }}
+      >
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+              {profile.is_builtin && <StarIcon sx={{ fontSize: 16, color: 'warning.main' }} />}
+              <Typography variant="subtitle2" fontWeight={isSelected ? 700 : 600}>{profile.name}</Typography>
+            </Stack>
+            <Typography variant="caption" color="text.secondary" display="block" noWrap sx={{ opacity: 0.8 }}>
+              {profile.prompt.split('\n')[0]}
+            </Typography>
+            {!profile.is_builtin && (
+              <Typography variant="caption" sx={{ color: 'text.disabled', mt: 0.5, display: 'block' }}>
+                Updated {new Date(profile.updated_at).toLocaleDateString()}
+              </Typography>
+            )}
+          </Box>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {profile.is_builtin ? (
+              <Chip label="Built-in" size="small" variant="outlined" sx={{ height: 18, fontSize: '0.6rem', borderRadius: 0.5 }} />
+            ) : (
+              <>
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onEdit(profile)
+                  }}
+                >
+                  <PencilIcon fontSize="inherit" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDelete(profile.id)
+                  }}
+                >
+                  <Trash2Icon fontSize="inherit" />
+                </IconButton>
+              </>
+            )}
+          </Stack>
+        </Stack>
+      </Paper>
+    )
+  }
+
   return (
-    <div className="space-y-4">
+    <Stack spacing={3}>
       {/* Built-in Profiles */}
       {builtinProfiles.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium text-muted-foreground">Built-in Profiles</h3>
-          {builtinProfiles.map((profile) => (
-            <Card
-              key={profile.id}
-              className={`p-3 cursor-pointer transition-colors ${
-                activeProfileId === profile.id
-                  ? 'border-primary bg-primary/5'
-                  : 'hover:border-primary/50'
-              }`}
-              onClick={() => onSelect(profile.id)}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Star className="h-4 w-4 text-yellow-600 dark:text-yellow-500 shrink-0" />
-                    <h4 className="font-medium truncate">{profile.name}</h4>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                    {profile.prompt.split('\n')[0]}
-                  </p>
-                </div>
-                <div className="ml-2 shrink-0 text-xs text-muted-foreground">Built-in</div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Box>
+          <Typography variant="caption" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary', mb: 1.5, display: 'block' }}>
+            Built-in Profiles
+          </Typography>
+          <Stack spacing={1}>
+            {builtinProfiles.map(renderProfileItem)}
+          </Stack>
+        </Box>
       )}
 
       {/* Custom Profiles */}
       {customProfiles.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium text-muted-foreground">Custom Profiles</h3>
-          {customProfiles.map((profile) => (
-            <Card
-              key={profile.id}
-              className={`p-3 cursor-pointer transition-colors ${
-                activeProfileId === profile.id
-                  ? 'border-primary bg-primary/5'
-                  : 'hover:border-primary/50'
-              }`}
-              onClick={() => onSelect(profile.id)}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-medium truncate">{profile.name}</h4>
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                    {profile.prompt.split('\n')[0] || 'No description'}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Updated {new Date(profile.updated_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="ml-2 flex items-center gap-1 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onEdit(profile)
-                    }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDelete(profile.id)
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Box>
+          <Typography variant="caption" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary', mb: 1.5, display: 'block' }}>
+            Custom Profiles
+          </Typography>
+          <Stack spacing={1}>
+            {customProfiles.map(renderProfileItem)}
+          </Stack>
+        </Box>
       )}
-    </div>
+    </Stack>
   )
 }

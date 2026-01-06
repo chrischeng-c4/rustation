@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
 import {
+  Button,
+  TextField,
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Typography,
+  Stack,
+  Box
+} from '@mui/material'
 import type { AgentProfile } from '@/types/state'
 
 interface ProfileEditorDialogProps {
@@ -25,7 +26,6 @@ interface ProfileEditorDialogProps {
 
 /**
  * Dialog for creating or editing an agent profile.
- * Validates that name and prompt are not empty.
  */
 export function ProfileEditorDialog({
   open,
@@ -74,75 +74,49 @@ export function ProfileEditorDialog({
     }
   }
 
-  const charCount = prompt.length
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Profile' : 'Create New Profile'}</DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? 'Update the profile name and system prompt.'
-              : 'Create a custom agent profile with specific instructions.'}
-          </DialogDescription>
-        </DialogHeader>
+    <Dialog open={open} onClose={() => onOpenChange(false)} maxWidth="md" fullWidth>
+      <DialogTitle>{isEditing ? 'Edit Profile' : 'Create New Profile'}</DialogTitle>
+      <DialogContent>
+        <DialogContentText sx={{ mb: 3 }}>
+          {isEditing
+            ? 'Update the profile name and system prompt.'
+            : 'Create a custom agent profile with specific instructions.'}
+        </DialogContentText>
 
-        <div className="flex-1 space-y-4 overflow-y-auto py-4">
-          {/* Name Input */}
-          <div className="space-y-2">
-            <Label htmlFor="profile-name">
-              Profile Name <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="profile-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Rust Expert, Code Reviewer"
-              className={errors.name ? 'border-red-500' : ''}
-            />
-            {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
-          </div>
+        <Stack spacing={3} sx={{ mt: 1 }}>
+          <TextField
+            label="Profile Name"
+            placeholder="e.g. Rust Expert, Code Reviewer"
+            fullWidth
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            error={!!errors.name}
+            helperText={errors.name}
+          />
 
-          {/* Prompt Textarea */}
-          <div className="space-y-2 flex-1 flex flex-col">
-            <Label htmlFor="profile-prompt">
-              System Prompt <span className="text-red-500">*</span>
-            </Label>
-            <textarea
-              id="profile-prompt"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={`Example:
-
-You are a Rust programming expert.
-
-Core Principles:
-- Always use snake_case for function names
-- Prefer Result<T, E> over Option when errors are possible
-- Write comprehensive tests for all functions
-
-Code Style:
-- Use rustfmt and clippy
-- Add doc comments for public APIs`}
-              className={`flex-1 min-h-[300px] rounded-md border px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none ${
-                errors.prompt ? 'border-red-500' : 'border-input bg-background'
-              }`}
-            />
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{charCount.toLocaleString()} characters</span>
-              {errors.prompt && <span className="text-red-500">{errors.prompt}</span>}
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>{isEditing ? 'Save Changes' : 'Create Profile'}</Button>
-        </DialogFooter>
+          <TextField
+            label="System Prompt"
+            placeholder="Describe the agent's role and rules..."
+            multiline
+            rows={12}
+            fullWidth
+            required
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            error={!!errors.prompt}
+            helperText={errors.prompt || `${prompt.length.toLocaleString()} characters`}
+            InputProps={{ sx: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
+          />
+        </Stack>
       </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button onClick={() => onOpenChange(false)}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave} sx={{ borderRadius: 2 }}>
+          {isEditing ? 'Save Changes' : 'Create Profile'}
+        </Button>
+      </DialogActions>
     </Dialog>
   )
 }

@@ -1,7 +1,21 @@
 import { useState, useCallback } from 'react'
-import { Plus, X, FileText, Folder } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import {
+  Add as PlusIcon,
+  Close as XIcon,
+  Description as FileTextIcon,
+  Folder as FolderIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  TextField,
+  Box,
+  Typography,
+  Stack,
+  IconButton,
+  Paper,
+  Divider,
+  alpha
+} from '@mui/material'
 
 interface EnvPatternListProps {
   /** Current list of tracked patterns */
@@ -13,8 +27,7 @@ interface EnvPatternListProps {
 }
 
 /**
- * Editable list of env file patterns (e.g., ".env", ".envrc", ".claude/").
- * Allows adding and removing patterns.
+ * Editable list of env file patterns.
  */
 export function EnvPatternList({
   patterns,
@@ -54,65 +67,89 @@ export function EnvPatternList({
   const isDirectory = (pattern: string) => pattern.endsWith('/')
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Tracked Patterns</span>
-        <span className="text-xs text-muted-foreground">{patterns.length} pattern(s)</span>
-      </div>
+    <Stack spacing={2}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography variant="subtitle2" fontWeight={600}>Tracked Patterns</Typography>
+        <Typography variant="caption" color="text.secondary">{patterns.length} pattern(s)</Typography>
+      </Box>
 
       {/* Pattern list */}
-      <div className="space-y-2">
+      <Stack spacing={1}>
         {patterns.map((pattern) => (
-          <div
+          <Paper
             key={pattern}
-            className="flex items-center justify-between rounded-md border px-3 py-2"
+            variant="outlined"
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 1.5,
+              py: 0.75,
+              bgcolor: 'background.default',
+              borderColor: 'outlineVariant'
+            }}
           >
-            <span className="flex items-center gap-2 text-sm">
+            <Stack direction="row" spacing={1.5} alignItems="center">
               {isDirectory(pattern) ? (
-                <Folder className="h-4 w-4 text-muted-foreground" />
+                <FolderIcon fontSize="small" sx={{ color: 'text.secondary' }} />
               ) : (
-                <FileText className="h-4 w-4 text-muted-foreground" />
+                <FileTextIcon fontSize="small" sx={{ color: 'text.secondary' }} />
               )}
-              <code className="font-mono">{pattern}</code>
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0"
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{pattern}</Typography>
+            </Stack>
+            <IconButton
+              size="small"
               onClick={() => handleRemovePattern(pattern)}
               disabled={disabled}
+              sx={{ '&:hover': { color: 'error.main' } }}
             >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+              <XIcon fontSize="inherit" />
+            </IconButton>
+          </Paper>
         ))}
 
         {patterns.length === 0 && (
-          <div className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
-            No patterns configured. Add patterns like .env or .claude/
-          </div>
+          <Paper
+            variant="outlined"
+            sx={{
+              py: 4,
+              textAlign: 'center',
+              bgcolor: 'surfaceContainerLow.main',
+              borderStyle: 'dashed',
+              borderColor: 'outlineVariant'
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              No patterns configured. Add patterns like .env or .claude/
+            </Typography>
+          </Paper>
         )}
-      </div>
+      </Stack>
+
+      <Divider sx={{ my: 1 }} />
 
       {/* Add new pattern */}
-      <div className="flex gap-2">
-        <Input
+      <Stack direction="row" spacing={1}>
+        <TextField
           placeholder="Add pattern (e.g., .env.local)"
           value={newPattern}
           onChange={(e) => setNewPattern(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          className="font-mono"
+          size="small"
+          fullWidth
+          InputProps={{ sx: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
         />
         <Button
-          variant="outline"
-          size="icon"
+          variant="contained"
           onClick={handleAddPattern}
           disabled={disabled || !newPattern.trim()}
+          startIcon={<PlusIcon />}
+          sx={{ borderRadius: 1.5, px: 2, minWidth: 80 }}
         >
-          <Plus className="h-4 w-4" />
+          Add
         </Button>
-      </div>
-    </div>
+      </Stack>
+    </Stack>
   )
 }

@@ -1,16 +1,22 @@
 import { useState, useEffect } from 'react'
-import { AlertTriangle, Container } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
+  WarningAmber as AlertTriangleIcon,
+  Dns as ContainerIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  TextField,
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Typography,
+  Stack,
+  Box,
+  Paper,
+  alpha
+} from '@mui/material'
 
 interface PendingConflict {
   service_id: string
@@ -81,92 +87,96 @@ export function PortConflictDialog({
   }
 
   return (
-    <Dialog open={!!pendingConflict} onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-yellow-500" />
-            Port Conflict Detected
-          </DialogTitle>
-          <DialogDescription>
-            Port {requested_port} is already in use. Choose how to resolve this conflict.
-          </DialogDescription>
-        </DialogHeader>
+    <Dialog open={!!pendingConflict} onClose={onCancel} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <AlertTriangleIcon color="warning" />
+          <Typography variant="h6">Port Conflict Detected</Typography>
+        </Stack>
+      </DialogTitle>
+      <DialogContent>
+        <DialogContentText sx={{ mb: 3 }}>
+          Port <strong>{requested_port}</strong> is already in use. Choose how to resolve this conflict.
+        </DialogContentText>
 
-        {/* Conflicting container info */}
-        <div className="rounded-lg border bg-muted/40 p-3">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Container className="h-4 w-4" />
-            {conflicting_container.name}
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            Image: {conflicting_container.image}
-          </div>
-        </div>
+        <Stack spacing={3}>
+          {/* Conflicting container info */}
+          <Paper variant="outlined" sx={{ p: 2, bgcolor: 'surfaceContainerLow.main', borderRadius: 2 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <ContainerIcon fontSize="small" color="primary" />
+              <Box>
+                <Typography variant="body2" fontWeight={700}>{conflicting_container.name}</Typography>
+                <Typography variant="caption" color="text.secondary">Image: {conflicting_container.image}</Typography>
+              </Box>
+            </Stack>
+          </Paper>
 
-        {/* Resolution options - using simple buttons instead of radio group */}
-        <div className="space-y-3">
-          {/* Option 1: Use alternative port */}
-          <div
-            className={`rounded-lg border p-3 cursor-pointer transition-colors ${
-              resolution === 'alt-port' ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'
-            }`}
-            onClick={() => setResolution('alt-port')}
-          >
-            <Label className="font-medium cursor-pointer">
-              Use alternative port
-            </Label>
-            <div className="mt-2 flex items-center gap-2">
-              <Input
-                type="number"
-                min={1}
-                max={65535}
-                value={customPort}
-                onChange={(e) => setCustomPort(e.target.value)}
-                disabled={resolution !== 'alt-port' || isResolving}
-                className="w-24"
-                onClick={(e) => e.stopPropagation()}
-              />
-              <span className="text-sm text-muted-foreground">
-                (suggested: {suggested_port})
-              </span>
-            </div>
-          </div>
+          {/* Resolution options */}
+          <Stack spacing={2}>
+            {/* Option 1: Use alternative port */}
+            <Paper
+              variant="outlined"
+              onClick={() => setResolution('alt-port')}
+              sx={{
+                p: 2,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                borderColor: resolution === 'alt-port' ? 'primary.main' : 'outlineVariant',
+                bgcolor: resolution === 'alt-port' ? alpha('#D0BCFF', 0.05) : 'background.paper',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+            >
+              <Typography variant="subtitle2" fontWeight={700}>Use alternative port</Typography>
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 1.5 }}>
+                <TextField
+                  size="small"
+                  type="number"
+                  label="Port"
+                  value={customPort}
+                  onChange={(e) => setCustomPort(e.target.value)}
+                  disabled={resolution !== 'alt-port' || isResolving}
+                  onClick={(e) => e.stopPropagation()}
+                  sx={{ width: 120 }}
+                />
+                <Typography variant="caption" color="text.secondary">(suggested: {suggested_port})</Typography>
+              </Stack>
+            </Paper>
 
-          {/* Option 2: Stop conflicting container */}
-          <div
-            className={`rounded-lg border p-3 transition-colors ${
-              !canStopContainer
-                ? 'opacity-50 cursor-not-allowed'
-                : resolution === 'stop-container'
-                ? 'border-primary bg-primary/5 cursor-pointer'
-                : 'hover:bg-muted/40 cursor-pointer'
-            }`}
-            onClick={() => canStopContainer && setResolution('stop-container')}
-          >
-            <Label className={`font-medium ${!canStopContainer ? 'text-muted-foreground' : 'cursor-pointer'}`}>
-              Stop conflicting container and retry
-            </Label>
-            {!canStopContainer && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                This container is not managed by rstn and cannot be stopped here.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onCancel} disabled={isResolving}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleResolve}
-            disabled={isResolving || (resolution === 'alt-port' && !isValidPort())}
-          >
-            {isResolving ? 'Resolving...' : 'Continue'}
-          </Button>
-        </DialogFooter>
+            {/* Option 2: Stop conflicting container */}
+            <Paper
+              variant="outlined"
+              onClick={() => canStopContainer && setResolution('stop-container')}
+              sx={{
+                p: 2,
+                cursor: canStopContainer ? 'pointer' : 'not-allowed',
+                opacity: canStopContainer ? 1 : 0.6,
+                transition: 'all 0.2s',
+                borderColor: resolution === 'stop-container' ? 'primary.main' : 'outlineVariant',
+                bgcolor: resolution === 'stop-container' ? alpha('#D0BCFF', 0.05) : 'background.paper',
+                '&:hover': { bgcolor: canStopContainer ? 'action.hover' : 'background.paper' }
+              }}
+            >
+              <Typography variant="subtitle2" fontWeight={700}>Stop conflicting container and retry</Typography>
+              {!canStopContainer && (
+                <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                  This container is not managed by rstn and cannot be stopped here.
+                </Typography>
+              )}
+            </Paper>
+          </Stack>
+        </Stack>
       </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button onClick={onCancel} disabled={isResolving}>Cancel</Button>
+        <Button
+          variant="contained"
+          onClick={handleResolve}
+          disabled={isResolving || (resolution === 'alt-port' && !isValidPort())}
+          sx={{ borderRadius: 2, px: 3 }}
+        >
+          {isResolving ? 'Resolving...' : 'Continue'}
+        </Button>
+      </DialogActions>
     </Dialog>
   )
 }

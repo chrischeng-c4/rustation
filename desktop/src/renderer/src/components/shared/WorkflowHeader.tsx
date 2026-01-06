@@ -14,7 +14,6 @@ interface WorkflowHeaderProps {
 
 /**
  * WorkflowHeader - Standardized header for workflow sub-panels.
- * Smaller and more compact than PageHeader, designed for nested views.
  */
 export function WorkflowHeader({
   title,
@@ -31,21 +30,19 @@ export function WorkflowHeader({
       alignItems="center"
       justifyContent="space-between"
       sx={{
-        borderBottom: 1,
-        borderColor: 'divider',
-        bgcolor: 'background.paper',
-        px: 2,
-        py: 1,
-        height: 48,
+        bgcolor: 'surfaceContainerLow.main',
+        px: 3,
+        py: 1.5,
+        height: 64,
         flexShrink: 0,
         ...sx,
       }}
     >
-      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
-        {icon && <Box sx={{ display: 'flex', flexShrink: 0 }}>{icon}</Box>}
-        <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+      <Stack direction="row" alignItems="center" spacing={2} sx={{ minWidth: 0 }}>
+        {icon && <Box sx={{ display: 'flex', flexShrink: 0, color: 'primary.main' }}>{icon}</Box>}
+        <Stack spacing={0} sx={{ minWidth: 0 }}>
           <Stack direction="row" alignItems="center" spacing={1}>
-            <Typography variant="subtitle2" noWrap>
+            <Typography variant="subtitle1" fontWeight={600} noWrap>
               {title}
             </Typography>
             {status && (
@@ -53,7 +50,7 @@ export function WorkflowHeader({
                 label={status}
                 size="small"
                 color={statusColor}
-                sx={{ height: 18, fontSize: '0.625rem', fontWeight: 600 }}
+                sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, borderRadius: 1 }}
               />
             )}
           </Stack>

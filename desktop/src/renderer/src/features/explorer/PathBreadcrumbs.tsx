@@ -1,5 +1,9 @@
-import { ChevronRight, Home } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import {
+  ChevronRight as ChevronRightIcon,
+  Home as HomeIcon,
+  Folder as FolderIcon
+} from '@mui/icons-material'
+import { Button, Breadcrumbs, Link, Typography, Stack, Box } from '@mui/material'
 
 interface PathBreadcrumbsProps {
   currentPath: string
@@ -9,40 +13,69 @@ interface PathBreadcrumbsProps {
 
 export function PathBreadcrumbs({ currentPath, rootPath, onNavigate }: PathBreadcrumbsProps) {
   // Calculate relative path segments
-  const relativePath = currentPath.startsWith(rootPath) 
-    ? currentPath.slice(rootPath.length) 
+  const relativePath = currentPath.startsWith(rootPath)
+    ? currentPath.slice(rootPath.length)
     : ''
-  
+
   const segments = relativePath.split('/').filter(Boolean)
-  
+
   return (
-    <div className="flex items-center text-sm overflow-x-auto whitespace-nowrap no-scrollbar">
-      <Button 
-        variant="ghost" 
-        size="sm" 
-        className="h-7 px-2 flex items-center gap-1"
+    <Breadcrumbs
+      separator={<ChevronRightIcon sx={{ fontSize: 14, color: 'text.disabled' }} />}
+      aria-label="breadcrumb"
+      sx={{
+        '& .MuiBreadcrumbs-ol': { flexWrap: 'nowrap' },
+        '& .MuiBreadcrumbs-li': { minWidth: 0 }
+      }}
+    >
+      <Button
+        variant="text"
+        size="small"
         onClick={() => onNavigate(rootPath)}
+        startIcon={<HomeIcon sx={{ fontSize: 16 }} />}
+        sx={{
+          minHeight: 28,
+          px: 1,
+          textTransform: 'none',
+          color: 'primary.main',
+          fontWeight: 700,
+          fontSize: '0.75rem',
+          borderRadius: 1
+        }}
       >
-        <Home className="h-3.5 w-3.5" />
-        <span className="max-w-[100px] truncate">Project</span>
+        Project
       </Button>
 
       {segments.map((segment, idx) => {
+        const isLast = idx === segments.length - 1
         const fullPath = rootPath + '/' + segments.slice(0, idx + 1).join('/')
+
         return (
-          <div key={fullPath} className="flex items-center">
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground mx-0.5" />
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-7 px-2"
-              onClick={() => onNavigate(fullPath)}
-            >
+          <Button
+            key={fullPath}
+            variant="text"
+            size="small"
+            onClick={() => onNavigate(fullPath)}
+            startIcon={!isLast ? <FolderIcon sx={{ fontSize: 14, opacity: 0.7 }} /> : null}
+            sx={{
+              minHeight: 28,
+              px: 1,
+              textTransform: 'none',
+              color: isLast ? 'text.primary' : 'text.secondary',
+              fontWeight: isLast ? 700 : 500,
+              fontSize: '0.75rem',
+              minWidth: 0,
+              maxWidth: 150,
+              borderRadius: 1,
+              '& .MuiButton-startIcon': { mr: 0.5 }
+            }}
+          >
+            <Typography variant="caption" fontWeight="inherit" noWrap>
               {segment}
-            </Button>
-          </div>
+            </Typography>
+          </Button>
         )
       })}
-    </div>
+    </Breadcrumbs>
   )
 }

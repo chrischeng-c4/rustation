@@ -1,29 +1,30 @@
-import { Check, ChevronDown } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+  Check as CheckIcon,
+  ExpandMore as ChevronDownIcon,
+  Star as StarIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  Box,
+  Typography
+} from '@mui/material'
+import { useState } from 'react'
 import type { AgentProfile } from '@/types/state'
 
 interface ProfileSelectorProps {
-  /** All available profiles */
   profiles: AgentProfile[]
-  /** Currently active profile ID */
   activeProfileId?: string
-  /** Callback when a profile is selected */
   onSelect: (profileId: string | undefined) => void
-  /** Whether the selector is disabled */
   disabled?: boolean
 }
 
 /**
  * Dropdown selector for choosing an agent profile.
- * Shows built-in profiles with a star badge.
  */
 export function ProfileSelector({
   profiles,
@@ -31,80 +32,87 @@ export function ProfileSelector({
   onSelect,
   disabled,
 }: ProfileSelectorProps) {
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const open = Boolean(anchorEl)
+
   const activeProfile = profiles.find((p) => p.id === activeProfileId)
   const builtinProfiles = profiles.filter((p) => p.is_builtin)
   const customProfiles = profiles.filter((p) => !p.is_builtin)
 
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAnchorEl(event.currentTarget)
+  }
+
+  const handleClose = () => {
+    setAnchorEl(null)
+  }
+
+  const handleItemClick = (profileId: string | undefined) => {
+    onSelect(profileId)
+    handleClose()
+  }
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" disabled={disabled} className="w-full justify-between">
-          <span className="truncate">
-            {activeProfile ? (
-              <>
-                {activeProfile.is_builtin && (
-                  <span className="mr-1 text-yellow-600 dark:text-yellow-500">⭐</span>
-                )}
-                {activeProfile.name}
-              </>
-            ) : (
-              'Select a profile...'
-            )}
-          </span>
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-[300px]">
+    <Box>
+      <Button
+        variant="outlined"
+        disabled={disabled}
+        fullWidth
+        onClick={handleClick}
+        endIcon={<ChevronDownIcon />}
+        sx={{ justifyContent: 'space-between', px: 2, height: 48, borderRadius: 2 }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+          {activeProfile ? (
+            <>
+              {activeProfile.is_builtin && (
+                <StarIcon sx={{ fontSize: 16, color: 'warning.main', mr: 1 }} />
+              )}
+              <Typography variant="body2" fontWeight={600} noWrap>{activeProfile.name}</Typography>
+            </>
+          ) : (
+            <Typography variant="body2" color="text.secondary">Select a profile...</Typography>
+          )}
+        </Box>
+      </Button>
+
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleClose}
+        PaperProps={{ sx: { width: 300, mt: 1 } }}
+      >
         {/* Built-in Profiles */}
-        {builtinProfiles.length > 0 && (
-          <>
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Built-in Profiles
-            </DropdownMenuLabel>
-            {builtinProfiles.map((profile) => (
-              <DropdownMenuItem
-                key={profile.id}
-                onClick={() => onSelect(profile.id)}
-                className="cursor-pointer"
-              >
-                <span className="mr-2 text-yellow-600 dark:text-yellow-500">⭐</span>
-                <span className="flex-1">{profile.name}</span>
-                {activeProfileId === profile.id && <Check className="h-4 w-4" />}
-              </DropdownMenuItem>
-            ))}
-          </>
-        )}
+        {builtinProfiles.length > 0 && [
+          <Box key="label-builtin" sx={{ px: 2, py: 1 }}><Typography variant="caption" fontWeight={700} color="text.secondary">BUILT-IN PROFILES</Typography></Box>,
+          ...builtinProfiles.map((profile) => (
+            <MenuItem key={profile.id} onClick={() => handleItemClick(profile.id)}>
+              <ListItemIcon><StarIcon fontSize="small" sx={{ color: 'warning.main' }} /></ListItemIcon>
+              <ListItemText primary={profile.name} primaryTypographyProps={{ variant: 'body2' }} />
+              {activeProfileId === profile.id && <CheckIcon fontSize="small" color="primary" />}
+            </MenuItem>
+          ))
+        ]}
 
         {/* Custom Profiles */}
-        {customProfiles.length > 0 && (
-          <>
-            {builtinProfiles.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Custom Profiles
-            </DropdownMenuLabel>
-            {customProfiles.map((profile) => (
-              <DropdownMenuItem
-                key={profile.id}
-                onClick={() => onSelect(profile.id)}
-                className="cursor-pointer"
-              >
-                <span className="flex-1">{profile.name}</span>
-                {activeProfileId === profile.id && <Check className="h-4 w-4" />}
-              </DropdownMenuItem>
-            ))}
-          </>
-        )}
+        {customProfiles.length > 0 && [
+          builtinProfiles.length > 0 && <Divider key="divider" sx={{ my: 1 }} />,
+          <Box key="label-custom" sx={{ px: 2, py: 1 }}><Typography variant="caption" fontWeight={700} color="text.secondary">CUSTOM PROFILES</Typography></Box>,
+          ...customProfiles.map((profile) => (
+            <MenuItem key={profile.id} onClick={() => handleItemClick(profile.id)}>
+              <ListItemText primary={profile.name} inset={false} sx={{ pl: 4 }} primaryTypographyProps={{ variant: 'body2' }} />
+              {activeProfileId === profile.id && <CheckIcon fontSize="small" color="primary" />}
+            </MenuItem>
+          ))
+        ]}
 
         {/* None Option */}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => onSelect(undefined)}
-          className="cursor-pointer text-muted-foreground"
-        >
-          <span className="flex-1">None (use CLAUDE.md)</span>
-          {!activeProfileId && <Check className="h-4 w-4" />}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        <Divider sx={{ my: 1 }} />
+        <MenuItem onClick={() => handleItemClick(undefined)}>
+          <ListItemText primary="None (use CLAUDE.md)" sx={{ pl: 4, color: 'text.secondary' }} primaryTypographyProps={{ variant: 'body2' }} />
+          {!activeProfileId && <CheckIcon fontSize="small" color="primary" />}
+        </MenuItem>
+      </Menu>
+    </Box>
   )
 }

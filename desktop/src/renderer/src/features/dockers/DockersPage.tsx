@@ -1,8 +1,23 @@
 import { useEffect, useCallback, useState, useMemo } from 'react'
-import { RefreshCw, AlertCircle, ChevronDown, ChevronRight, Lock, Container } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
+import {
+  Refresh as RefreshIcon,
+  ErrorOutline as AlertCircleIcon,
+  ChevronRight,
+  ExpandMore as ChevronDown,
+  LockOutlined as LockIcon,
+  Dns as ContainerIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Box,
+  Typography,
+  Chip,
+  Paper,
+  Divider,
+  Stack,
+  IconButton,
+  Collapse
+} from '@mui/material'
 import { LogPanel } from '@/components/shared/LogPanel'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { LoadingState } from '@/components/shared/LoadingState'
@@ -11,6 +26,7 @@ import { DockerServiceCard } from './DockerServiceCard'
 import { PortConflictDialog } from './PortConflictDialog'
 import { useDockersState } from '@/hooks/useAppState'
 import type { DockerServiceInfo } from '@/types/state'
+import { statusLabels } from '@/types/state'
 
 interface ServiceGroup {
   name: string
@@ -153,20 +169,19 @@ export function DockersPage() {
   if (dockerAvailable === false) {
     return (
       <EmptyState
-        icon={AlertCircle}
         title="Docker Not Available"
         description="Please ensure Docker Desktop or Docker Engine is installed and running on your system."
         action={{
           label: "Retry Connection",
           onClick: handleRetry,
-          icon: RefreshCw
+          icon: <RefreshIcon />
         }}
       />
     )
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <Box sx={{ display: 'flex', height: '100%', flexDirection: 'column' }}>
       {/* Port Conflict Dialog */}
       <PortConflictDialog
         pendingConflict={pendingConflict}
@@ -180,52 +195,84 @@ export function DockersPage() {
         title="Dockers"
         description="Container management dashboard for shared services"
       >
-        <Button variant="outline" onClick={handleRefreshAll} disabled={isRefreshing}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+        <Button
+          variant="outlined"
+          onClick={handleRefreshAll}
+          disabled={isRefreshing}
+          startIcon={<RefreshIcon sx={{ animation: isRefreshing ? 'spin 2s linear infinite' : 'none' }} />}
+        >
           Refresh
         </Button>
       </PageHeader>
 
       {/* Two-column layout */}
-      <div className="flex flex-1 gap-4 overflow-hidden">
+      <Stack direction="row" spacing={3} sx={{ flex: 1, overflow: 'hidden', mt: 1 }}>
         {/* Left: Service List */}
-        <div className="w-1/2 overflow-hidden rounded-lg border">
-          <div className="border-b bg-muted/40 px-4 py-2">
-            <span className="text-sm font-medium">Services</span>
-          </div>
-          <ScrollArea className="h-[calc(100%-40px)]">
-            <div className="space-y-2 p-4">
+        <Paper
+          variant="outlined"
+          sx={{
+            width: '50%',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: 'surfaceContainerLow.main',
+            borderRadius: 4
+          }}
+        >
+          <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'outlineVariant' }}>
+            <Typography variant="subtitle2" fontWeight={600}>Services</Typography>
+          </Box>
+
+          <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+            <Stack spacing={2}>
               {serviceGroups.map((group) => {
                 const isCollapsed = collapsedGroups.has(group.name)
                 return (
-                  <div key={group.name} className="rounded-lg border">
+                  <Paper
+                    key={group.name}
+                    elevation={0}
+                    variant="outlined"
+                    sx={{ overflow: 'hidden', borderColor: 'outlineVariant' }}
+                  >
                     {/* Group Header */}
-                    <button
-                      className="flex w-full items-center justify-between px-3 py-2 hover:bg-muted/40 transition-colors"
+                    <Box
+                      component="button"
                       onClick={() => toggleGroup(group.name)}
+                      sx={{
+                        display: 'flex',
+                        width: '100%',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        px: 2,
+                        py: 1,
+                        border: 'none',
+                        bgcolor: 'transparent',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        '&:hover': { bgcolor: 'action.hover' }
+                      }}
                     >
-                      <div className="flex items-center gap-2">
-                        {isCollapsed ? (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        )}
-                        <span className="font-medium">{group.name}</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {group.runningCount}/{group.services.length}
-                        </Badge>
-                      </div>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        {isCollapsed ? <ChevronRight fontSize="small" /> : <ChevronDown fontSize="small" />}
+                        <Typography variant="subtitle2" fontWeight={600}>{group.name}</Typography>
+                        <Chip
+                          label={`${group.runningCount}/${group.services.length}`}
+                          size="small"
+                          sx={{ height: 20, fontSize: '0.65rem' }}
+                        />
+                      </Stack>
                       {!group.isRstnManaged && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Lock className="h-3 w-3" />
-                          read-only
-                        </div>
+                        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: 'text.secondary' }}>
+                          <LockIcon sx={{ fontSize: 14 }} />
+                          <Typography variant="caption">read-only</Typography>
+                        </Stack>
                       )}
-                    </button>
+                    </Box>
 
                     {/* Group Services */}
-                    {!isCollapsed && (
-                      <div className="space-y-2 border-t px-3 py-2">
+                    <Collapse in={!isCollapsed}>
+                      <Divider />
+                      <Stack spacing={1.5} sx={{ p: 2 }}>
                         {group.services.map((service) => (
                           <DockerServiceCard
                             key={service.id}
@@ -239,29 +286,29 @@ export function DockersPage() {
                             onCreateVhost={handleCreateVhost}
                           />
                         ))}
-                      </div>
-                    )}
-                  </div>
+                      </Stack>
+                    </Collapse>
+                  </Paper>
                 )
               })}
+
               {serviceGroups.length === 0 && !isRefreshing && (
                 <EmptyState
-                  icon={Container}
                   title="No Services Found"
                   description="No Docker services were detected on your system."
                   action={{
                     label: "Refresh",
                     onClick: handleRefreshAll,
-                    icon: RefreshCw
+                    icon: <RefreshIcon />
                   }}
                 />
               )}
-            </div>
-          </ScrollArea>
-        </div>
+            </Stack>
+          </Box>
+        </Paper>
 
         {/* Right: Log Panel */}
-        <div className="w-1/2 overflow-hidden">
+        <Box sx={{ width: '50%', overflow: 'hidden' }}>
           <LogPanel
             title={selectedService ? `${selectedService.name} Logs` : 'Logs'}
             logs={logs}
@@ -270,8 +317,14 @@ export function DockersPage() {
             showCopy={true}
             emptyMessage="Click a service to view its logs"
           />
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Stack>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </Box>
   )
 }

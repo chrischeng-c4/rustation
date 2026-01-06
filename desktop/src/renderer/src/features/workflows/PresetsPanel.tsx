@@ -1,22 +1,37 @@
 import React, { useState, useCallback } from 'react'
-import { FileText, Plus, Info, Pencil, Trash2, Star } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Description as FileTextIcon,
+  Add as PlusIcon,
+  Info as InfoIcon,
+  Edit as PencilIcon,
+  Delete as Trash2Icon,
+  Star as StarIcon,
+  ExpandMore as ExpandMoreIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Card,
+  CardContent,
+  Box,
+  Typography,
+  Paper,
+  Stack,
+  Divider,
+  IconButton,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  TextField,
+  Chip,
+  alpha
+} from '@mui/material'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { useAppState } from '@/hooks/useAppState'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import type { ConstitutionPreset } from '@/types/state'
 
 interface PresetEditorDialogProps {
@@ -68,82 +83,55 @@ function PresetEditorDialog({ open, onOpenChange, preset, onSave }: PresetEditor
     }
   }
 
-  const charCount = prompt.length
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Preset' : 'Create New Preset'}</DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? 'Update the preset name and system prompt.'
-              : 'Create a custom constitution preset with specific instructions.'}
-          </DialogDescription>
-        </DialogHeader>
+    <Dialog open={open} onClose={() => onOpenChange(false)} maxWidth="md" fullWidth>
+      <DialogTitle>{isEditing ? 'Edit Preset' : 'Create New Preset'}</DialogTitle>
+      <DialogContent>
+        <DialogContentText sx={{ mb: 3 }}>
+          {isEditing
+            ? 'Update the preset name and system prompt.'
+            : 'Create a custom constitution preset with specific instructions.'}
+        </DialogContentText>
 
-        <div className="flex-1 space-y-4 overflow-y-auto py-4">
-          {/* Name Input */}
-          <div className="space-y-2">
-            <Label htmlFor="preset-name">
-              Preset Name <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="preset-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Rust Expert, Code Reviewer"
-              className={errors.name ? 'border-red-500' : ''}
-            />
-            {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
-          </div>
+        <Stack spacing={3} sx={{ mt: 1 }}>
+          <TextField
+            label="Preset Name"
+            placeholder="e.g. Rust Expert, Code Reviewer"
+            fullWidth
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            error={!!errors.name}
+            helperText={errors.name}
+          />
 
-          {/* Prompt Textarea */}
-          <div className="space-y-2 flex-1 flex flex-col">
-            <Label htmlFor="preset-prompt">
-              System Prompt <span className="text-red-500">*</span>
-            </Label>
-            <textarea
-              id="preset-prompt"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={`Example:
-
-You are a Rust programming expert.
-
-Core Principles:
-- Always use snake_case for function names
-- Prefer Result<T, E> over Option when errors are possible
-- Write comprehensive tests for all functions
-
-Code Style:
-- Use rustfmt and clippy
-- Add doc comments for public APIs`}
-              className={`flex-1 min-h-[300px] rounded-md border px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none ${
-                errors.prompt ? 'border-red-500' : 'border-input bg-background'
-              }`}
-            />
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{charCount.toLocaleString()} characters</span>
-              {errors.prompt && <span className="text-red-500">{errors.prompt}</span>}
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>{isEditing ? 'Save Changes' : 'Create Preset'}</Button>
-        </DialogFooter>
+          <TextField
+            label="System Prompt"
+            placeholder="Describe the AI's role and rules..."
+            multiline
+            rows={12}
+            fullWidth
+            required
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            error={!!errors.prompt}
+            helperText={errors.prompt || `${prompt.length.toLocaleString()} characters`}
+            InputProps={{ sx: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
+          />
+        </Stack>
       </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button onClick={() => onOpenChange(false)}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave} sx={{ borderRadius: 2 }}>
+          {isEditing ? 'Save Changes' : 'Create Preset'}
+        </Button>
+      </DialogActions>
     </Dialog>
   )
 }
 
 /**
  * Constitution Presets Management Panel.
- * Allows selecting and managing constitution presets (full system prompt replacement).
  */
 export function PresetsPanel() {
   const { state, dispatch, isLoading } = useAppState()
@@ -153,10 +141,9 @@ export function PresetsPanel() {
   const [editingPreset, setEditingPreset] = useState<ConstitutionPreset | undefined>()
 
   // Get presets config from active worktree
-  const presetsConfig = state.projects[state.active_project_index]
-    ?.worktrees[
-      state.projects[state.active_project_index]?.active_worktree_index ?? 0
-    ]?.tasks?.constitution_presets
+  const activeProject = state.projects[state.active_project_index]
+  const activeWorktree = activeProject?.worktrees[activeProject?.active_worktree_index ?? 0]
+  const presetsConfig = activeWorktree?.tasks?.constitution_presets
 
   // Handlers
   const handleSelectPreset = useCallback(
@@ -194,7 +181,6 @@ export function PresetsPanel() {
   const handleSavePreset = useCallback(
     async (name: string, prompt: string) => {
       if (editingPreset) {
-        // Update existing preset
         await dispatch({
           type: 'UpdateConstitutionPreset',
           payload: {
@@ -204,7 +190,6 @@ export function PresetsPanel() {
           },
         })
       } else {
-        // Create new preset
         await dispatch({
           type: 'CreateConstitutionPreset',
           payload: { name, prompt },
@@ -223,7 +208,6 @@ export function PresetsPanel() {
   if (!presetsConfig) {
     return (
       <EmptyState
-        icon={FileText}
         title="No Worktree Active"
         description="Open a worktree to manage constitution presets"
       />
@@ -235,172 +219,179 @@ export function PresetsPanel() {
   const customPresets = presetsConfig.presets.filter((p) => !p.is_builtin)
 
   return (
-    <>
-      <div className="flex h-full flex-col">
-        <PageHeader
-          title="Constitution Presets"
-          subtitle="Full system prompt replacement mode"
-          icon={<FileText className="h-5 w-5" />}
-        />
+    <Box sx={{ height: '100%', overflow: 'auto', p: 3 }}>
+      <PageHeader
+        title="Constitution Presets"
+        description="Full system prompt replacement mode"
+        icon={<FileTextIcon />}
+      />
 
-        <ScrollArea className="flex-1 p-4 pt-0">
-          <div className="space-y-4">
-            {/* Active Preset */}
-            {activePreset && (
-              <Card className="p-4 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      {activePreset.is_builtin && (
-                        <Star className="h-4 w-4 text-yellow-600 dark:text-yellow-500" />
-                      )}
-                      <h3 className="font-medium">{activePreset.name}</h3>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">Active Preset</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSelectPreset(null)}
-                  >
-                    Deactivate
-                  </Button>
-                </div>
-                <div className="mt-3">
-                  <p className="text-xs text-muted-foreground mb-2">System Prompt:</p>
-                  <pre className="text-xs font-mono bg-muted p-3 rounded-md overflow-x-auto max-h-[150px] whitespace-pre-wrap">
-                    {activePreset.prompt}
-                  </pre>
-                </div>
-              </Card>
-            )}
+      <Stack spacing={4}>
+        {/* Active Preset */}
+        {activePreset && (
+          <Paper variant="outlined" sx={{ p: 3, bgcolor: 'primary.container', borderColor: 'primary.main', borderRadius: 4 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+              <Box>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                  {activePreset.is_builtin && <StarIcon sx={{ fontSize: 18, color: 'warning.main' }} />}
+                  <Typography variant="h6" fontWeight={700} color="primary.contrastText">{activePreset.name}</Typography>
+                </Stack>
+                <Typography variant="caption" sx={{ color: 'primary.contrastText', opacity: 0.8 }}>Active Preset</Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => handleSelectPreset(null)}
+                sx={{ borderRadius: 2, color: 'primary.contrastText', borderColor: 'primary.contrastText' }}
+              >
+                Deactivate
+              </Button>
+            </Stack>
+            <Box sx={{ mt: 2, p: 2, bgcolor: alpha('#000', 0.2), borderRadius: 2 }}>
+              <Typography variant="caption" display="block" sx={{ mb: 1, color: 'primary.contrastText', fontWeight: 700, opacity: 0.7 }}>SYSTEM PROMPT:</Typography>
+              <Typography component="pre" variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', color: 'primary.contrastText', maxHeight: 150, overflow: 'auto' }}>
+                {activePreset.prompt}
+              </Typography>
+            </Box>
+          </Paper>
+        )}
 
-            {/* Create Button */}
-            <Button onClick={handleCreatePreset} className="w-full" size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              Create New Preset
-            </Button>
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={handleCreatePreset}
+          startIcon={<PlusIcon />}
+          sx={{ borderRadius: 2, py: 1.5 }}
+        >
+          Create New Preset
+        </Button>
 
-            {/* Built-in Presets */}
-            {builtinPresets.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium text-muted-foreground">Built-in Presets</h3>
-                {builtinPresets.map((preset) => (
-                  <Card
-                    key={preset.id}
-                    className={`p-3 cursor-pointer transition-colors ${
-                      presetsConfig.active_preset_id === preset.id
-                        ? 'border-primary bg-primary/5'
-                        : 'hover:border-primary/50'
-                    }`}
-                    onClick={() => handleSelectPreset(preset.id)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Star className="h-4 w-4 text-yellow-600 dark:text-yellow-500 shrink-0" />
-                          <h4 className="font-medium truncate">{preset.name}</h4>
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                          {preset.prompt.split('\n')[0]}
-                        </p>
-                      </div>
-                      <div className="ml-2 shrink-0 text-xs text-muted-foreground">Built-in</div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
+        {/* Built-in Presets */}
+        {builtinPresets.length > 0 && (
+          <Box>
+            <Typography variant="caption" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary', mb: 1.5, display: 'block' }}>
+              Built-in Presets
+            </Typography>
+            <Stack spacing={1.5}>
+              {builtinPresets.map((preset) => (
+                <Paper
+                  key={preset.id}
+                  variant="outlined"
+                  onClick={() => handleSelectPreset(preset.id)}
+                  sx={{
+                    p: 2,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    borderColor: presetsConfig.active_preset_id === preset.id ? 'primary.main' : 'outlineVariant',
+                    bgcolor: presetsConfig.active_preset_id === preset.id ? 'action.selected' : 'background.paper',
+                    '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' }
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                        <StarIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+                        <Typography variant="subtitle2" fontWeight={700}>{preset.name}</Typography>
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ opacity: 0.8 }}>
+                        {preset.prompt.split('\n')[0]}
+                      </Typography>
+                    </Box>
+                    <Chip label="Built-in" size="small" variant="outlined" sx={{ height: 18, fontSize: '0.6rem', borderRadius: 0.5 }} />
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          </Box>
+        )}
 
-            {/* Custom Presets */}
-            {customPresets.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium text-muted-foreground">Custom Presets</h3>
-                {customPresets.map((preset) => (
-                  <Card
-                    key={preset.id}
-                    className={`p-3 cursor-pointer transition-colors ${
-                      presetsConfig.active_preset_id === preset.id
-                        ? 'border-primary bg-primary/5'
-                        : 'hover:border-primary/50'
-                    }`}
-                    onClick={() => handleSelectPreset(preset.id)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium truncate">{preset.name}</h4>
-                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                          {preset.prompt.split('\n')[0] || 'No description'}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Updated {new Date(preset.updated_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="ml-2 flex items-center gap-1 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleEditPreset(preset)
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDeletePreset(preset.id)
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
+        {/* Custom Presets */}
+        <Box>
+          <Typography variant="caption" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary', mb: 1.5, display: 'block' }}>
+            Custom Presets
+          </Typography>
+          {customPresets.length === 0 ? (
+            <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: 'surfaceContainerLow.main', borderStyle: 'dashed' }}>
+              <Typography variant="body2" color="text.secondary">No custom presets yet. Create your first preset!</Typography>
+            </Paper>
+          ) : (
+            <Stack spacing={1.5}>
+              {customPresets.map((preset) => (
+                <Paper
+                  key={preset.id}
+                  variant="outlined"
+                  onClick={() => handleSelectPreset(preset.id)}
+                  sx={{
+                    p: 2,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    borderColor: presetsConfig.active_preset_id === preset.id ? 'primary.main' : 'outlineVariant',
+                    bgcolor: presetsConfig.active_preset_id === preset.id ? 'action.selected' : 'background.paper',
+                    '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' }
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>{preset.name}</Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ opacity: 0.8 }}>
+                        {preset.prompt.split('\n')[0] || 'No description'}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.disabled', mt: 0.5, display: 'block' }}>
+                        Updated {new Date(preset.updated_at).toLocaleDateString()}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={0.5}>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleEditPreset(preset)
+                        }}
+                      >
+                        <PencilIcon fontSize="inherit" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeletePreset(preset.id)
+                        }}
+                      >
+                        <Trash2Icon fontSize="inherit" />
+                      </IconButton>
+                    </Stack>
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </Box>
 
-            {customPresets.length === 0 && (
-              <Card className="p-4">
-                <p className="text-sm text-muted-foreground text-center">
-                  No custom presets yet. Create your first preset!
-                </p>
-              </Card>
-            )}
+        {/* Info Card */}
+        <Paper variant="outlined" sx={{ p: 2.5, bgcolor: 'surfaceContainerLow.main', borderRadius: 3 }}>
+          <Stack direction="row" spacing={2}>
+            <InfoIcon color="primary" />
+            <Box>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>How Presets Work</Typography>
+              <Box component="ul" sx={{ m: 0, pl: 2, typography: 'caption', color: 'text.secondary', '& li': { mb: 0.5 } }}>
+                <li>Presets <strong>replace</strong> the entire system prompt (not append)</li>
+                <li>Built-in presets (⭐) provide templates for common roles</li>
+                <li>Create custom presets to define your own coding standards</li>
+                <li>Only one preset can be active at a time</li>
+                <li>Built-in presets cannot be edited or deleted</li>
+              </Box>
+            </Box>
+          </Stack>
+        </Paper>
+      </Stack>
 
-            {/* Info Card */}
-            <Card className="p-4">
-              <div className="flex items-start gap-3">
-                <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                <div className="flex-1 space-y-2">
-                  <h3 className="font-medium">How Presets Work</h3>
-                  <ul className="space-y-1 text-sm text-muted-foreground list-disc list-inside">
-                    <li>
-                      Presets <strong>replace</strong> the entire system prompt (not append)
-                    </li>
-                    <li>Built-in presets (⭐) provide expert templates for common roles</li>
-                    <li>Create custom presets to define your own coding standards</li>
-                    <li>Only one preset can be active at a time</li>
-                    <li>Built-in presets cannot be edited or deleted</li>
-                  </ul>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </ScrollArea>
-      </div>
-
-      {/* Preset Editor Dialog */}
       <PresetEditorDialog
         open={isEditorOpen}
         onOpenChange={setIsEditorOpen}
         preset={editingPreset}
         onSave={handleSavePreset}
       />
-    </>
+    </Box>
   )
 }

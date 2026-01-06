@@ -7,19 +7,37 @@
  */
 
 import { useState, useCallback } from 'react'
-import { X, Plus, FolderOpen, GitBranch, History, Container, FileCode, Camera } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import {
+  Close as XIcon,
+  Add as PlusIcon,
+  FolderOpen as FolderOpenIcon,
+  AccountTree as GitBranchIcon,
+  History as HistoryIcon,
+  Dns as ContainerIcon,
+  Code as FileCodeIcon,
+  CameraAlt as CameraIcon,
+  ExpandMore as ChevronDownIcon,
+  CheckCircle as CheckCircleIcon,
+} from '@mui/icons-material'
+import {
+  Button,
+  Box,
+  Typography,
+  Tabs,
+  Tab,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  Stack,
+  Tooltip,
+  Paper,
+  alpha
+} from '@mui/material'
 import { useActiveProject, useActiveWorktree, useAppState } from '@/hooks/useAppState'
 import { NotificationDrawer } from '@/features/notifications'
-import { cn } from '@/lib/utils'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { AddWorktreeDialog } from './AddWorktreeDialog'
 
 export function ProjectTabs() {
@@ -27,31 +45,35 @@ export function ProjectTabs() {
   const { projects, activeIndex, dispatch } = useActiveProject()
   const { worktrees, activeWorktreeIndex, worktree } = useActiveWorktree()
   const [addWorktreeDialogOpen, setAddWorktreeDialogOpen] = useState(false)
+  
+  const [projectMenuAnchor, setProjectMenuAnchor] = useState<null | HTMLElement>(null)
 
   const recentProjects = state?.recent_projects ?? []
   const activeProject = projects[activeIndex]
 
   const handleOpenProject = async () => {
+    setProjectMenuAnchor(null)
     const path = await window.dialogApi.openFolder()
     if (path) {
       await dispatch({ type: 'OpenProject', payload: { path } })
     }
   }
 
-  const handleSwitchProject = async (index: number) => {
-    await dispatch({ type: 'SwitchProject', payload: { index } })
+  const handleSwitchProject = (_: any, index: number) => {
+    dispatch({ type: 'SwitchProject', payload: { index } })
   }
 
-  const handleCloseProject = async (e: React.MouseEvent, index: number) => {
+  const handleCloseProject = (e: React.MouseEvent, index: number) => {
     e.stopPropagation()
-    await dispatch({ type: 'CloseProject', payload: { index } })
+    dispatch({ type: 'CloseProject', payload: { index } })
   }
 
-  const handleSwitchWorktree = async (index: number) => {
-    await dispatch({ type: 'SwitchWorktree', payload: { index } })
+  const handleSwitchWorktree = (_: any, index: number) => {
+    dispatch({ type: 'SwitchWorktree', payload: { index } })
   }
 
   const handleOpenRecentProject = async (path: string) => {
+    setProjectMenuAnchor(null)
     await dispatch({ type: 'OpenProject', payload: { path } })
   }
 
@@ -63,16 +85,8 @@ export function ProjectTabs() {
     await dispatch({ type: 'AddWorktreeNewBranch', payload: { branch } })
   }, [dispatch])
 
-  // Check if worktree has unsaved changes
-  const getWorktreeModified = (wt: typeof worktree) => {
-    return wt?.is_modified ?? false
-  }
-
-  // Filter out already open projects from recent list
   const openProjectPaths = new Set(projects.map(p => p.path))
   const filteredRecentProjects = recentProjects.filter(r => !openProjectPaths.has(r.path))
-
-  // Get active view from state
   const activeView = state?.active_view ?? 'tasks'
 
   const handleDockerClick = useCallback(async () => {
@@ -80,39 +94,16 @@ export function ProjectTabs() {
   }, [dispatch])
 
   const handleScreenshot = useCallback(async () => {
-    console.log('Screenshot button clicked!')
     try {
       const result = await window.screenshotApi.capture()
-      console.log('Screenshot result:', result)
-
       if (result.success && result.filePath) {
-        // Show success notification
         await dispatch({
           type: 'AddNotification',
-          payload: {
-            message: `Screenshot saved and copied to clipboard: ${result.filePath}`,
-            notification_type: 'success',
-          },
-        })
-      } else {
-        // Show error notification
-        await dispatch({
-          type: 'AddNotification',
-          payload: {
-            message: `Screenshot failed: ${result.error || 'Unknown error'}`,
-            notification_type: 'error',
-          },
+          payload: { message: `Screenshot saved: ${result.filePath}`, notification_type: 'success' },
         })
       }
     } catch (error) {
       console.error('Screenshot error:', error)
-      await dispatch({
-        type: 'AddNotification',
-        payload: {
-          message: `Screenshot error: ${error}`,
-          notification_type: 'error',
-        },
-      })
     }
   }, [dispatch])
 
@@ -121,173 +112,152 @@ export function ProjectTabs() {
   }, [dispatch])
 
   return (
-    <div className="flex flex-col border-b bg-muted/30" data-testid="project-tabs">
-      {/* Project Tabs (Top Row) - Global Features on Right */}
-      <div className="flex items-center justify-between px-2 py-1 min-h-[40px]">
-        {/* Left side: Project tabs */}
-        <div className="flex items-center gap-1">
+    <Box sx={{ display: 'flex', flexDirection: 'column', bgcolor: 'surfaceContainerLow.main', borderBottom: 1, borderColor: 'outlineVariant' }}>
+      {/* Project Tabs (Top Row) */}
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 1, height: 48 }}>
+        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
           {projects.length === 0 ? (
             <Button
-              variant="ghost"
-              size="sm"
+              variant="text"
+              size="small"
               onClick={handleOpenProject}
-              className="gap-2 text-muted-foreground"
+              startIcon={<FolderOpenIcon />}
+              sx={{ color: 'text.secondary', textTransform: 'none' }}
             >
-              <FolderOpen className="h-4 w-4" />
               Open Project
             </Button>
           ) : (
             <>
-              {projects.map((project, index) => {
-                // Check if any worktree in this project is modified
-                const hasModifiedWorktree = project.worktrees.some(wt => wt.is_modified)
-
-                return (
-                  <div
+              <Tabs
+                value={activeIndex}
+                onChange={handleSwitchProject}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{
+                  minHeight: 40,
+                  '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' }
+                }}
+              >
+                {projects.map((project, index) => (
+                  <Tab
                     key={project.id}
-                    onClick={() => handleSwitchProject(index)}
-                    className={cn(
-                      'flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-colors',
-                      'hover:bg-accent group',
-                      index === activeIndex
-                        ? 'bg-background border shadow-sm'
-                        : 'text-muted-foreground'
-                    )}
-                  >
-                    <span className="text-sm truncate max-w-[120px]">
-                      {hasModifiedWorktree && <span className="text-yellow-500 mr-1">*</span>}
-                      {project.name}
-                    </span>
-                    <button
-                      onClick={(e) => handleCloseProject(e, index)}
-                      className="opacity-0 group-hover:opacity-100 hover:bg-destructive/20 rounded p-0.5 transition-opacity"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                )
-              })}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={handleOpenProject}>
-                    <FolderOpen className="h-4 w-4 mr-2" />
-                    Open Project...
-                  </DropdownMenuItem>
-                  {filteredRecentProjects.length > 0 && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel className="flex items-center gap-2">
-                        <History className="h-3 w-3" />
-                        Recent Projects
-                      </DropdownMenuLabel>
-                      {filteredRecentProjects.slice(0, 5).map((recent) => (
-                        <DropdownMenuItem
-                          key={recent.path}
-                          onClick={() => handleOpenRecentProject(recent.path)}
+                    label={
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Typography variant="caption" fontWeight={600} noWrap sx={{ maxWidth: 120 }}>
+                          {project.worktrees.some(wt => wt.is_modified) && (
+                            <Box component="span" sx={{ color: 'warning.main', mr: 0.5 }}>*</Box>
+                          )}
+                          {project.name}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => handleCloseProject(e, index)}
+                          sx={{ p: 0.25, '&:hover': { bgcolor: 'error.container', color: 'error.main' } }}
                         >
-                          <span className="truncate max-w-[200px]">
-                            {recent.path.split('/').pop()}
-                          </span>
-                        </DropdownMenuItem>
-                      ))}
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                          <XIcon sx={{ fontSize: 12 }} />
+                        </IconButton>
+                      </Stack>
+                    }
+                    sx={{ minHeight: 40, py: 0, textTransform: 'none', px: 2 }}
+                  />
+                ))}
+              </Tabs>
+              <IconButton size="small" onClick={(e) => setProjectMenuAnchor(e.currentTarget)} sx={{ ml: 0.5 }}>
+                <PlusIcon fontSize="small" />
+              </IconButton>
+              <Menu
+                anchorEl={projectMenuAnchor}
+                open={Boolean(projectMenuAnchor)}
+                onClose={() => setProjectMenuAnchor(null)}
+              >
+                <MenuItem onClick={handleOpenProject}>
+                  <ListItemIcon><FolderOpenIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText primary="Open Project..." />
+                </MenuItem>
+                {filteredRecentProjects.length > 0 && [
+                  <Divider key="divider" />,
+                  <Box key="label" sx={{ px: 2, py: 1 }}><Typography variant="caption" fontWeight={700} color="text.secondary">RECENT</Typography></Box>,
+                  ...filteredRecentProjects.slice(0, 5).map((recent) => (
+                    <MenuItem key={recent.path} onClick={() => handleOpenRecentProject(recent.path)}>
+                      <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+                      <ListItemText primary={recent.path.split('/').pop()} secondary={recent.path} secondaryTypographyProps={{ variant: 'caption', noWrap: true, sx: { maxWidth: 200 } }} />
+                    </MenuItem>
+                  ))
+                ]}
+              </Menu>
             </>
           )}
-        </div>
+        </Stack>
 
-        {/* Right side: Global features (Screenshot, Docker, Notifications) */}
-        <div className="flex items-center gap-1">
-          {/* Screenshot button (dev mode only) */}
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ pl: 2 }}>
           {import.meta.env.DEV && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleScreenshot}
-              className="gap-1.5 text-sm h-7"
-              title="Capture screenshot"
-            >
-              <Camera className="h-3.5 w-3.5" />
-              Screenshot
-            </Button>
+            <Tooltip title="Capture Screenshot">
+              <IconButton size="small" onClick={handleScreenshot}><CameraIcon fontSize="small" /></IconButton>
+            </Tooltip>
           )}
-
           <Button
-            variant={activeView === 'dockers' ? 'secondary' : 'ghost'}
-            size="sm"
+            variant={activeView === 'dockers' ? 'contained' : 'text'}
+            color={activeView === 'dockers' ? 'secondary' : 'inherit'}
+            size="small"
             onClick={handleDockerClick}
-            className="gap-1.5 text-sm h-7"
+            startIcon={<ContainerIcon />}
+            sx={{ height: 32, borderRadius: 2, textTransform: 'none', fontSize: '0.75rem' }}
           >
-            <Container className="h-3.5 w-3.5" />
             Docker
           </Button>
           <NotificationDrawer />
-        </div>
-      </div>
+        </Stack>
+      </Stack>
 
-      {/* Worktree Sub-Tabs (Second Row) - Project Features on Right */}
+      {/* Worktree Sub-Tabs (Second Row) */}
       {worktrees.length > 0 && (
-        <div className="flex items-center justify-between px-2 py-1 border-t border-border/50 bg-muted/20">
-          {/* Left side: Worktree tabs */}
-          <div className="flex items-center gap-1">
-            <GitBranch className="h-3.5 w-3.5 text-muted-foreground mr-1" />
-            {worktrees.map((wt, index) => (
-              <div
-                key={wt.id}
-                onClick={() => handleSwitchWorktree(index)}
-                className={cn(
-                  'flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer transition-colors',
-                  'hover:bg-accent',
-                  index === activeWorktreeIndex
-                    ? 'bg-background border shadow-sm font-medium'
-                    : 'text-muted-foreground'
-                )}
-              >
-                {getWorktreeModified(wt) && <span className="text-yellow-500">*</span>}
-                <span className="truncate max-w-[100px]">{wt.branch}</span>
-                {wt.is_main && (
-                  <span className="text-[10px] text-muted-foreground/70">(main)</span>
-                )}
-              </div>
-            ))}
-            {/* Add Worktree Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-muted-foreground ml-1"
-              onClick={() => setAddWorktreeDialogOpen(true)}
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 1.5, height: 36, bgcolor: alpha('#000', 0.1) }}>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+            <GitBranchIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+            <Tabs
+              value={activeWorktreeIndex}
+              onChange={handleSwitchWorktree}
+              variant="scrollable"
+              sx={{
+                minHeight: 36,
+                '& .MuiTabs-indicator': { display: 'none' },
+                '& .Mui-selected': { bgcolor: 'action.selected', borderRadius: 1 }
+              }}
             >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+              {worktrees.map((wt, index) => (
+                <Tab
+                  key={wt.id}
+                  label={
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      {wt.is_modified && <Box component="span" sx={{ color: 'warning.main' }}>*</Box>}
+                      <Typography variant="caption" fontWeight={activeIndex === index ? 700 : 500}>
+                        {wt.branch}
+                      </Typography>
+                      {wt.is_main && <Typography variant="caption" sx={{ opacity: 0.5, fontSize: '0.6rem' }}>(main)</Typography>}
+                    </Stack>
+                  }
+                  sx={{ minHeight: 32, height: 32, px: 1.5, textTransform: 'none', minWidth: 0 }}
+                />
+              ))}
+            </Tabs>
+            <IconButton size="small" onClick={() => setAddWorktreeDialogOpen(true)} sx={{ width: 24, height: 24 }}>
+              <PlusIcon sx={{ fontSize: 14 }} />
+            </IconButton>
+          </Stack>
 
-          {/* Right side: Project features (Env) */}
-          <div className="flex items-center gap-1">
-            <Button
-              variant={activeView === 'env' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={handleEnvClick}
-              className="gap-1.5 text-xs h-6"
-            >
-              <FileCode className="h-3.5 w-3.5" />
-              Env
-            </Button>
-          </div>
-        </div>
+          <Button
+            variant={activeView === 'env' ? 'contained' : 'text'}
+            color={activeView === 'env' ? 'secondary' : 'inherit'}
+            size="small"
+            onClick={handleEnvClick}
+            startIcon={<FileCodeIcon sx={{ fontSize: 14 }} />}
+            sx={{ height: 24, borderRadius: 1, textTransform: 'none', fontSize: '0.7rem', px: 1 }}
+          >
+            Env
+          </Button>
+        </Stack>
       )}
 
-      {/* Add Worktree Dialog */}
       {activeProject && (
         <AddWorktreeDialog
           open={addWorktreeDialogOpen}
@@ -297,6 +267,6 @@ export function ProjectTabs() {
           onAddNewBranch={handleAddWorktreeNewBranch}
         />
       )}
-    </div>
+    </Box>
   )
 }

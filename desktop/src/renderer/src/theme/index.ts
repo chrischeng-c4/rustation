@@ -1,5 +1,34 @@
 import { createTheme, alpha } from '@mui/material/styles'
 
+declare module '@mui/material/styles' {
+  interface Palette {
+    surfaceContainerLowest: Palette['primary']
+    surfaceContainerLow: Palette['primary']
+    surfaceContainer: Palette['primary']
+    surfaceContainerHigh: Palette['primary']
+    surfaceContainerHighest: Palette['primary']
+    onSurface: Palette['primary']
+    onSurfaceVariant: Palette['primary']
+    outline: Palette['primary']
+    outlineVariant: Palette['primary']
+    secondaryContainer: Palette['primary']
+    onSecondaryContainer: Palette['primary']
+  }
+  interface PaletteOptions {
+    surfaceContainerLowest?: PaletteOptions['primary']
+    surfaceContainerLow?: PaletteOptions['primary']
+    surfaceContainer?: PaletteOptions['primary']
+    surfaceContainerHigh?: PaletteOptions['primary']
+    surfaceContainerHighest?: PaletteOptions['primary']
+    onSurface?: PaletteOptions['primary']
+    onSurfaceVariant?: PaletteOptions['primary']
+    outline?: PaletteOptions['primary']
+    outlineVariant?: PaletteOptions['primary']
+    secondaryContainer?: PaletteOptions['primary']
+    onSecondaryContainer?: PaletteOptions['primary']
+  }
+}
+
 // Material Design 3 inspired theme
 export const theme = createTheme({
   palette: {
@@ -20,6 +49,18 @@ export const theme = createTheme({
       default: '#1C1B1F', // M3 Dark Surface
       paper: '#2B2930',   // M3 Dark Surface Container
     },
+    // Custom M3 Surface Container Roles
+    surfaceContainerLowest: { main: '#0F0D13' },
+    surfaceContainerLow: { main: '#1D1B20' },
+    surfaceContainer: { main: '#211F26' },
+    surfaceContainerHigh: { main: '#2B2930' },
+    surfaceContainerHighest: { main: '#36343B' },
+    onSurface: { main: '#E6E1E5' },
+    onSurfaceVariant: { main: '#CAC4D0' },
+    outline: { main: '#938F99' },
+    outlineVariant: { main: '#49454F' },
+    secondaryContainer: { main: '#4A4458' },
+    onSecondaryContainer: { main: '#E8DEF8' },
     error: {
       main: '#F2B8B5',
     },

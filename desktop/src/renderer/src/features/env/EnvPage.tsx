@@ -1,16 +1,29 @@
 import { useState, useCallback } from 'react'
-import { Copy, RefreshCw, Settings2, ArrowRight } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  ContentCopy as CopyIcon,
+  Refresh as RefreshIcon,
+  Settings as SettingsIcon,
+  ArrowForward as ArrowRightIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Card,
+  CardContent,
+  Box,
+  Typography,
+  Stack,
+  Paper,
+  Divider,
+  CircularProgress
+} from '@mui/material'
 import { EnvPatternList } from './EnvPatternList'
 import { WorktreeSelector } from './WorktreeSelector'
 import { EnvCopyHistory } from './EnvCopyHistory'
 import { useEnvState } from '@/hooks/useAppState'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 /**
  * Environment Management Page.
- * Allows syncing dotfiles between worktrees in a project.
  */
 export function EnvPage() {
   const { envConfig, project, worktrees, dispatch, isLoading } = useEnvState()
@@ -62,114 +75,129 @@ export function EnvPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <Box sx={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress color="primary" />
+      </Box>
     )
   }
 
   // No project open
   if (!project || !envConfig) {
     return (
-      <div className="flex h-full flex-col items-center justify-center">
-        <Settings2 className="h-12 w-12 text-muted-foreground" />
-        <h2 className="mt-4 text-xl font-semibold">No Project Open</h2>
-        <p className="mt-2 text-muted-foreground">
+      <Box sx={{ display: 'flex', height: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 3 }}>
+        <SettingsIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2, opacity: 0.5 }} />
+        <Typography variant="h5" fontWeight={600}>No Project Open</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           Open a project to manage environment files.
-        </p>
-      </div>
+        </Typography>
+      </Box>
     )
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="space-y-6 p-4">
+    <Box sx={{ height: '100%', overflow: 'auto', p: 3 }}>
+      <Stack spacing={3}>
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold">Environment</h2>
-            <p className="mt-1 text-muted-foreground">
-              Sync dotfiles across worktrees in {project.name}
-            </p>
-          </div>
+        <PageHeader
+          title="Environment"
+          description={`Sync dotfiles across worktrees in ${project.name}`}
+          icon={<SettingsIcon />}
+        >
           <Button
-            variant={envConfig.auto_copy_enabled ? 'default' : 'outline'}
+            variant={envConfig.auto_copy_enabled ? 'contained' : 'outlined'}
             onClick={handleAutoCopyToggle}
+            sx={{ borderRadius: 2 }}
           >
             Auto-Copy: {envConfig.auto_copy_enabled ? 'ON' : 'OFF'}
           </Button>
-        </div>
+        </PageHeader>
 
         {/* Manual Sync Card */}
-        <Card className="p-4">
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-medium">
-            <Copy className="h-5 w-5" />
-            Manual Sync
-          </h3>
+        <Card variant="outlined" sx={{ borderRadius: 4 }}>
+          <CardContent sx={{ p: 3 }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 3 }}>
+              <CopyIcon fontSize="small" color="primary" />
+              <Typography variant="h6" fontWeight={600}>Manual Sync</Typography>
+            </Stack>
 
-          <div className="grid grid-cols-[1fr,auto,1fr] items-end gap-4">
-            <WorktreeSelector
-              worktrees={worktrees}
-              value={effectiveSource}
-              onChange={setSelectedSource}
-              label="Source"
-              placeholder="Select source worktree"
-            />
+            <Stack direction="row" spacing={3} alignItems="flex-end" sx={{ mb: 3 }}>
+              <Box sx={{ flex: 1 }}>
+                <WorktreeSelector
+                  worktrees={worktrees}
+                  value={effectiveSource}
+                  onChange={setSelectedSource}
+                  label="Source"
+                  placeholder="Select source worktree"
+                />
+              </Box>
 
-            <ArrowRight className="mb-2 h-5 w-5 text-muted-foreground" />
+              <Box sx={{ pb: 1 }}>
+                <ArrowRightIcon sx={{ color: 'text.disabled' }} />
+              </Box>
 
-            <WorktreeSelector
-              worktrees={worktrees}
-              value={selectedTarget}
-              onChange={setSelectedTarget}
-              label="Target"
-              excludePaths={effectiveSource ? [effectiveSource] : []}
-              placeholder="Select target worktree"
-            />
-          </div>
+              <Box sx={{ flex: 1 }}>
+                <WorktreeSelector
+                  worktrees={worktrees}
+                  value={selectedTarget}
+                  onChange={setSelectedTarget}
+                  label="Target"
+                  excludePaths={effectiveSource ? [effectiveSource] : []}
+                  placeholder="Select target worktree"
+                />
+              </Box>
+            </Stack>
 
-          <div className="mt-4 flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Files: {envConfig.tracked_patterns.join(', ') || 'None configured'}
-            </p>
-            <Button
-              onClick={handleCopyEnvFiles}
-              disabled={!effectiveSource || !selectedTarget || isCopying}
-            >
-              {isCopying ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Copying...
-                </>
-              ) : (
-                <>
-                  <Copy className="mr-2 h-4 w-4" />
-                  Copy Now
-                </>
-              )}
-            </Button>
-          </div>
+            <Divider sx={{ my: 2 }} />
+
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" display="block">Tracked Files:</Typography>
+                <Typography variant="body2" fontWeight={500}>
+                  {envConfig.tracked_patterns.join(', ') || 'None configured'}
+                </Typography>
+              </Box>
+              <Button
+                variant="contained"
+                onClick={handleCopyEnvFiles}
+                disabled={!effectiveSource || !selectedTarget || isCopying}
+                startIcon={isCopying ? <RefreshIcon sx={{ animation: 'spin 2s linear infinite' }} /> : <CopyIcon />}
+                sx={{ borderRadius: 2 }}
+              >
+                {isCopying ? 'Copying...' : 'Copy Now'}
+              </Button>
+            </Box>
+          </CardContent>
         </Card>
 
         {/* Configuration Card */}
-        <Card className="p-4">
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-medium">
-            <Settings2 className="h-5 w-5" />
-            Configuration
-          </h3>
+        <Card variant="outlined" sx={{ borderRadius: 4 }}>
+          <CardContent sx={{ p: 3 }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+              <SettingsIcon fontSize="small" color="primary" />
+              <Typography variant="h6" fontWeight={600}>Configuration</Typography>
+            </Stack>
 
-          <EnvPatternList
-            patterns={envConfig.tracked_patterns}
-            onPatternsChange={handlePatternsChange}
-          />
+            <EnvPatternList
+              patterns={envConfig.tracked_patterns}
+              onPatternsChange={handlePatternsChange}
+            />
+          </CardContent>
         </Card>
 
         {/* Recent Activity Card */}
-        <Card className="p-4">
-          <h3 className="mb-4 text-lg font-medium">Recent Activity</h3>
-          <EnvCopyHistory lastResult={envConfig.last_copy_result} />
+        <Card variant="outlined" sx={{ borderRadius: 4 }}>
+          <CardContent sx={{ p: 3 }}>
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>Recent Activity</Typography>
+            <EnvCopyHistory lastResult={envConfig.last_copy_result} />
+          </CardContent>
         </Card>
-      </div>
-    </ScrollArea>
+      </Stack>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </Box>
   )
 }

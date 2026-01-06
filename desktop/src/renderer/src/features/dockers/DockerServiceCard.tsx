@@ -1,16 +1,25 @@
 import { useState } from 'react'
-import { Play, Square, RotateCw, FileText, Copy, Check } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
+  PlayArrow as PlayIcon,
+  Stop as StopIcon,
+  Refresh as RotateCwIcon,
+  Description as FileTextIcon,
+  ContentCopy as CopyIcon,
+  Check as CheckIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Badge,
   Card,
   CardHeader,
-  CardTitle,
-  CardDescription,
   CardContent,
-  CardFooter,
-} from '@/components/ui/card'
-import { cn } from '@/lib/utils'
+  CardActions,
+  Typography,
+  Box,
+  IconButton,
+  Tooltip,
+  Chip
+} from '@mui/material'
 import type { DockerServiceInfo } from '@/types/state'
 import { statusColors, statusLabels } from '@/types/state'
 import { AddDbDialog } from './AddDbDialog'
@@ -73,84 +82,110 @@ export function DockerServiceCard({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Map status labels to M3 colors
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'running': return 'success'
+      case 'starting': return 'warning'
+      case 'error': return 'error'
+      default: return 'default'
+    }
+  }
+
   return (
     <Card
-      className={cn(
-        'w-full cursor-pointer transition-colors hover:border-muted-foreground/50',
-        isActive && 'border-primary bg-primary/5'
-      )}
+      variant="outlined"
+      sx={{
+        width: '100%',
+        cursor: 'pointer',
+        transition: (theme) => theme.transitions.create(['border-color', 'background-color']),
+        borderColor: isActive ? 'primary.main' : 'outlineVariant',
+        bgcolor: isActive ? 'secondaryContainer.main' : 'background.paper',
+        '&:hover': {
+          borderColor: 'primary.main',
+          bgcolor: isActive ? 'secondaryContainer.main' : 'action.hover',
+        },
+      }}
       onClick={() => onSelect?.(service.id)}
     >
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">{service.name}</CardTitle>
-          <div className="flex items-center gap-2">
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${statusColors[service.status]}`}
-            />
-            <Badge variant={isRunning ? 'default' : 'secondary'}>
-              {statusLabels[service.status]}
-            </Badge>
-          </div>
-        </div>
-        <CardDescription className="font-mono text-xs">
-          {service.image}
-        </CardDescription>
-      </CardHeader>
+      <CardHeader
+        sx={{ pb: 1 }}
+        title={
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="subtitle1" fontWeight={600}>{service.name}</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  bgcolor: isRunning ? 'success.main' : isStarting ? 'warning.main' : 'text.disabled'
+                }}
+              />
+              <Chip
+                label={statusLabels[service.status]}
+                size="small"
+                color={getStatusColor(service.status) as any}
+                variant={isRunning ? 'filled' : 'outlined'}
+                sx={{ fontSize: '0.65rem', height: 20 }}
+              />
+            </Box>
+          </Box>
+        }
+        subheader={
+          <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'onSurfaceVariant.main' }}>
+            {service.image}
+          </Typography>
+        }
+      />
 
-      <CardContent className="pb-3">
+      <CardContent sx={{ pb: 1 }}>
         {service.port && (
-          <p className="text-sm text-muted-foreground">
-            Port: <span className="font-mono">{service.port}</span>
-          </p>
+          <Typography variant="body2" sx={{ color: 'onSurfaceVariant.main' }}>
+            Port: <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{service.port}</Box>
+          </Typography>
         )}
       </CardContent>
 
-      <CardFooter className="flex flex-wrap gap-2">
+      <CardActions sx={{ px: 2, pb: 2, pt: 0, flexWrap: 'wrap', gap: 1 }}>
         <Button
-          variant={isRunning ? 'destructive' : 'default'}
-          size="sm"
+          variant="contained"
+          size="small"
+          color={isRunning ? 'error' : 'primary'}
           disabled={!canControl}
           onClick={(e) => {
             e.stopPropagation()
             onToggle?.(service.id)
           }}
+          startIcon={isRunning ? <StopIcon /> : <PlayIcon />}
+          sx={{ borderRadius: 2 }}
         >
-          {isRunning ? (
-            <>
-              <Square className="mr-1 h-3.5 w-3.5" />
-              Stop
-            </>
-          ) : (
-            <>
-              <Play className="mr-1 h-3.5 w-3.5" />
-              Start
-            </>
-          )}
+          {isRunning ? 'Stop' : 'Start'}
         </Button>
 
         <Button
-          variant="outline"
-          size="sm"
+          variant="outlined"
+          size="small"
           disabled={!canControl || !isRunning}
           onClick={(e) => {
             e.stopPropagation()
             onRestart?.(service.id)
           }}
+          startIcon={<RotateCwIcon />}
+          sx={{ borderRadius: 2 }}
         >
-          <RotateCw className="mr-1 h-3.5 w-3.5" />
           Restart
         </Button>
 
         <Button
-          variant="ghost"
-          size="sm"
+          variant="text"
+          size="small"
           onClick={(e) => {
             e.stopPropagation()
             onViewLogs?.(service.id)
           }}
+          startIcon={<FileTextIcon />}
         >
-          <FileText className="mr-1 h-3.5 w-3.5" />
           Logs
         </Button>
 
@@ -173,28 +208,22 @@ export function DockerServiceCard({
           />
         )}
 
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation()
-            handleCopyConnectionString()
-          }}
-          className="ml-auto"
-        >
-          {copied ? (
-            <>
-              <Check className="mr-1 h-3.5 w-3.5 text-green-500" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="mr-1 h-3.5 w-3.5" />
-              Copy URL
-            </>
-          )}
-        </Button>
-      </CardFooter>
+        <Box sx={{ ml: 'auto' }}>
+          <Tooltip title="Copy Connection URL">
+            <Button
+              size="small"
+              variant="text"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleCopyConnectionString()
+              }}
+              startIcon={copied ? <CheckIcon color="success" /> : <CopyIcon />}
+            >
+              {copied ? 'Copied' : 'Copy URL'}
+            </Button>
+          </Tooltip>
+        </Box>
+      </CardActions>
     </Card>
   )
 }

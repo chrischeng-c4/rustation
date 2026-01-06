@@ -3,13 +3,13 @@ import { Box, Button, Stack, Typography } from '@mui/material'
 import type { SxProps, Theme } from '@mui/material/styles'
 
 interface EmptyStateProps {
-  icon: React.ElementType
+  icon?: React.ReactNode // Changed to ReactNode to allow passing icon with props
   title: string
   description: string
   action?: {
     label: string
     onClick: () => void
-    icon?: React.ElementType
+    icon?: React.ReactNode
   }
   sx?: SxProps<Theme>
 }
@@ -18,7 +18,7 @@ interface EmptyStateProps {
  * EmptyState - Standardized placeholder for empty views or lists.
  */
 export function EmptyState({
-  icon: Icon,
+  icon,
   title,
   description,
   action,
@@ -28,33 +28,42 @@ export function EmptyState({
     <Stack
       alignItems="center"
       justifyContent="center"
-      spacing={2}
+      spacing={3}
       sx={{ height: '100%', p: 4, textAlign: 'center', ...sx }}
     >
-      <Box
-        sx={{
-          height: 80,
-          width: 80,
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          bgcolor: 'action.hover',
-        }}
-      >
-        <Icon sx={{ fontSize: 40, color: 'text.secondary' }} />
+      {icon && (
+        <Box
+          sx={{
+            height: 80,
+            width: 80,
+            borderRadius: 4, // M3 Rounded square
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'secondaryContainer.main',
+            color: 'onSecondaryContainer.main',
+            '& .MuiSvgIcon-root': { fontSize: 40 }
+          }}
+        >
+          {icon}
+        </Box>
+      )}
+      
+      <Box>
+        <Typography variant="h6" fontWeight={600}>
+          {title}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 280, mt: 1 }}>
+          {description}
+        </Typography>
       </Box>
-      <Typography variant="h6" fontWeight={600}>
-        {title}
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 250 }}>
-        {description}
-      </Typography>
+
       {action && (
         <Button
-          variant="outlined"
+          variant="contained"
           onClick={action.onClick}
-          startIcon={action.icon ? <action.icon /> : undefined}
+          startIcon={action.icon}
+          sx={{ borderRadius: 2 }}
         >
           {action.label}
         </Button>

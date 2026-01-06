@@ -1,18 +1,29 @@
 import { useState, useEffect } from 'react'
-import { GitBranch, Plus, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
+  AccountTree as GitBranchIcon,
+  Add as PlusIcon,
+  Refresh as RefreshIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  TextField,
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/utils'
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Box,
+  Typography,
+  Stack,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Paper,
+  CircularProgress,
+  Divider
+} from '@mui/material'
 
 interface BranchInfo {
   name: string
@@ -86,7 +97,6 @@ export function AddWorktreeDialog({
       return
     }
 
-    // Validate branch name (basic validation)
     if (!/^[a-zA-Z0-9._/-]+$/.test(newBranchName)) {
       setError('Invalid branch name. Use only letters, numbers, dots, underscores, slashes, and hyphens.')
       return
@@ -106,7 +116,6 @@ export function AddWorktreeDialog({
 
   const handleClose = () => {
     onOpenChange(false)
-    // Reset state after close animation
     setTimeout(() => {
       setMode('select')
       setSelectedBranch(null)
@@ -116,136 +125,123 @@ export function AddWorktreeDialog({
     }, 200)
   }
 
-  // Filter out branches that already have worktrees
   const availableBranches = branches.filter(b => !b.hasWorktree)
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Add Worktree</DialogTitle>
-          <DialogDescription>
-            {mode === 'select'
-              ? 'Select an existing branch or create a new one'
-              : 'Enter a name for the new branch'}
-          </DialogDescription>
-        </DialogHeader>
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Add Worktree</DialogTitle>
+      <DialogContent>
+        <DialogContentText sx={{ mb: 2 }}>
+          {mode === 'select'
+            ? 'Select an existing branch or create a new one'
+            : 'Enter a name for the new branch'}
+        </DialogContentText>
 
         {mode === 'select' ? (
-          <>
+          <Stack spacing={3}>
             {isLoadingBranches ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress size={32} />
+              </Box>
             ) : (
-              <div className="grid gap-4 py-4">
-                {/* Branch List */}
-                <div className="grid gap-2">
-                  <Label>Available Branches</Label>
-                  {availableBranches.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">
+              <Box>
+                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', mb: 1, display: 'block' }}>
+                  Available Branches
+                </Typography>
+                {availableBranches.length === 0 ? (
+                  <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', bgcolor: 'action.hover' }}>
+                    <Typography variant="body2" color="text.secondary">
                       All branches already have worktrees
-                    </p>
-                  ) : (
-                    <ScrollArea className="h-[200px] rounded-md border">
-                      <div className="p-2 space-y-1">
-                        {availableBranches.map((branch) => (
-                          <button
-                            key={branch.name}
-                            onClick={() => setSelectedBranch(branch.name)}
-                            className={cn(
-                              'w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left',
-                              'hover:bg-accent transition-colors',
-                              selectedBranch === branch.name && 'bg-accent'
-                            )}
-                          >
-                            <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
-                            <span className="truncate">{branch.name}</span>
-                            {branch.isCurrent && (
-                              <span className="text-xs text-muted-foreground">(current)</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  )}
-                </div>
-
-                {/* Create New Branch Option */}
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setMode('new')}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create New Branch
-                </Button>
-
-                {error && (
-                  <p className="text-sm text-destructive">{error}</p>
-                )}
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAddFromBranch}
-                disabled={!selectedBranch || isCreating}
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
+                    </Typography>
+                  </Paper>
                 ) : (
-                  'Add Worktree'
+                  <Paper variant="outlined" sx={{ maxHeight: 240, overflow: 'auto', bgcolor: 'background.default' }}>
+                    <List sx={{ p: 0 }}>
+                      {availableBranches.map((branch) => (
+                        <ListItem key={branch.name} disablePadding divider>
+                          <ListItemButton
+                            selected={selectedBranch === branch.name}
+                            onClick={() => setSelectedBranch(branch.name)}
+                            sx={{ py: 1.5 }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 36 }}>
+                              <GitBranchIcon fontSize="small" color={selectedBranch === branch.name ? 'primary' : 'inherit'} />
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={branch.name}
+                              primaryTypographyProps={{ variant: 'body2', fontWeight: selectedBranch === branch.name ? 700 : 400 }}
+                              secondary={branch.isCurrent ? '(current)' : null}
+                              secondaryTypographyProps={{ variant: 'caption' }}
+                            />
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Paper>
                 )}
-              </Button>
-            </DialogFooter>
+              </Box>
+            )}
+
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => setMode('new')}
+              startIcon={<PlusIcon />}
+              sx={{ borderRadius: 2 }}
+            >
+              Create New Branch
+            </Button>
+
+            {error && (
+              <Typography variant="caption" color="error">{error}</Typography>
+            )}
+          </Stack>
+        ) : (
+          <Stack spacing={3}>
+            <Box>
+              <TextField
+                autoFocus
+                label="Branch Name"
+                placeholder="feature/my-new-feature"
+                fullWidth
+                value={newBranchName}
+                onChange={(e) => setNewBranchName(e.target.value)}
+                disabled={isCreating}
+                error={!!error}
+                helperText={error || "A new branch will be created from the current HEAD"}
+              />
+            </Box>
+          </Stack>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        {mode === 'select' ? (
+          <>
+            <Button onClick={handleClose}>Cancel</Button>
+            <Button
+              variant="contained"
+              onClick={handleAddFromBranch}
+              disabled={!selectedBranch || isCreating}
+              startIcon={isCreating && <RefreshIcon sx={{ animation: 'spin 2s linear infinite' }} />}
+            >
+              {isCreating ? 'Creating...' : 'Add Worktree'}
+            </Button>
           </>
         ) : (
           <>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="branchName">Branch Name</Label>
-                <Input
-                  id="branchName"
-                  placeholder="feature/my-new-feature"
-                  value={newBranchName}
-                  onChange={(e) => setNewBranchName(e.target.value)}
-                  disabled={isCreating}
-                />
-                <p className="text-xs text-muted-foreground">
-                  A new branch will be created from the current HEAD
-                </p>
-              </div>
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setMode('select')}>
-                Back
-              </Button>
-              <Button
-                onClick={handleAddNewBranch}
-                disabled={!newBranchName.trim() || isCreating}
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  'Create & Add Worktree'
-                )}
-              </Button>
-            </DialogFooter>
+            <Button onClick={() => setMode('select')}>Back</Button>
+            <Button
+              variant="contained"
+              onClick={handleAddNewBranch}
+              disabled={!newBranchName.trim() || isCreating}
+              startIcon={isCreating && <RefreshIcon sx={{ animation: 'spin 2s linear infinite' }} />}
+            >
+              {isCreating ? 'Creating...' : 'Create & Add Worktree'}
+            </Button>
           </>
         )}
-      </DialogContent>
+      </DialogActions>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </Dialog>
   )
 }

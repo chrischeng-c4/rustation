@@ -1,13 +1,38 @@
-import { FileText, Play, Check, X, Clock, Archive, RefreshCw, Rocket, ClipboardCheck, MessageSquare, ThumbsUp, ThumbsDown, ChevronDown, FileCode } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import {
+  Description as FileTextIcon,
+  PlayArrow as PlayIcon,
+  CheckCircle as CheckIcon,
+  Cancel as XIcon,
+  AccessTime as ClockIcon,
+  Archive as ArchiveIcon,
+  Refresh as RefreshIcon,
+  RocketLaunch as RocketIcon,
+  AssignmentTurnedIn as ClipboardCheckIcon,
+  ChatBubbleOutline as MessageSquareIcon,
+  ThumbUpOutlined as ThumbsUpIcon,
+  ThumbDownOutlined as ThumbsDownIcon,
+  ExpandMore as ChevronDownIcon,
+  Code as FileCodeIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Chip,
+  Box,
+  Typography,
+  Tabs,
+  Tab,
+  Paper,
+  Stack,
+  Divider,
+  IconButton,
+  Collapse,
+  alpha
+} from '@mui/material'
 import { WorkflowHeader } from '@/components/shared/WorkflowHeader'
 import { useAppState } from '@/hooks/useAppState'
 import { ContextFilesInput } from './ContextFilesInput'
-import type { Change, ReviewSession, ReviewStatus } from '@/types/state'
+import type { Change, ReviewSession, ReviewStatus, ChangeStatus } from '@/types/state'
+import { useState } from 'react'
 
 interface ChangeDetailViewProps {
   change: Change
@@ -30,28 +55,31 @@ function getReviewSession(
 function ReviewStatusBadge({ session, type }: { session: ReviewSession | null; type: 'proposal' | 'plan' }) {
   if (!session) return null
 
-  const statusConfig: Record<ReviewStatus, { label: string; color: string; icon: typeof Clock }> = {
-    pending: { label: 'Pending Review', color: 'bg-gray-500/10 text-gray-700', icon: Clock },
-    reviewing: { label: 'In Review', color: 'bg-blue-500/10 text-blue-700', icon: ClipboardCheck },
-    iterating: { label: 'Iterating', color: 'bg-yellow-500/10 text-yellow-700', icon: RefreshCw },
-    approved: { label: 'Approved', color: 'bg-green-500/10 text-green-700', icon: Check },
-    rejected: { label: 'Rejected', color: 'bg-red-500/10 text-red-700', icon: X },
+  const statusConfig: Record<ReviewStatus, { label: string; color: 'default' | 'info' | 'warning' | 'success' | 'error'; icon: any }> = {
+    pending: { label: 'Pending Review', color: 'default', icon: ClockIcon },
+    reviewing: { label: 'In Review', color: 'info', icon: ClipboardCheckIcon },
+    iterating: { label: 'Iterating', color: 'warning', icon: RefreshIcon },
+    approved: { label: 'Approved', color: 'success', icon: CheckIcon },
+    rejected: { label: 'Rejected', color: 'error', icon: XIcon },
   }
 
   const config = statusConfig[session.status]
   const Icon = config.icon
 
   return (
-    <Badge variant="outline" className={`ml-2 gap-1 ${config.color}`}>
-      <Icon className="h-3 w-3" />
-      {type === 'proposal' ? 'Proposal' : 'Plan'}: {config.label}
-      {session.comments.filter((c) => !c.resolved).length > 0 && (
-        <span className="ml-1 flex items-center gap-0.5">
-          <MessageSquare className="h-3 w-3" />
-          {session.comments.filter((c) => !c.resolved).length}
-        </span>
-      )}
-    </Badge>
+    <Chip
+      icon={<Icon sx={{ fontSize: '0.8rem !important' }} />}
+      label={`${type === 'proposal' ? 'Proposal' : 'Plan'}: ${config.label}`}
+      size="small"
+      color={config.color as any}
+      variant="outlined"
+      sx={{ 
+        height: 24, 
+        fontSize: '0.65rem', 
+        fontWeight: 700,
+        bgcolor: alpha(config.color === 'default' ? '#000' : '#fff', 0.05)
+      }}
+    />
   )
 }
 
@@ -65,7 +93,6 @@ interface InlineReviewControlsProps {
 }
 
 function InlineReviewControls({ session, onApprove, onReject }: InlineReviewControlsProps) {
-  // Only show controls if review is in progress (not already approved/rejected)
   if (session.status === 'approved' || session.status === 'rejected') {
     return null
   }
@@ -73,30 +100,45 @@ function InlineReviewControls({ session, onApprove, onReject }: InlineReviewCont
   const unresolvedComments = session.comments.filter((c) => !c.resolved).length
 
   return (
-    <div className="border-t bg-muted/30 p-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <ClipboardCheck className="h-4 w-4" />
-          <span>Review required</span>
+    <Paper elevation={0} sx={{ borderTop: 1, borderColor: 'outlineVariant', bgcolor: 'action.hover', p: 2 }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+          <ClipboardCheckIcon fontSize="small" color="primary" />
+          <Typography variant="body2" fontWeight={600}>Review required</Typography>
           {unresolvedComments > 0 && (
-            <Badge variant="secondary" className="gap-1">
-              <MessageSquare className="h-3 w-3" />
-              {unresolvedComments} comment{unresolvedComments > 1 ? 's' : ''}
-            </Badge>
+            <Chip 
+              icon={<MessageSquareIcon sx={{ fontSize: '0.8rem !important' }} />}
+              label={`${unresolvedComments} active`} 
+              size="small" 
+              color="secondary"
+              sx={{ height: 20, fontSize: '0.6rem' }} 
+            />
           )}
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={onReject} className="gap-1">
-            <ThumbsDown className="h-3 w-3" />
+        </Stack>
+        <Stack direction="row" spacing={1}>
+          <Button 
+            size="small" 
+            variant="outlined" 
+            color="error" 
+            onClick={onReject} 
+            startIcon={<ThumbsDownIcon />}
+            sx={{ borderRadius: 1.5 }}
+          >
             Reject
           </Button>
-          <Button size="sm" onClick={onApprove} className="gap-1 bg-green-600 hover:bg-green-700">
-            <ThumbsUp className="h-3 w-3" />
+          <Button 
+            size="small" 
+            variant="contained" 
+            color="success" 
+            onClick={onApprove} 
+            startIcon={<ThumbsUpIcon />}
+            sx={{ borderRadius: 1.5 }}
+          >
             Approve
           </Button>
-        </div>
-      </div>
-    </div>
+        </Stack>
+      </Stack>
+    </Paper>
   )
 }
 
@@ -105,6 +147,8 @@ function InlineReviewControls({ session, onApprove, onReject }: InlineReviewCont
  */
 export function ChangeDetailView({ change }: ChangeDetailViewProps) {
   const { state, dispatch } = useAppState()
+  const [activeTab, setActiveTab] = useState('proposal')
+  const [contextOpen, setContextOpen] = useState(false)
 
   // Get review sessions linked to this change
   const activeProject = state?.projects?.[state?.active_project_index ?? 0]
@@ -179,233 +223,290 @@ export function ChangeDetailView({ change }: ChangeDetailViewProps) {
   const canSyncAndArchive = change.status === 'done'
   const isArchived = change.status === 'archived'
 
+  const STATUS_COLORS: Record<string, 'info' | 'warning' | 'secondary' | 'success' | 'error' | 'default'> = {
+    proposed: 'info',
+    planning: 'warning',
+    planned: 'secondary',
+    implementing: 'warning',
+    testing: 'info',
+    done: 'success',
+    archived: 'default',
+    cancelled: 'error',
+    failed: 'error',
+  }
+
   return (
-    <div className="h-full flex flex-col">
+    <Stack sx={{ height: '100%' }}>
       <WorkflowHeader
         title={change.name}
         subtitle={change.intent}
         status={change.status}
-        statusColor={STATUS_CONFIG[change.status as ChangeStatus]?.color || "bg-gray-500"}
+        statusColor={STATUS_COLORS[change.status] || "default"}
       >
         {/* Review Status Badges */}
-        <div className="flex flex-wrap gap-2">
+        <Stack direction="row" spacing={1}>
           {proposalReviewSession && <ReviewStatusBadge session={proposalReviewSession} type="proposal" />}
           {planReviewSession && <ReviewStatusBadge session={planReviewSession} type="plan" />}
-        </div>
+        </Stack>
       </WorkflowHeader>
 
-      <div className="flex-1 overflow-hidden p-4">
+      <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', p: 3 }}>
         {/* Context Files Section */}
         {worktree?.path && (
-          <Collapsible className="mb-4">
-            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm hover:bg-muted/50 transition-colors [&[data-state=open]>svg]:rotate-180">
-              <div className="flex items-center gap-2">
-                <FileCode className="h-4 w-4" />
-                <span>Context Files</span>
+          <Box sx={{ mb: 2 }}>
+            <Paper 
+              variant="outlined" 
+              sx={{ 
+                p: 1.5, 
+                px: 2, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                bgcolor: 'surfaceContainerLow.main',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+              onClick={() => setContextOpen(!contextOpen)}
+            >
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <FileCodeIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Typography variant="body2" fontWeight={600}>Context Files</Typography>
                 {(change.context_files?.length ?? 0) > 0 && (
-                  <Badge variant="secondary" className="ml-2">
-                    {change.context_files.length}
-                  </Badge>
+                  <Chip label={change.context_files.length} size="small" sx={{ height: 18, fontSize: '0.6rem' }} />
                 )}
-              </div>
-              <ChevronDown className="h-4 w-4 transition-transform duration-200" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 rounded-md border p-3">
-              <ContextFilesInput
-                changeId={change.id}
-                files={change.context_files ?? []}
-                projectRoot={worktree.path}
-              />
-            </CollapsibleContent>
-          </Collapsible>
+              </Stack>
+              <ChevronDownIcon sx={{ fontSize: 18, transform: contextOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            </Paper>
+            <Collapse in={contextOpen}>
+              <Paper variant="outlined" sx={{ mt: 1, p: 2, borderStyle: 'dashed' }}>
+                <ContextFilesInput
+                  changeId={change.id}
+                  files={change.context_files ?? []}
+                  projectRoot={worktree.path}
+                />
+              </Paper>
+            </Collapse>
+          </Box>
         )}
 
-        <Tabs defaultValue="proposal" className="h-full">
-          <TabsList className="mb-4">
-            <TabsTrigger value="proposal" className="gap-1">
-              <FileText className="h-4 w-4" />
-              Proposal
-              {proposalReviewSession?.status === 'reviewing' && (
-                <span className="ml-1 h-2 w-2 rounded-full bg-blue-500" />
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="plan" className="gap-1">
-              <FileText className="h-4 w-4" />
-              Plan
-              {planReviewSession?.status === 'reviewing' && (
-                <span className="ml-1 h-2 w-2 rounded-full bg-blue-500" />
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="implementation" className="gap-1">
-              <Rocket className="h-4 w-4" />
-              Implementation
-            </TabsTrigger>
-          </TabsList>
+        <Paper variant="outlined" sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 4 }}>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'surfaceContainerLow.main' }}>
+            <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
+              <Tab 
+                value="proposal" 
+                label={
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <FileTextIcon sx={{ fontSize: 16 }} />
+                    <Typography variant="caption" fontWeight={700}>Proposal</Typography>
+                    {proposalReviewSession?.status === 'reviewing' && (
+                      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'info.main' }} />
+                    )}
+                  </Stack>
+                }
+                sx={{ textTransform: 'none', minHeight: 48 }}
+              />
+              <Tab 
+                value="plan" 
+                label={
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <FileTextIcon sx={{ fontSize: 16 }} />
+                    <Typography variant="caption" fontWeight={700}>Plan</Typography>
+                    {planReviewSession?.status === 'reviewing' && (
+                      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'info.main' }} />
+                    )}
+                  </Stack>
+                }
+                sx={{ textTransform: 'none', minHeight: 48 }}
+              />
+              <Tab 
+                value="implementation" 
+                label={
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <RocketIcon sx={{ fontSize: 16 }} />
+                    <Typography variant="caption" fontWeight={700}>Implementation</Typography>
+                  </Stack>
+                }
+                sx={{ textTransform: 'none', minHeight: 48 }}
+              />
+            </Tabs>
+          </Box>
 
-          <TabsContent value="proposal" className="h-[calc(100%-50px)]">
-            {isPlanning && change.streaming_output ? (
-              <ScrollArea className="h-full rounded-md border p-4">
-                <div className="flex items-center gap-2 mb-2 text-yellow-600">
-                  <Clock className="h-4 w-4 animate-spin" />
-                  <span className="text-sm font-medium">Generating...</span>
-                </div>
-                <pre className="whitespace-pre-wrap text-sm">{change.streaming_output}</pre>
-              </ScrollArea>
-            ) : hasProposal ? (
-              <div className="flex h-full flex-col rounded-md border">
-                <ScrollArea className="flex-1 p-4">
-                  <pre className="whitespace-pre-wrap text-sm">{change.proposal}</pre>
-                </ScrollArea>
-                {/* Inline Review Controls */}
-                {proposalReviewSession && (
-                  <InlineReviewControls
-                    session={proposalReviewSession}
-                    onApprove={handleApproveProposalReview}
-                    onReject={handleRejectProposalReview}
-                  />
+          <Box sx={{ flex: 1, overflow: 'auto', p: 0, display: 'flex', flexDirection: 'column' }}>
+            {activeTab === 'proposal' && (
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                {isPlanning && change.streaming_output ? (
+                  <Box sx={{ p: 3 }}>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2, color: 'warning.main' }}>
+                      <RefreshIcon fontSize="small" sx={{ animation: 'spin 2s linear infinite' }} />
+                      <Typography variant="caption" fontWeight={700}>Generating proposal...</Typography>
+                    </Stack>
+                    <Typography component="pre" variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                      {change.streaming_output}
+                    </Typography>
+                  </Box>
+                ) : hasProposal ? (
+                  <>
+                    <Box sx={{ flex: 1, p: 3 }}>
+                      <Typography component="pre" variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                        {change.proposal}
+                      </Typography>
+                    </Box>
+                    {proposalReviewSession && (
+                      <InlineReviewControls
+                        session={proposalReviewSession}
+                        onApprove={handleApproveProposalReview}
+                        onReject={handleRejectProposalReview}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <Stack alignItems="center" justifyContent="center" sx={{ flex: 1, p: 4 }}>
+                    <FileTextIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2, opacity: 0.5 }} />
+                    <Typography variant="body2" color="text.secondary" gutterBottom>No proposal generated yet</Typography>
+                    {canGenerateProposal && (
+                      <Button variant="contained" size="small" onClick={handleGenerateProposal} startIcon={<PlayIcon />} sx={{ mt: 1, borderRadius: 2 }}>
+                        Generate Proposal
+                      </Button>
+                    )}
+                  </Stack>
                 )}
-              </div>
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-4">
-                <FileText className="h-12 w-12 text-muted-foreground" />
-                <p className="text-muted-foreground">No proposal generated yet</p>
-                {canGenerateProposal && (
-                  <Button onClick={handleGenerateProposal}>
-                    <Play className="mr-2 h-4 w-4" />
-                    Generate Proposal
-                  </Button>
-                )}
-              </div>
+              </Box>
             )}
-          </TabsContent>
 
-          <TabsContent value="plan" className="h-[calc(100%-50px)]">
-            {isPlanning && !hasProposal && change.streaming_output ? (
-              <ScrollArea className="h-full rounded-md border p-4">
-                <div className="flex items-center gap-2 mb-2 text-yellow-600">
-                  <Clock className="h-4 w-4 animate-spin" />
-                  <span className="text-sm font-medium">Generating plan...</span>
-                </div>
-                <pre className="whitespace-pre-wrap text-sm">{change.streaming_output}</pre>
-              </ScrollArea>
-            ) : hasPlan ? (
-              <div className="flex h-full flex-col rounded-md border">
-                <ScrollArea className="flex-1 p-4">
-                  <pre className="whitespace-pre-wrap text-sm">{change.plan}</pre>
-                </ScrollArea>
-                {/* Inline Review Controls */}
-                {planReviewSession && (
-                  <InlineReviewControls
-                    session={planReviewSession}
-                    onApprove={handleApprovePlanReview}
-                    onReject={handleRejectPlanReview}
-                  />
+            {activeTab === 'plan' && (
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                {isPlanning && !hasProposal && change.streaming_output ? (
+                  <Box sx={{ p: 3 }}>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2, color: 'warning.main' }}>
+                      <RefreshIcon fontSize="small" sx={{ animation: 'spin 2s linear infinite' }} />
+                      <Typography variant="caption" fontWeight={700}>Generating plan...</Typography>
+                    </Stack>
+                    <Typography component="pre" variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                      {change.streaming_output}
+                    </Typography>
+                  </Box>
+                ) : hasPlan ? (
+                  <>
+                    <Box sx={{ flex: 1, p: 3 }}>
+                      <Typography component="pre" variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                        {change.plan}
+                      </Typography>
+                    </Box>
+                    {planReviewSession && (
+                      <InlineReviewControls
+                        session={planReviewSession}
+                        onApprove={handleApprovePlanReview}
+                        onReject={handleRejectPlanReview}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <Stack alignItems="center" justifyContent="center" sx={{ flex: 1, p: 4 }}>
+                    <FileTextIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2, opacity: 0.5 }} />
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      {hasProposal ? 'No plan generated yet' : 'Generate a proposal first'}
+                    </Typography>
+                    {canGeneratePlan && (
+                      <Button variant="contained" size="small" onClick={handleGeneratePlan} startIcon={<PlayIcon />} sx={{ mt: 1, borderRadius: 2 }}>
+                        Generate Plan
+                      </Button>
+                    )}
+                  </Stack>
                 )}
-              </div>
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-4">
-                <FileText className="h-12 w-12 text-muted-foreground" />
-                <p className="text-muted-foreground">
-                  {hasProposal ? 'No plan generated yet' : 'Generate a proposal first'}
-                </p>
-                {canGeneratePlan && (
-                  <Button onClick={handleGeneratePlan}>
-                    <Play className="mr-2 h-4 w-4" />
-                    Generate Plan
-                  </Button>
-                )}
-              </div>
+              </Box>
             )}
-          </TabsContent>
 
-          <TabsContent value="implementation" className="h-[calc(100%-50px)]">
-            {isImplementing && change.streaming_output ? (
-              <ScrollArea className="h-full rounded-md border p-4">
-                <div className="flex items-center gap-2 mb-2 text-blue-600">
-                  <Rocket className="h-4 w-4 animate-pulse" />
-                  <span className="text-sm font-medium">Implementing...</span>
-                </div>
-                <pre className="whitespace-pre-wrap text-sm">{change.streaming_output}</pre>
-              </ScrollArea>
-            ) : change.status === 'done' ? (
-              <ScrollArea className="h-full rounded-md border p-4">
-                <div className="flex items-center gap-2 mb-2 text-green-600">
-                  <Check className="h-4 w-4" />
-                  <span className="text-sm font-medium">Implementation Complete</span>
-                </div>
-                <pre className="whitespace-pre-wrap text-sm">{change.streaming_output}</pre>
-              </ScrollArea>
-            ) : change.status === 'failed' ? (
-              <ScrollArea className="h-full rounded-md border p-4">
-                <div className="flex items-center gap-2 mb-2 text-red-600">
-                  <X className="h-4 w-4" />
-                  <span className="text-sm font-medium">Implementation Failed</span>
-                </div>
-                <pre className="whitespace-pre-wrap text-sm">{change.streaming_output}</pre>
-              </ScrollArea>
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-4">
-                <Rocket className="h-12 w-12 text-muted-foreground" />
-                <p className="text-muted-foreground">
-                  {hasPlan ? 'Ready to implement' : 'Generate a plan first'}
-                </p>
-                {canExecute && (
-                  <Button onClick={handleExecutePlan} className="bg-blue-600 hover:bg-blue-700">
-                    <Rocket className="mr-2 h-4 w-4" />
-                    Execute Plan
-                  </Button>
+            {activeTab === 'implementation' && (
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                {isImplementing && change.streaming_output ? (
+                  <Box sx={{ p: 3 }}>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2, color: 'info.main' }}>
+                      <RocketIcon fontSize="small" sx={{ animation: 'pulse 1.5s infinite' }} />
+                      <Typography variant="caption" fontWeight={700}>Implementing...</Typography>
+                    </Stack>
+                    <Typography component="pre" variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                      {change.streaming_output}
+                    </Typography>
+                  </Box>
+                ) : change.status === 'done' ? (
+                  <Box sx={{ p: 3 }}>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2, color: 'success.main' }}>
+                      <CheckIcon fontSize="small" />
+                      <Typography variant="caption" fontWeight={700}>Implementation Complete</Typography>
+                    </Stack>
+                    <Typography component="pre" variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                      {change.streaming_output}
+                    </Typography>
+                  </Box>
+                ) : change.status === 'failed' ? (
+                  <Box sx={{ p: 3 }}>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2, color: 'error.main' }}>
+                      <XIcon fontSize="small" />
+                      <Typography variant="caption" fontWeight={700}>Implementation Failed</Typography>
+                    </Stack>
+                    <Typography component="pre" variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                      {change.streaming_output}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Stack alignItems="center" justifyContent="center" sx={{ flex: 1, p: 4 }}>
+                    <RocketIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2, opacity: 0.5 }} />
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      {hasPlan ? 'Ready to implement' : 'Generate a plan first'}
+                    </Typography>
+                    {canExecute && (
+                      <Button variant="contained" size="small" onClick={handleExecutePlan} startIcon={<RocketIcon />} sx={{ mt: 1, borderRadius: 2 }}>
+                        Execute Plan
+                      </Button>
+                    )}
+                  </Stack>
                 )}
-              </div>
+              </Box>
             )}
-          </TabsContent>
-        </Tabs>
+          </Box>
+        </Paper>
 
-        {/* Action Buttons */}
-        <div className="mt-4 flex gap-2 border-t pt-4">
+        {/* Action Buttons Bar */}
+        <Stack direction="row" spacing={2} sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'outlineVariant' }}>
           {canApprove && (
-            <Button onClick={handleApprovePlan} className="bg-green-600 hover:bg-green-700">
-              <Check className="mr-2 h-4 w-4" />
+            <Button variant="contained" color="success" onClick={handleApprovePlan} startIcon={<CheckIcon />} sx={{ borderRadius: 2 }}>
               Approve Plan
             </Button>
           )}
           {canExecute && (
-            <Button onClick={handleExecutePlan} className="bg-blue-600 hover:bg-blue-700">
-              <Rocket className="mr-2 h-4 w-4" />
+            <Button variant="contained" color="primary" onClick={handleExecutePlan} startIcon={<RocketIcon />} sx={{ borderRadius: 2 }}>
               Execute Plan
             </Button>
           )}
           {isImplementing && (
-            <Badge variant="secondary" className="px-3 py-1">
-              <Rocket className="mr-2 h-4 w-4 animate-pulse" />
-              Implementing...
-            </Badge>
+            <Chip icon={<RocketIcon sx={{ animation: 'pulse 1.5s infinite' }} />} label="Implementing..." color="warning" variant="filled" sx={{ borderRadius: 1.5 }} />
           )}
           {canSyncAndArchive && (
             <>
-              <Button onClick={handleSyncContext} variant="outline">
-                <RefreshCw className="mr-2 h-4 w-4" />
+              <Button variant="outlined" color="primary" onClick={handleSyncContext} startIcon={<RefreshIcon />} sx={{ borderRadius: 2 }}>
                 Sync to Context
               </Button>
-              <Button onClick={handleArchive} className="bg-blue-600 hover:bg-blue-700">
-                <Archive className="mr-2 h-4 w-4" />
+              <Button variant="contained" color="primary" onClick={handleArchive} startIcon={<ArchiveIcon />} sx={{ borderRadius: 2 }}>
                 Archive
               </Button>
             </>
           )}
           {isArchived && (
-            <Badge variant="secondary" className="px-3 py-1">
-              <Archive className="mr-2 h-4 w-4" />
-              Archived
-            </Badge>
+            <Chip icon={<ArchiveIcon />} label="Archived" color="default" sx={{ borderRadius: 1.5 }} />
           )}
-          {canCancel && (
-            <Button variant="destructive" onClick={handleCancelChange}>
-              <X className="mr-2 h-4 w-4" />
-              Cancel Change
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
+          <Box sx={{ ml: 'auto' }}>
+            {canCancel && (
+              <Button variant="text" color="error" onClick={handleCancelChange} startIcon={<XIcon />}>
+                Cancel Change
+              </Button>
+            )}
+          </Box>
+        </Stack>
+      </Box>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+      `}</style>
+    </Stack>
   )
 }

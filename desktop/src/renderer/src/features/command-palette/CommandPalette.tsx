@@ -1,20 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Command } from 'cmdk'
 import {
-  FolderOpen,
-  GitBranch,
-  Play,
-  Container,
-  Settings,
-  FileCode,
-  ListTodo,
-  Sun,
-  Moon,
-  Monitor,
-  Server,
-  MessageSquare,
-  TerminalSquare,
-} from 'lucide-react'
+  FolderOpen as FolderOpenIcon,
+  AccountTree as GitBranchIcon,
+  PlayArrow as PlayIcon,
+  Dns as ContainerIcon,
+  Settings as SettingsIcon,
+  Code as FileCodeIcon,
+  ListAlt as ListTodoIcon,
+  WbSunny as SunIcon,
+  DarkMode as MoonIcon,
+  DesktopWindows as MonitorIcon,
+  Storage as ServerIcon,
+  ChatBubbleOutline as MessageSquareIcon,
+  Terminal as TerminalSquareIcon,
+} from '@mui/icons-material'
 import { useAppState, useActiveProject, useActiveWorktree } from '@/hooks/useAppState'
 import type { Theme } from '@/types/state'
 import './command-palette.css'
@@ -125,7 +125,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 onSelect={() => handleSwitchProject(index)}
                 className="command-item"
               >
-                <FolderOpen className="command-icon" />
+                <FolderOpenIcon className="command-icon" />
                 <span>{project.name}</span>
                 {index === activeIndex && (
                   <span className="command-badge">Active</span>
@@ -145,7 +145,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 onSelect={() => handleSwitchWorktree(index)}
                 className="command-item"
               >
-                <GitBranch className="command-icon" />
+                <GitBranchIcon className="command-icon" />
                 <span>{wt.branch}</span>
                 {wt.is_main && <span className="command-badge">main</span>}
               </Command.Item>
@@ -163,7 +163,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 onSelect={() => handleRunTask(task.name)}
                 className="command-item"
               >
-                <Play className="command-icon" />
+                <PlayIcon className="command-icon" />
                 <span>just {task.name}</span>
                 {task.description && (
                   <span className="command-description">{task.description}</span>
@@ -180,7 +180,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             onSelect={() => handleSetView('tasks')}
             className="command-item"
           >
-            <ListTodo className="command-icon" />
+            <ListTodoIcon className="command-icon" />
             <span>Tasks</span>
           </Command.Item>
           <Command.Item
@@ -188,7 +188,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             onSelect={() => handleSetView('mcp')}
             className="command-item"
           >
-            <Server className="command-icon" />
+            <ServerIcon className="command-icon" />
             <span>rstn-mcp Integration</span>
           </Command.Item>
           <Command.Item
@@ -196,7 +196,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             onSelect={() => handleSetView('chat')}
             className="command-item"
           >
-            <MessageSquare className="command-icon" />
+            <MessageSquareIcon className="command-icon" />
             <span>Chat</span>
           </Command.Item>
           <Command.Item
@@ -204,7 +204,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             onSelect={() => handleSetView('terminal')}
             className="command-item"
           >
-            <TerminalSquare className="command-icon" />
+            <TerminalSquareIcon className="command-icon" />
             <span>Terminal</span>
           </Command.Item>
           <Command.Item
@@ -212,7 +212,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             onSelect={() => handleSetView('dockers')}
             className="command-item"
           >
-            <Container className="command-icon" />
+            <ContainerIcon className="command-icon" />
             <span>Docker</span>
           </Command.Item>
           <Command.Item
@@ -220,7 +220,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             onSelect={() => handleSetView('env')}
             className="command-item"
           >
-            <FileCode className="command-icon" />
+            <FileCodeIcon className="command-icon" />
             <span>Environment</span>
           </Command.Item>
           <Command.Item
@@ -228,7 +228,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             onSelect={() => handleSetView('settings')}
             className="command-item"
           >
-            <Settings className="command-icon" />
+            <SettingsIcon className="command-icon" />
             <span>Settings</span>
           </Command.Item>
         </Command.Group>
@@ -240,7 +240,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             onSelect={() => handleSetTheme('system')}
             className="command-item"
           >
-            <Monitor className="command-icon" />
+            <MonitorIcon className="command-icon" />
             <span>System Theme</span>
           </Command.Item>
           <Command.Item
@@ -248,7 +248,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             onSelect={() => handleSetTheme('light')}
             className="command-item"
           >
-            <Sun className="command-icon" />
+            <SunIcon className="command-icon" />
             <span>Light Theme</span>
           </Command.Item>
           <Command.Item
@@ -256,7 +256,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             onSelect={() => handleSetTheme('dark')}
             className="command-item"
           >
-            <Moon className="command-icon" />
+            <MoonIcon className="command-icon" />
             <span>Dark Theme</span>
           </Command.Item>
         </Command.Group>

@@ -1,17 +1,22 @@
 import { useState } from 'react'
-import { Server, Copy, Check } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
+  Dns as ServerIcon,
+  ContentCopy as CopyIcon,
+  Check as CheckIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  TextField,
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Typography,
+  IconButton,
+  Stack,
+  InputAdornment
+} from '@mui/material'
 
 interface AddVhostDialogProps {
   serviceId: string
@@ -37,7 +42,6 @@ export function AddVhostDialog({
       return
     }
 
-    // Validate: alphanumeric, underscores, and hyphens only
     if (!/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(vhostName)) {
       setError('Vhost name must start with a letter or underscore and contain only alphanumeric characters, underscores, and hyphens')
       return
@@ -51,7 +55,6 @@ export function AddVhostDialog({
         const connStr = await onCreateVhost(serviceId, vhostName)
         setConnectionString(connStr)
       } else {
-        // Mock for now
         setConnectionString(`amqp://guest:guest@localhost:5672/${vhostName}`)
       }
     } catch (err) {
@@ -72,7 +75,6 @@ export function AddVhostDialog({
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen)
     if (!isOpen) {
-      // Reset state when closing
       setVhostName('')
       setConnectionString(null)
       setError(null)
@@ -81,81 +83,83 @@ export function AddVhostDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Server className="mr-1 h-3.5 w-3.5" />
-          Add vhost
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Create Virtual Host</DialogTitle>
-          <DialogDescription>
-            Create a new virtual host in RabbitMQ
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Button
+        variant="text"
+        size="small"
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation()
+          handleOpenChange(true)
+        }}
+        startIcon={<ServerIcon />}
+      >
+        Add vhost
+      </Button>
 
-        {!connectionString ? (
-          <>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="vhostName">Vhost Name</Label>
-                <Input
-                  id="vhostName"
-                  placeholder="my_vhost"
-                  value={vhostName}
-                  onChange={(e) => setVhostName(e.target.value)}
-                  disabled={isCreating}
-                />
-                {error && (
-                  <p className="text-sm text-destructive">{error}</p>
-                )}
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleCreate} disabled={isCreating || !vhostName.trim()}>
+      <Dialog open={open} onClose={() => handleOpenChange(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Create Virtual Host</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 3 }}>
+            Create a new virtual host in RabbitMQ
+          </DialogContentText>
+
+          {!connectionString ? (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                autoFocus
+                label="Vhost Name"
+                placeholder="my_vhost"
+                fullWidth
+                value={vhostName}
+                onChange={(e) => setVhostName(e.target.value)}
+                disabled={isCreating}
+                error={!!error}
+                helperText={error}
+              />
+            </Stack>
+          ) : (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                label="Connection String"
+                value={connectionString}
+                fullWidth
+                readOnly
+                InputProps={{
+                  readOnly: true,
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={handleCopy} edge="end">
+                        {copied ? <CheckIcon color="success" /> : <CopyIcon />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                  sx: { fontFamily: 'monospace', fontSize: '0.8rem' }
+                }}
+              />
+              <Typography variant="body2" color="success.main">
+                Vhost "{vhostName}" created successfully!
+              </Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          {!connectionString ? (
+            <>
+              <Button onClick={() => handleOpenChange(false)}>Cancel</Button>
+              <Button
+                variant="contained"
+                onClick={handleCreate}
+                disabled={isCreating || !vhostName.trim()}
+              >
                 {isCreating ? 'Creating...' : 'Create Vhost'}
               </Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label>Connection String</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={connectionString}
-                    readOnly
-                    className="font-mono text-xs"
-                  />
-                  <Button variant="outline" size="icon" onClick={handleCopy}>
-                    {copied ? (
-                      <Check className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Vhost &quot;{vhostName}&quot; created successfully!
-                </p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                Close
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+            </>
+          ) : (
+            <Button variant="contained" onClick={() => handleOpenChange(false)}>Close</Button>
+          )}
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }

@@ -1,9 +1,28 @@
 import { useCallback } from 'react'
-import { Server, Play, Square, RefreshCw, Trash2, AlertCircle, CheckCircle2, Terminal, Copy } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
+import {
+  Storage as ServerIcon,
+  PlayArrow as PlayIcon,
+  Stop as StopIcon,
+  Refresh as RefreshIcon,
+  Delete as DeleteIcon,
+  ErrorOutline as AlertIcon,
+  CheckCircle as SuccessIcon,
+  Terminal as TerminalIcon,
+  ContentCopy as CopyIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Card,
+  CardContent,
+  Box,
+  Typography,
+  Chip,
+  Paper,
+  Stack,
+  Divider,
+  IconButton,
+  Tooltip
+} from '@mui/material'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -13,7 +32,6 @@ import type { McpLogEntry, McpTool } from '@/types/state'
 
 /**
  * rstn-mcp Integration Page.
- * Shows MCP server status, Claude Code command, and server logs.
  */
 export function McpPage() {
   const { mcp, projectName, dispatch, isLoading } = useMcpState()
@@ -36,7 +54,7 @@ export function McpPage() {
     navigator.clipboard.writeText(command)
   }, [mcp?.config_path])
 
-  // Get tools from state (populated automatically when server starts)
+  // Get tools from state
   const tools = mcp?.available_tools ?? []
 
   // Loading state
@@ -48,7 +66,6 @@ export function McpPage() {
   if (!mcp) {
     return (
       <EmptyState
-        icon={Server}
         title="No Project Open"
         description="Open a project to enable MCP integration with Claude Code."
       />
@@ -61,178 +78,205 @@ export function McpPage() {
   const logEntries = mcp.log_entries ?? []
 
   return (
-    <ScrollArea className="h-full">
-      <div className="p-4">
-        {/* Header */}
-        <PageHeader
-          title="rstn-mcp"
-          description={`Claude Code integration for ${projectName}`}
-        />
+    <Box sx={{ height: '100%', overflow: 'auto', p: 3 }}>
+      {/* Header */}
+      <PageHeader
+        title="rstn-mcp"
+        description={`Claude Code integration for ${projectName}`}
+        icon={<ServerIcon />}
+      />
 
-        <div className="space-y-6">
-          {/* Error message */}
-          {hasError && mcp.error && <ErrorBanner error={mcp.error} />}
+      <Stack spacing={3}>
+        {/* Error message */}
+        {hasError && mcp.error && <ErrorBanner error={mcp.error} />}
 
-          {/* Server Status Card */}
-          <Card className="p-4">
-            <h3 className="mb-3 flex items-center gap-2 text-lg font-medium">
-              <Server className="h-5 w-5" />
-              Worktree MCP Server
-            </h3>
+        {/* Server Status Card */}
+        <Card variant="outlined" sx={{ borderRadius: 4 }}>
+          <CardContent sx={{ p: 3 }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+              <ServerIcon fontSize="small" color="primary" />
+              <Typography variant="h6" fontWeight={600}>Worktree MCP Server</Typography>
+            </Stack>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Status:</span>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+              <Stack direction="row" spacing={3} alignItems="center">
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="body2" color="text.secondary">Status:</Typography>
                   <StatusBadge status={mcp.status} />
-                </div>
+                </Stack>
 
                 {mcp.port && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">Port:</span>
-                    <Badge variant="outline">{mcp.port}</Badge>
-                  </div>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="body2" color="text.secondary">Port:</Typography>
+                    <Chip label={mcp.port} size="small" variant="outlined" sx={{ borderRadius: 1, fontFamily: 'monospace' }} />
+                  </Stack>
                 )}
-              </div>
+              </Stack>
 
-              <div className="flex gap-2">
+              <Stack direction="row" spacing={1}>
                 {isRunning ? (
-                  <Button variant="destructive" size="sm" onClick={handleStop}>
-                    <Square className="mr-2 h-4 w-4" />
+                  <Button
+                    variant="contained"
+                    color="error"
+                    size="small"
+                    onClick={handleStop}
+                    startIcon={<StopIcon />}
+                    sx={{ borderRadius: 2 }}
+                  >
                     Stop Server
                   </Button>
                 ) : (
                   <Button
-                    size="sm"
+                    variant="contained"
+                    size="small"
                     onClick={handleStart}
                     disabled={isStarting}
+                    startIcon={isStarting ? <RefreshIcon sx={{ animation: 'spin 2s linear infinite' }} /> : <PlayIcon />}
+                    sx={{ borderRadius: 2 }}
                   >
-                    {isStarting ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Starting...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="mr-2 h-4 w-4" />
-                        Start Server
-                      </>
-                    )}
+                    {isStarting ? 'Starting...' : 'Start Server'}
                   </Button>
                 )}
-              </div>
-            </div>
+              </Stack>
+            </Box>
 
             {/* Server info */}
             {isRunning && (
-              <div className="mt-4 space-y-2 rounded-md bg-muted/50 p-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Config File:</span>
-                  <code className="text-xs">{mcp.config_path}</code>
-                </div>
-              </div>
+              <Box sx={{ mt: 3, p: 2, bgcolor: 'surfaceContainerLow.main', borderRadius: 2, border: 1, borderColor: 'outlineVariant' }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography variant="caption" color="text.secondary">Config File:</Typography>
+                  <Typography variant="caption" sx={{ fontFamily: 'monospace', bgcolor: 'action.hover', px: 1, py: 0.5, borderRadius: 0.5 }}>
+                    {mcp.config_path}
+                  </Typography>
+                </Stack>
+              </Box>
             )}
-          </Card>
+          </CardContent>
+        </Card>
 
-          {/* Available Tools Card */}
-          {isRunning && (
-            <Card className="p-4">
-              <h3 className="mb-4 text-lg font-medium">Available Tools</h3>
+        {/* Available Tools Card */}
+        {isRunning && (
+          <Card variant="outlined" sx={{ borderRadius: 4 }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>Available Tools</Typography>
               {tools.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No tools available</p>
+                <Typography variant="body2" color="text.secondary">No tools available</Typography>
               ) : (
-                <div className="space-y-3">
+                <Stack spacing={1.5}>
                   {tools.map((tool) => (
-                    <Card key={tool.name} className="p-3 bg-muted/30">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <code className="text-sm font-mono font-semibold">{tool.name}</code>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{tool.description}</p>
-                        {tool.input_schema && (
-                          <details className="text-xs">
-                            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                              Parameters
-                            </summary>
-                            <pre className="mt-2 overflow-x-auto rounded bg-muted p-2 font-mono text-xs">
-                              {JSON.stringify(tool.input_schema, null, 2)}
-                            </pre>
-                          </details>
-                        )}
-                      </div>
-                    </Card>
+                    <Paper key={tool.name} variant="outlined" sx={{ p: 2, bgcolor: 'surfaceContainerLow.main', borderColor: 'outlineVariant' }}>
+                      <Typography variant="subtitle2" sx={{ fontFamily: 'monospace', fontWeight: 700, color: 'primary.main', mb: 0.5 }}>
+                        {tool.name}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>{tool.description}</Typography>
+                      {tool.input_schema && (
+                        <Box component="details" sx={{ cursor: 'pointer' }}>
+                          <Box component="summary" sx={{ typography: 'caption', color: 'text.secondary', '&:hover': { color: 'text.primary' } }}>
+                            Parameters
+                          </Box>
+                          <Box
+                            component="pre"
+                            sx={{
+                              mt: 1,
+                              p: 1.5,
+                              bgcolor: 'background.default',
+                              borderRadius: 1,
+                              typography: 'caption',
+                              fontFamily: 'monospace',
+                              overflowX: 'auto',
+                              border: 1,
+                              borderColor: 'outlineVariant'
+                            }}
+                          >
+                            {JSON.stringify(tool.input_schema, null, 2)}
+                          </Box>
+                        </Box>
+                      )}
+                    </Paper>
                   ))}
-                </div>
+                </Stack>
               )}
-            </Card>
-          )}
+            </CardContent>
+          </Card>
+        )}
 
-          {/* Claude Code Command Card */}
-          {isRunning && mcp.config_path && (
-            <Card className="p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-lg font-medium">
-                  <Terminal className="h-5 w-5" />
-                  Claude Code Command
-                </h3>
+        {/* Claude Code Command Card */}
+        {isRunning && mcp.config_path && (
+          <Card variant="outlined" sx={{ borderRadius: 4 }}>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <TerminalIcon fontSize="small" />
+                  <Typography variant="subtitle1" fontWeight={600}>Claude Code Command</Typography>
+                </Stack>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="outlined"
+                  size="small"
                   onClick={handleCopyCommand}
+                  startIcon={<CopyIcon />}
+                  sx={{ borderRadius: 2 }}
                 >
-                  <Copy className="mr-2 h-4 w-4" />
                   Copy
                 </Button>
-              </div>
-              <div className="rounded-md bg-muted p-3">
-                <code className="text-xs break-all">
+              </Box>
+              <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2, border: 1, borderColor: 'outlineVariant' }}>
+                <Typography variant="caption" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', color: 'primary.light' }}>
                   claude -p --verbose --output-format stream-json --mcp-config {mcp.config_path} "your prompt here"
-                </code>
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
                 This command is automatically used when you chat with Claude Code. The --mcp-config flag enables Claude to access your project files.
-              </p>
-            </Card>
-          )}
+              </Typography>
+            </CardContent>
+          </Card>
+        )}
 
-          {/* Server Logs Card */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="flex items-center gap-2 text-lg font-medium">
-                Server Logs
+        {/* Server Logs Card */}
+        <Card variant="outlined" sx={{ borderRadius: 4 }}>
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="subtitle1" fontWeight={600}>Server Logs</Typography>
                 {logEntries.length > 0 && (
-                  <Badge variant="secondary">{logEntries.length}</Badge>
+                  <Chip label={logEntries.length} size="small" sx={{ height: 20, fontSize: '0.65rem' }} />
                 )}
-              </h3>
+              </Stack>
               <Button
-                variant="outline"
-                size="sm"
+                variant="outlined"
+                size="small"
                 onClick={handleClearLogs}
                 disabled={logEntries.length === 0}
+                startIcon={<DeleteIcon />}
+                sx={{ borderRadius: 2 }}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Clear Logs
+                Clear
               </Button>
-            </div>
+            </Box>
 
             {logEntries.length === 0 ? (
-              <EmptyState
-                icon={Terminal}
-                title="No Activity Yet"
-                description="MCP tool calls from Claude Code will appear here when the server is running."
-                className="py-12"
-              />
+              <Box sx={{ py: 6, textAlign: 'center', bgcolor: 'surfaceContainerLow.main', borderRadius: 2, border: '1px dashed', borderColor: 'outlineVariant' }}>
+                <TerminalIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1, opacity: 0.5 }} />
+                <Typography variant="body2" color="text.secondary">
+                  MCP tool calls from Claude Code will appear here when the server is running.
+                </Typography>
+              </Box>
             ) : (
-              <div className="space-y-2 font-mono text-sm">
+              <Stack spacing={0.5} sx={{ p: 1.5, bgcolor: 'background.default', borderRadius: 2, border: 1, borderColor: 'outlineVariant', maxHeight: 400, overflowY: 'auto' }}>
                 {logEntries.map((entry, index) => (
                   <LogEntryRow key={index} entry={entry} />
                 ))}
-              </div>
+              </Stack>
             )}
-          </Card>
-        </div>
-      </div>
-    </ScrollArea>
+          </CardContent>
+        </Card>
+      </Stack>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </Box>
   )
 }
 
@@ -240,30 +284,40 @@ function StatusBadge({ status }: { status: string }) {
   switch (status) {
     case 'running':
       return (
-        <Badge className="bg-green-500 hover:bg-green-600">
-          <CheckCircle2 className="mr-1 h-3 w-3" />
-          Running
-        </Badge>
+        <Chip
+          icon={<SuccessIcon sx={{ fontSize: '1rem !important' }} />}
+          label="Running"
+          size="small"
+          sx={{ bgcolor: 'success.dark', color: 'success.contrastText', fontWeight: 600 }}
+        />
       )
     case 'starting':
       return (
-        <Badge className="bg-yellow-500 hover:bg-yellow-600">
-          <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
-          Starting
-        </Badge>
+        <Chip
+          icon={<RefreshIcon sx={{ animation: 'spin 2s linear infinite', fontSize: '1rem !important' }} />}
+          label="Starting"
+          size="small"
+          sx={{ bgcolor: 'warning.dark', color: 'warning.contrastText', fontWeight: 600 }}
+        />
       )
     case 'error':
       return (
-        <Badge variant="destructive">
-          <AlertCircle className="mr-1 h-3 w-3" />
-          Error
-        </Badge>
+        <Chip
+          icon={<AlertIcon sx={{ fontSize: '1rem !important' }} />}
+          label="Error"
+          size="small"
+          color="error"
+          sx={{ fontWeight: 600 }}
+        />
       )
     default:
       return (
-        <Badge variant="secondary">
-          Stopped
-        </Badge>
+        <Chip
+          label="Stopped"
+          size="small"
+          variant="outlined"
+          sx={{ color: 'text.secondary', fontWeight: 600 }}
+        />
       )
   }
 }
@@ -273,24 +327,53 @@ function LogEntryRow({ entry }: { entry: McpLogEntry }) {
   const isIn = entry.direction === 'in'
 
   return (
-    <div
-      className={`flex items-start gap-2 rounded px-2 py-1 ${
-        entry.is_error
-          ? 'bg-destructive/10 text-destructive'
-          : isIn
-            ? 'bg-blue-500/10'
-            : 'bg-green-500/10'
-      }`}
+    <Stack
+      direction="row"
+      spacing={1.5}
+      alignItems="flex-start"
+      sx={{
+        p: 0.75,
+        borderRadius: 1,
+        '&:hover': { bgcolor: 'action.hover' },
+        ...(entry.is_error && { color: 'error.main' })
+      }}
     >
-      <span className="text-muted-foreground whitespace-nowrap">[{time}]</span>
-      <Badge variant={isIn ? 'default' : 'outline'} className="shrink-0">
-        {isIn ? 'IN' : 'OUT'}
-      </Badge>
-      <span className="font-semibold">{entry.method}</span>
+      <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary', flexShrink: 0 }}>
+        [{time}]
+      </Typography>
+      <Chip
+        label={isIn ? 'IN' : 'OUT'}
+        size="small"
+        variant={isIn ? 'filled' : 'outlined'}
+        sx={{
+          height: 18,
+          fontSize: '0.6rem',
+          fontWeight: 700,
+          bgcolor: isIn ? 'primary.dark' : 'transparent',
+          color: isIn ? 'primary.contrastText' : 'text.secondary',
+          flexShrink: 0
+        }}
+      />
+      <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, flexShrink: 0 }}>
+        {entry.method}
+      </Typography>
       {entry.tool_name && (
-        <span className="text-muted-foreground">"{entry.tool_name}"</span>
+        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'primary.main', flexShrink: 0 }}>
+          "{entry.tool_name}"
+        </Typography>
       )}
-      <span className="truncate text-muted-foreground">{entry.payload}</span>
-    </div>
+      <Typography
+        variant="caption"
+        sx={{
+          fontFamily: 'monospace',
+          color: 'text.secondary',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {entry.payload}
+      </Typography>
+    </Stack>
   )
 }

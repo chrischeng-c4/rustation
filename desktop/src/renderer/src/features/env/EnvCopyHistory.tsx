@@ -1,6 +1,11 @@
 import { useMemo } from 'react'
-import { CheckCircle2, AlertCircle, FileText, Clock } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import {
+  CheckCircle as SuccessIcon,
+  ErrorOutline as AlertIcon,
+  Description as FileTextIcon,
+  AccessTime as ClockIcon
+} from '@mui/icons-material'
+import { Chip, Box, Typography, Stack, Paper, alpha } from '@mui/material'
 import type { EnvCopyResult } from '@/types/state'
 
 interface EnvCopyHistoryProps {
@@ -10,7 +15,6 @@ interface EnvCopyHistoryProps {
 
 /**
  * Displays the result of the most recent env file copy operation.
- * Shows copied files and any failures.
  */
 export function EnvCopyHistory({ lastResult }: EnvCopyHistoryProps) {
   const formattedTime = useMemo(() => {
@@ -25,10 +29,10 @@ export function EnvCopyHistory({ lastResult }: EnvCopyHistoryProps) {
 
   if (!lastResult) {
     return (
-      <div className="rounded-md border border-dashed px-4 py-6 text-center">
-        <Clock className="mx-auto h-8 w-8 text-muted-foreground/50" />
-        <p className="mt-2 text-sm text-muted-foreground">No recent copy operations</p>
-      </div>
+      <Paper variant="outlined" sx={{ py: 6, textAlign: 'center', bgcolor: 'surfaceContainerLow.main', borderStyle: 'dashed' }}>
+        <ClockIcon sx={{ fontSize: 40, color: 'text.disabled', opacity: 0.3, mb: 1 }} />
+        <Typography variant="body2" color="text.secondary">No recent copy operations</Typography>
+      </Paper>
     )
   }
 
@@ -39,15 +43,15 @@ export function EnvCopyHistory({ lastResult }: EnvCopyHistoryProps) {
 
   if (isEmpty) {
     return (
-      <div className="rounded-md border px-4 py-4">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <FileText className="h-4 w-4" />
-          <span className="text-sm">No files to copy (all patterns already exist in target)</span>
-          {formattedTime && (
-            <span className="ml-auto text-xs">{formattedTime}</span>
-          )}
-        </div>
-      </div>
+      <Paper variant="outlined" sx={{ p: 2, bgcolor: 'surfaceContainerLow.main' }}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <FileTextIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+          <Typography variant="body2" color="text.secondary">
+            No files to copy (all patterns already exist in target)
+          </Typography>
+          {formattedTime && <Typography variant="caption" sx={{ ml: 'auto' }}>{formattedTime}</Typography>}
+        </Stack>
+      </Paper>
     )
   }
 
@@ -55,57 +59,64 @@ export function EnvCopyHistory({ lastResult }: EnvCopyHistoryProps) {
   const isPartial = totalCopied > 0 && totalFailed > 0
 
   return (
-    <div className="space-y-3">
+    <Stack spacing={2.5}>
       {/* Summary */}
-      <div className="flex items-center gap-2">
+      <Stack direction="row" spacing={1.5} alignItems="center">
         {isSuccess ? (
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <SuccessIcon color="success" fontSize="small" />
         ) : (
-          <AlertCircle className="h-4 w-4 text-yellow-500" />
+          <AlertIcon color="warning" fontSize="small" />
         )}
-        <span className="text-sm font-medium">
+        <Typography variant="subtitle2" fontWeight={700}>
           {isSuccess
             ? `Copied ${totalCopied} file(s)`
             : isPartial
               ? `Copied ${totalCopied}, failed ${totalFailed}`
               : `Failed to copy ${totalFailed} file(s)`}
-        </span>
+        </Typography>
         {formattedTime && (
-          <span className="ml-auto text-xs text-muted-foreground">{formattedTime}</span>
+          <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>{formattedTime}</Typography>
         )}
-      </div>
+      </Stack>
 
       {/* Copied files */}
       {copied_files.length > 0 && (
-        <div className="space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">Copied:</span>
-          <div className="flex flex-wrap gap-1">
+        <Box>
+          <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', mb: 1, display: 'block' }}>Copied:</Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             {copied_files.map((file) => (
-              <Badge key={file} variant="secondary" className="font-mono text-xs">
-                {file}
-              </Badge>
+              <Chip 
+                key={file} 
+                label={file} 
+                size="small" 
+                variant="outlined"
+                sx={{ height: 20, fontSize: '0.65rem', fontFamily: 'monospace', borderRadius: 0.5, bgcolor: alpha('#fff', 0.05) }} 
+              />
             ))}
-          </div>
-        </div>
+          </Box>
+        </Box>
       )}
 
       {/* Failed files */}
       {failed_files.length > 0 && (
-        <div className="space-y-1">
-          <span className="text-xs font-medium text-red-500">Failed:</span>
-          <div className="space-y-1">
+        <Box>
+          <Typography variant="caption" fontWeight={700} color="error" sx={{ textTransform: 'uppercase', mb: 1, display: 'block' }}>Failed:</Typography>
+          <Stack spacing={1}>
             {failed_files.map(([file, error]) => (
-              <div
-                key={file}
-                className="flex items-start gap-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs dark:border-red-900 dark:bg-red-950"
+              <Paper 
+                key={file} 
+                variant="outlined" 
+                sx={{ p: 1, px: 1.5, bgcolor: alpha('#ef5350', 0.05), borderColor: alpha('#ef5350', 0.2) }}
               >
-                <code className="font-mono">{file}</code>
-                <span className="text-red-600 dark:text-red-400">{error}</span>
-              </div>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: 'error.main' }}>{file}</Typography>
+                  <Typography variant="caption" color="error">{error}</Typography>
+                </Stack>
+              </Paper>
             ))}
-          </div>
-        </div>
+          </Stack>
+        </Box>
       )}
-    </div>
+    </Stack>
   )
 }

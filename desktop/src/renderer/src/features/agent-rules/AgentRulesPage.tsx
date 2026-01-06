@@ -1,17 +1,32 @@
 import { useState, useCallback } from 'react'
-import { Bot, RefreshCw, AlertTriangle, Info, Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  SmartToy as BotIcon,
+  Refresh as RefreshIcon,
+  WarningAmber as AlertTriangleIcon,
+  Info as InfoIcon,
+  Add as PlusIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Card,
+  CardContent,
+  Box,
+  Typography,
+  Stack,
+  Paper,
+  Divider,
+  CircularProgress,
+  alpha
+} from '@mui/material'
 import { useAgentRulesState } from '@/hooks/useAppState'
 import { ProfileSelector } from './ProfileSelector'
 import { ProfileList } from './ProfileList'
 import { ProfileEditorDialog } from './ProfileEditorDialog'
+import { PageHeader } from '@/components/shared/PageHeader'
 import type { AgentProfile } from '@/types/state'
 
 /**
  * Agent Rules Management Page.
- * Allows managing multiple agent profiles per project.
  */
 export function AgentRulesPage() {
   const { agentRulesConfig, project, dispatch, isLoading } = useAgentRulesState()
@@ -64,7 +79,6 @@ export function AgentRulesPage() {
   const handleSaveProfile = useCallback(
     async (name: string, prompt: string) => {
       if (editingProfile) {
-        // Update existing profile
         await dispatch({
           type: 'UpdateAgentProfile',
           payload: {
@@ -74,7 +88,6 @@ export function AgentRulesPage() {
           },
         })
       } else {
-        // Create new profile
         await dispatch({
           type: 'CreateAgentProfile',
           payload: { name, prompt },
@@ -87,22 +100,22 @@ export function AgentRulesPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <Box sx={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Box>
     )
   }
 
   // No project open
   if (!project || !agentRulesConfig) {
     return (
-      <div className="flex h-full flex-col items-center justify-center">
-        <Bot className="h-12 w-12 text-muted-foreground" />
-        <h2 className="mt-4 text-xl font-semibold">No Project Open</h2>
-        <p className="mt-2 text-muted-foreground">
+      <Box sx={{ display: 'flex', height: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 3 }}>
+        <BotIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2, opacity: 0.5 }} />
+        <Typography variant="h5" fontWeight={600}>No Project Open</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           Open a project to customize Claude Code behavior.
-        </p>
-      </div>
+        </Typography>
+      </Box>
     )
   }
 
@@ -112,50 +125,55 @@ export function AgentRulesPage() {
   )
 
   return (
-    <>
-      <ScrollArea className="h-full">
-        <div className="space-y-6 p-4">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold">Agent Rules</h2>
-              <p className="mt-1 text-muted-foreground">
-                Custom AI behavior for {project.name}
-              </p>
-            </div>
-            <Button variant={isEnabled ? 'default' : 'outline'} onClick={handleToggle}>
-              <Bot className="mr-2 h-4 w-4" />
-              {isEnabled ? 'Enabled' : 'Disabled'}
-            </Button>
-          </div>
+    <Box sx={{ height: '100%', overflow: 'auto', p: 3 }}>
+      <Stack spacing={3}>
+        {/* Header */}
+        <PageHeader
+          title="Agent Rules"
+          description={`Custom AI behavior for ${project.name}`}
+          icon={<BotIcon />}
+        >
+          <Button
+            variant={isEnabled ? 'contained' : 'outlined'}
+            onClick={handleToggle}
+            startIcon={<BotIcon />}
+            sx={{ borderRadius: 2 }}
+          >
+            {isEnabled ? 'Enabled' : 'Disabled'}
+          </Button>
+        </PageHeader>
 
-          {/* Warning Card */}
-          {isEnabled && activeProfile && (
-            <Card className="border-yellow-500/50 bg-yellow-500/10 p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
-                <div className="flex-1">
-                  <h3 className="font-medium text-yellow-900 dark:text-yellow-100">
-                    Custom Rules Active
-                  </h3>
-                  <p className="mt-1 text-sm text-yellow-800 dark:text-yellow-200">
-                    Profile <strong>{activeProfile.name}</strong> will <strong>replace</strong> the
-                    default CLAUDE.md instructions.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )}
+        {/* Warning Card */}
+        {isEnabled && activeProfile && (
+          <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha('#f9a825', 0.1), borderColor: 'warning.main', borderRadius: 2 }}>
+            <Stack direction="row" spacing={2}>
+              <AlertTriangleIcon color="warning" />
+              <Box>
+                <Typography variant="subtitle2" fontWeight={700} color="warning.main">Custom Rules Active</Typography>
+                <Typography variant="body2" sx={{ color: 'warning.light', mt: 0.5 }}>
+                  Profile <strong>{activeProfile.name}</strong> will <strong>replace</strong> the
+                  default CLAUDE.md instructions.
+                </Typography>
+              </Box>
+            </Stack>
+          </Paper>
+        )}
 
-          {/* Profile Selection */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">Active Profile</h3>
-              <Button size="sm" onClick={handleCreateProfile}>
-                <Plus className="mr-2 h-4 w-4" />
+        {/* Profile Selection */}
+        <Card variant="outlined" sx={{ borderRadius: 4 }}>
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
+              <Typography variant="h6" fontWeight={600}>Active Profile</Typography>
+              <Button 
+                variant="contained" 
+                size="small" 
+                onClick={handleCreateProfile} 
+                startIcon={<PlusIcon />}
+                sx={{ borderRadius: 2 }}
+              >
                 New Profile
               </Button>
-            </div>
+            </Box>
 
             <ProfileSelector
               profiles={agentRulesConfig.profiles}
@@ -165,44 +183,50 @@ export function AgentRulesPage() {
             />
 
             {!isEnabled && (
-              <p className="mt-2 text-xs text-muted-foreground">
+              <Typography variant="caption" sx={{ color: 'text.secondary', mt: 1.5, display: 'block' }}>
                 Enable agent rules to select a profile
-              </p>
+              </Typography>
             )}
-          </Card>
+          </CardContent>
+        </Card>
 
-          {/* Active Profile Preview */}
-          {activeProfile && (
-            <Card className="p-4">
-              <h3 className="text-lg font-medium mb-3">Profile Preview</h3>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Name:</span>
-                  <span className="font-medium">{activeProfile.name}</span>
-                </div>
+        {/* Active Profile Preview */}
+        {activeProfile && (
+          <Card variant="outlined" sx={{ borderRadius: 4 }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>Profile Preview</Typography>
+              <Stack spacing={1.5}>
+                <Stack direction="row" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">Name:</Typography>
+                  <Typography variant="body2" fontWeight={600}>{activeProfile.name}</Typography>
+                </Stack>
                 {activeProfile.is_builtin && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Type:</span>
-                    <span className="text-yellow-600 dark:text-yellow-500">⭐ Built-in</span>
-                  </div>
+                  <Stack direction="row" justifyContent="space-between">
+                    <Typography variant="body2" color="text.secondary">Type:</Typography>
+                    <Typography variant="body2" sx={{ color: 'warning.main' }}>⭐ Built-in</Typography>
+                  </Stack>
                 )}
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Updated:</span>
-                  <span>{new Date(activeProfile.updated_at).toLocaleString()}</span>
-                </div>
-                <div className="mt-3">
-                  <p className="text-sm text-muted-foreground mb-2">Prompt:</p>
-                  <pre className="text-xs font-mono bg-muted p-3 rounded-md overflow-x-auto max-h-[200px] whitespace-pre-wrap">
-                    {activeProfile.prompt}
-                  </pre>
-                </div>
-              </div>
-            </Card>
-          )}
+                <Stack direction="row" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">Updated:</Typography>
+                  <Typography variant="body2">{new Date(activeProfile.updated_at).toLocaleString()}</Typography>
+                </Stack>
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>Prompt:</Typography>
+                  <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
+                    <Typography component="pre" variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: 200, overflow: 'auto' }}>
+                      {activeProfile.prompt}
+                    </Typography>
+                  </Paper>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
 
-          {/* Profile List */}
-          <Card className="p-4">
-            <h3 className="text-lg font-medium mb-4">All Profiles</h3>
+        {/* Profile List */}
+        <Card variant="outlined" sx={{ borderRadius: 4 }}>
+          <CardContent sx={{ p: 3 }}>
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 3 }}>All Profiles</Typography>
             <ProfileList
               profiles={agentRulesConfig.profiles}
               activeProfileId={agentRulesConfig.active_profile_id}
@@ -210,45 +234,32 @@ export function AgentRulesPage() {
               onDelete={handleDeleteProfile}
               onSelect={handleSelectProfile}
             />
-          </Card>
+          </CardContent>
+        </Card>
 
-          {/* Info Card */}
-          <Card className="p-4">
-            <div className="flex items-start gap-3">
-              <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-              <div className="flex-1 space-y-2">
-                <h3 className="font-medium">How Agent Rules Work</h3>
-                <ul className="space-y-1 text-sm text-muted-foreground list-disc list-inside">
-                  <li>
-                    Select a profile to customize Claude Code's system prompt via{' '}
-                    <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                      --system-prompt-file
-                    </code>
-                  </li>
-                  <li>
-                    Built-in profiles (⭐) provide expert templates for Rust, TypeScript, and Code
-                    Review
-                  </li>
-                  <li>Create custom profiles to define your own rules and coding standards</li>
-                  <li>Different projects can use different profiles (project-scoped)</li>
-                  <li>
-                    Built-in profiles cannot be edited or deleted, but you can create custom
-                    variants
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </ScrollArea>
+        {/* Info Card */}
+        <Paper variant="outlined" sx={{ p: 2.5, bgcolor: 'surfaceContainerLow.main', borderRadius: 3 }}>
+          <Stack direction="row" spacing={2}>
+            <InfoIcon color="primary" />
+            <Box>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>How Agent Rules Work</Typography>
+              <Box component="ul" sx={{ m: 0, pl: 2, typography: 'caption', color: 'text.secondary', '& li': { mb: 0.5 } }}>
+                <li>Select a profile to customize Claude Code's system prompt</li>
+                <li>Built-in profiles (⭐) provide expert templates</li>
+                <li>Create custom profiles to define your own coding standards</li>
+                <li>Built-in profiles cannot be edited or deleted</li>
+              </Box>
+            </Box>
+          </Stack>
+        </Paper>
+      </Stack>
 
-      {/* Profile Editor Dialog */}
       <ProfileEditorDialog
         open={isEditorOpen}
         onOpenChange={setIsEditorOpen}
         profile={editingProfile}
         onSave={handleSaveProfile}
       />
-    </>
+    </Box>
   )
 }

@@ -1,9 +1,27 @@
 import { useEffect, useState } from 'react'
-import { Plus, CheckCircle, Clock, XCircle, GitBranch } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Add as PlusIcon,
+  CheckCircle as CheckCircleIcon,
+  AccessTime as ClockIcon,
+  Cancel as XCircleIcon,
+  AccountTree as GitIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  Card,
+  CardContent,
+  Box,
+  Typography,
+  Chip,
+  Paper,
+  Stack,
+  Divider,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  ListItemIcon
+} from '@mui/material'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { WorkflowHeader } from '@/components/shared/WorkflowHeader'
 import { LoadingState } from '@/components/shared/LoadingState'
@@ -16,25 +34,20 @@ import type { Change, ChangeStatus } from '@/types/state'
 /**
  * Status badge colors and labels
  */
-const STATUS_CONFIG: Record<ChangeStatus, { color: string; label: string; icon: any }> = {
-  proposed: { color: 'bg-blue-500', label: 'Proposed', icon: GitBranch },
-  planning: { color: 'bg-yellow-500', label: 'Planning', icon: Clock },
-  planned: { color: 'bg-purple-500', label: 'Planned', icon: GitBranch },
-  implementing: { color: 'bg-orange-500', label: 'Implementing', icon: Clock },
-  testing: { color: 'bg-cyan-500', label: 'Testing', icon: Clock },
-  done: { color: 'bg-green-500', label: 'Done', icon: CheckCircle },
-  archived: { color: 'bg-gray-500', label: 'Archived', icon: CheckCircle },
-  cancelled: { color: 'bg-red-500', label: 'Cancelled', icon: XCircle },
-  failed: { color: 'bg-red-600', label: 'Failed', icon: XCircle },
+const STATUS_CONFIG: Record<ChangeStatus, { color: 'info' | 'warning' | 'secondary' | 'success' | 'error' | 'default'; label: string; icon: any }> = {
+  proposed: { color: 'info', label: 'Proposed', icon: GitIcon },
+  planning: { color: 'warning', label: 'Planning', icon: ClockIcon },
+  planned: { color: 'secondary', label: 'Planned', icon: GitIcon },
+  implementing: { color: 'warning', label: 'Implementing', icon: ClockIcon },
+  testing: { color: 'info', label: 'Testing', icon: ClockIcon },
+  done: { color: 'success', label: 'Done', icon: CheckCircleIcon },
+  archived: { color: 'default', label: 'Archived', icon: CheckCircleIcon },
+  cancelled: { color: 'error', label: 'Cancelled', icon: XCircleIcon },
+  failed: { color: 'error', label: 'Failed', icon: XCircleIcon },
 }
 
 /**
  * ChangeManagementPanel - CESDD Phase 2 Change Management
- *
- * Allows users to:
- * 1. Create new changes from intent
- * 2. Generate proposals and plans using Claude
- * 3. Track change lifecycle
  */
 export function ChangeManagementPanel() {
   const { state, dispatch } = useAppState()
@@ -63,109 +76,147 @@ export function ChangeManagementPanel() {
     dispatch({ type: 'SelectChange', payload: { change_id: changeId } })
   }
 
-  const renderChangeCard = (change: Change) => {
+  const renderChangeItem = (change: Change) => {
     const config = STATUS_CONFIG[change.status]
-    const Icon = config.icon
     const isSelected = change.id === selectedChangeId
 
     return (
-      <Card
-        key={change.id}
-        className={`cursor-pointer transition-colors hover:bg-accent ${
-          isSelected ? 'border-primary bg-accent shadow-sm' : ''
-        }`}
-        onClick={() => handleSelectChange(change.id)}
-      >
-        <CardHeader className="p-3">
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="text-sm font-medium truncate">{change.name}</CardTitle>
-            <Badge variant="secondary" className={`${config.color} text-white shrink-0 h-5 px-1.5`}>
-              <Icon className="mr-1 h-3 w-3" />
-              {config.label}
-            </Badge>
-          </div>
-          <CardDescription className="line-clamp-2 text-[10px] leading-tight mt-1">{change.intent}</CardDescription>
-        </CardHeader>
-      </Card>
+      <ListItem key={change.id} disablePadding sx={{ mb: 1 }}>
+        <ListItemButton
+          selected={isSelected}
+          onClick={() => handleSelectChange(change.id)}
+          sx={{
+            borderRadius: 2,
+            p: 2,
+            border: 1,
+            borderColor: isSelected ? 'primary.main' : 'outlineVariant',
+            bgcolor: isSelected ? 'secondaryContainer.main' : 'background.paper',
+            flexDirection: 'column',
+            alignItems: 'stretch',
+            '&.Mui-selected': {
+              bgcolor: 'secondaryContainer.main',
+              color: 'onSecondaryContainer.main',
+              '&:hover': { bgcolor: 'secondaryContainer.main', filter: 'brightness(0.95)' }
+            }
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ flex: 1, minWidth: 0 }} noWrap>
+              {change.name}
+            </Typography>
+            <Chip
+              label={config.label}
+              size="small"
+              color={config.color as any}
+              sx={{ height: 18, fontSize: '0.6rem', fontWeight: 700, borderRadius: 0.5, ml: 1 }}
+            />
+          </Box>
+          <Typography variant="caption" sx={{ color: isSelected ? 'inherit' : 'text.secondary', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {change.intent}
+          </Typography>
+        </ListItemButton>
+      </ListItem>
     )
   }
 
   // Empty state
   if (!isLoading && changes.length === 0) {
     return (
-      <div className="flex h-full flex-col">
+      <Stack sx={{ height: '100%' }}>
         <PageHeader
           title="Change Management"
           description="Manage features with proposal and plan generation"
-          icon={<GitBranch className="h-5 w-5 text-blue-500" />}
+          icon={<GitIcon />}
         />
-        <div className="flex-1 px-4 pb-4">
+        <Box sx={{ flex: 1, p: 3 }}>
           <EmptyState
-            icon={GitBranch}
             title="Start Change Management"
             description="Create changes to manage features with AI-powered proposals and plans."
             action={{
               label: "Create First Change",
               onClick: () => setIsDialogOpen(true),
-              icon: Plus
+              icon: <PlusIcon />
             }}
           />
-        </div>
+        </Box>
 
         <NewChangeDialog
           open={isDialogOpen}
           onOpenChange={setIsDialogOpen}
           onSubmit={handleCreateChange}
         />
-      </div>
+      </Stack>
     )
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <Stack sx={{ height: '100%' }}>
       <WorkflowHeader
         title="Change Management"
         subtitle={`${changes.length} active changes in current worktree`}
-        icon={<GitBranch className="h-4 w-4 text-blue-500" />}
+        icon={<GitIcon />}
       >
-        <Button size="sm" onClick={() => setIsDialogOpen(true)} className="h-8 gap-1">
-          <Plus className="h-3.5 w-3.5" />
+        <Button
+          variant="contained"
+          size="small"
+          onClick={() => setIsDialogOpen(true)}
+          startIcon={<PlusIcon />}
+          sx={{ borderRadius: 2 }}
+        >
           New Change
         </Button>
       </WorkflowHeader>
 
-      <div className="flex flex-1 gap-4 overflow-hidden px-4 pb-4 pt-4">
+      <Stack direction="row" spacing={3} sx={{ flex: 1, overflow: 'hidden', p: 3 }}>
         {/* Change List (Left) */}
-        <div className="w-64 flex-shrink-0 flex flex-col border rounded-lg bg-muted/10">
-          <div className="p-3 border-b bg-muted/30">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Active Changes</h3>
-          </div>
-          {isLoading ? (
-            <div className="flex-1 flex items-center justify-center">
+        <Paper
+          variant="outlined"
+          sx={{
+            width: 280,
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: 'surfaceContainerLow.main',
+            borderRadius: 4,
+            overflow: 'hidden'
+          }}
+        >
+          <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'outlineVariant' }}>
+            <Typography variant="caption" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary' }}>Active Changes</Typography>
+          </Box>
+          <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
+            {isLoading ? (
               <LoadingState message="" />
-            </div>
-          ) : (
-            <ScrollArea className="flex-1">
-              <div className="p-2 space-y-2">
-                {changes.map(renderChangeCard)}
-              </div>
-            </ScrollArea>
-          )}
-        </div>
+            ) : (
+              <List sx={{ p: 0 }}>
+                {changes.map(renderChangeItem)}
+              </List>
+            )}
+          </Box>
+        </Paper>
 
         {/* Change Detail (Right) */}
-        <div className="flex-1 border rounded-lg overflow-hidden flex flex-col bg-background">
+        <Paper
+          variant="outlined"
+          sx={{
+            flex: 1,
+            borderRadius: 4,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: 'background.paper'
+          }}
+        >
           {selectedChange ? (
             <ChangeDetailView change={selectedChange} />
           ) : (
             <EmptyState
-              icon={GitBranch}
               title="No Change Selected"
               description="Select a change from the list on the left to view its details, proposal, and plan."
             />
           )}
-        </div>
-      </div>
+        </Paper>
+      </Stack>
 
       {/* New Change Dialog */}
       <NewChangeDialog
@@ -173,6 +224,6 @@ export function ChangeManagementPanel() {
         onOpenChange={setIsDialogOpen}
         onSubmit={handleCreateChange}
       />
-    </div>
+    </Stack>
   )
 }

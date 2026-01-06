@@ -1,17 +1,23 @@
 import { useState } from 'react'
-import { Database, Copy, Check } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
+  Storage as DatabaseIcon,
+  ContentCopy as CopyIcon,
+  Check as CheckIcon
+} from '@mui/icons-material'
+import {
+  Button,
+  TextField,
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Box,
+  Typography,
+  IconButton,
+  Stack,
+  InputAdornment
+} from '@mui/material'
 
 interface AddDbDialogProps {
   serviceId: string
@@ -39,7 +45,6 @@ export function AddDbDialog({
       return
     }
 
-    // Validate: alphanumeric and underscores only
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(dbName)) {
       setError('Database name must start with a letter or underscore and contain only alphanumeric characters and underscores')
       return
@@ -53,7 +58,6 @@ export function AddDbDialog({
         const connStr = await onCreateDb(serviceId, dbName)
         setConnectionString(connStr)
       } else {
-        // Mock for now
         const mockConnStr = serviceId.includes('postgres')
           ? `postgresql://postgres:postgres@localhost:5432/${dbName}`
           : serviceId.includes('mysql')
@@ -79,7 +83,6 @@ export function AddDbDialog({
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen)
     if (!isOpen) {
-      // Reset state when closing
       setDbName('')
       setConnectionString(null)
       setError(null)
@@ -88,81 +91,83 @@ export function AddDbDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Database className="mr-1 h-3.5 w-3.5" />
-          Add DB
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Create Database</DialogTitle>
-          <DialogDescription>
-            Create a new database in {serviceName}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Button
+        variant="text"
+        size="small"
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation()
+          handleOpenChange(true)
+        }}
+        startIcon={<DatabaseIcon />}
+      >
+        Add DB
+      </Button>
 
-        {!connectionString ? (
-          <>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="dbName">Database Name</Label>
-                <Input
-                  id="dbName"
-                  placeholder="my_database"
-                  value={dbName}
-                  onChange={(e) => setDbName(e.target.value)}
-                  disabled={isCreating}
-                />
-                {error && (
-                  <p className="text-sm text-destructive">{error}</p>
-                )}
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleCreate} disabled={isCreating || !dbName.trim()}>
+      <Dialog open={open} onClose={() => handleOpenChange(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Create Database</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 3 }}>
+            Create a new database in {serviceName}
+          </DialogContentText>
+
+          {!connectionString ? (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                autoFocus
+                label="Database Name"
+                placeholder="my_database"
+                fullWidth
+                value={dbName}
+                onChange={(e) => setDbName(e.target.value)}
+                disabled={isCreating}
+                error={!!error}
+                helperText={error}
+              />
+            </Stack>
+          ) : (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                label="Connection String"
+                value={connectionString}
+                fullWidth
+                readOnly
+                InputProps={{
+                  readOnly: true,
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={handleCopy} edge="end">
+                        {copied ? <CheckIcon color="success" /> : <CopyIcon />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                  sx: { fontFamily: 'monospace', fontSize: '0.8rem' }
+                }}
+              />
+              <Typography variant="body2" color="success.main">
+                Database "{dbName}" created successfully!
+              </Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          {!connectionString ? (
+            <>
+              <Button onClick={() => handleOpenChange(false)}>Cancel</Button>
+              <Button
+                variant="contained"
+                onClick={handleCreate}
+                disabled={isCreating || !dbName.trim()}
+              >
                 {isCreating ? 'Creating...' : 'Create Database'}
               </Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label>Connection String</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={connectionString}
-                    readOnly
-                    className="font-mono text-xs"
-                  />
-                  <Button variant="outline" size="icon" onClick={handleCopy}>
-                    {copied ? (
-                      <Check className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Database &quot;{dbName}&quot; created successfully!
-                </p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                Close
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+            </>
+          ) : (
+            <Button variant="contained" onClick={() => handleOpenChange(false)}>Close</Button>
+          )}
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }

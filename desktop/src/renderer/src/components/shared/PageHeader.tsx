@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box, Divider, Stack, Typography } from '@mui/material'
+import { Box, Stack, Typography } from '@mui/material'
 import type { SxProps, Theme } from '@mui/material/styles'
 
 interface PageHeaderProps {
@@ -22,26 +22,38 @@ export function PageHeader({
   icon,
 }: PageHeaderProps) {
   return (
-    <Stack spacing={2} sx={{ mb: 3, ...sx }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Box>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            {icon && <Box sx={{ color: 'text.secondary' }}>{icon}</Box>}
-            <Typography variant="h5" fontWeight={600}>
+    <Box sx={{ mb: 4, ...sx }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+        <Stack direction="row" alignItems="center" spacing={2}>
+          {icon && (
+            <Box 
+              sx={{ 
+                color: 'primary.main',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                '& .MuiSvgIcon-root': { fontSize: 28 }
+              }}
+            >
+              {icon}
+            </Box>
+          )}
+          <Box>
+            <Typography variant="h5" fontWeight={600} sx={{ letterSpacing: '-0.01em' }}>
               {title}
             </Typography>
-          </Stack>
-          {description && (
-            <Typography variant="body2" color="text.secondary">
-              {description}
-            </Typography>
-          )}
-        </Box>
-        <Stack direction="row" alignItems="center" spacing={1}>
+            {description && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {description}
+              </Typography>
+            )}
+          </Box>
+        </Stack>
+        
+        <Stack direction="row" alignItems="center" spacing={1.5}>
           {children}
         </Stack>
       </Stack>
-      <Divider />
-    </Stack>
+    </Box>
   )
 }

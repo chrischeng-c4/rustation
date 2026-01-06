@@ -1,14 +1,14 @@
-import { RefreshCw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Refresh as RefreshIcon, Close as XIcon } from '@mui/icons-material'
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from '@/components/ui/sheet'
+  Button,
+  Box,
+  Typography,
+  Drawer,
+  IconButton,
+  Stack,
+  Divider,
+  alpha
+} from '@mui/material'
 
 interface DockerLogSheetProps {
   open: boolean
@@ -26,34 +26,62 @@ export function DockerLogSheet({
   onRefresh,
 }: DockerLogSheetProps) {
   return (
-    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <SheetContent side="right" className="w-[500px] sm:max-w-[500px]">
-        <SheetHeader>
-          <SheetTitle>{serviceName} Logs</SheetTitle>
-          <SheetDescription>Container output logs</SheetDescription>
-        </SheetHeader>
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      PaperProps={{
+        sx: { width: 600, bgcolor: 'background.default' }
+      }}
+    >
+      <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+          <Box>
+            <Typography variant="h6" fontWeight={700}>{serviceName} Logs</Typography>
+            <Typography variant="caption" color="text.secondary">Container output logs</Typography>
+          </Box>
+          <IconButton onClick={onClose}><XIcon /></IconButton>
+        </Stack>
+        
+        <Divider sx={{ mb: 2 }} />
 
-        <ScrollArea className="my-4 h-[calc(100vh-200px)]">
-          <div className="space-y-1 font-mono text-xs">
+        <Box sx={{ 
+          flex: 1, 
+          overflow: 'auto', 
+          my: 2, 
+          p: 2, 
+          bgcolor: alpha('#000', 0.3), 
+          borderRadius: 2,
+          border: 1,
+          borderColor: 'outlineVariant'
+        }}>
+          <Stack spacing={0.5} sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
             {logs.length > 0 ? (
               logs.map((line, index) => (
-                <div key={index} className="whitespace-pre-wrap break-all">
+                <Typography key={index} variant="caption" component="div" sx={{ fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                   {line}
-                </div>
+                </Typography>
               ))
             ) : (
-              <p className="text-muted-foreground">No logs available</p>
+              <Typography variant="caption" color="text.disabled">No logs available</Typography>
             )}
-          </div>
-        </ScrollArea>
+          </Stack>
+        </Box>
 
-        <SheetFooter>
-          <Button variant="outline" size="sm" onClick={onRefresh}>
-            <RefreshCw className="mr-2 h-4 w-4" />
+        <Divider sx={{ my: 2 }} />
+
+        <Stack direction="row" justifyContent="flex-end">
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={onRefresh}
+            startIcon={<RefreshIcon />}
+            sx={{ borderRadius: 2 }}
+          >
             Refresh
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </Stack>
+      </Box>
+    </Drawer>
   )
 }

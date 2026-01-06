@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import {
+  Button,
+  TextField,
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Typography,
+  Stack,
+  Box
+} from '@mui/material'
 
 interface NewChangeDialogProps {
   open: boolean
@@ -37,42 +38,46 @@ export function NewChangeDialog({ open, onOpenChange, onSubmit }: NewChangeDialo
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Create New Change</DialogTitle>
-          <DialogDescription>
-            Describe what you want to accomplish. This will be used to generate a proposal and plan.
-          </DialogDescription>
-        </DialogHeader>
+    <Dialog 
+      open={open} 
+      onClose={() => onOpenChange(false)}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle>Create New Change</DialogTitle>
+      <DialogContent>
+        <DialogContentText sx={{ mb: 3 }}>
+          Describe what you want to accomplish. This will be used to generate a proposal and plan.
+        </DialogContentText>
 
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="intent">Intent</Label>
-            <Textarea
-              id="intent"
-              placeholder="e.g., Add user authentication with OAuth2 support"
-              value={intent}
-              onChange={(e) => setIntent(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={4}
-              className="resize-none"
-            />
-            <p className="text-xs text-muted-foreground">
-              Be specific about what you want to build. Press Cmd+Enter to submit.
-            </p>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={!intent.trim()}>
-            Create Change
-          </Button>
-        </DialogFooter>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <TextField
+            autoFocus
+            label="Intent"
+            placeholder="e.g., Add user authentication with OAuth2 support"
+            multiline
+            rows={4}
+            fullWidth
+            value={intent}
+            onChange={(e) => setIntent(e.target.value)}
+            onKeyDown={handleKeyDown}
+            helperText="Be specific about what you want to build. Press Cmd+Enter to submit."
+          />
+        </Stack>
       </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button onClick={() => onOpenChange(false)}>
+          Cancel
+        </Button>
+        <Button 
+          variant="contained" 
+          onClick={handleSubmit} 
+          disabled={!intent.trim()}
+          sx={{ borderRadius: 2 }}
+        >
+          Create Change
+        </Button>
+      </DialogActions>
     </Dialog>
   )
 }
