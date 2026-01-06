@@ -1,6 +1,5 @@
-import { Play, Loader2, CheckCircle, XCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { Box, Button, Paper, Stack, Typography } from '@mui/material'
+import { CheckCircle, Cancel, PlayArrow } from '@mui/icons-material'
 import type { JustCommand, TaskStatus } from '@/types/task'
 
 interface TaskCardProps {
@@ -14,38 +13,46 @@ export function TaskCard({ command, status, isActive = false, onRun }: TaskCardP
   const isRunning = status === 'running'
 
   return (
-    <div
+    <Paper
+      variant="outlined"
       data-testid={`task-card-${command.name}`}
-      className={cn(
-        'flex items-center justify-between rounded-lg border p-3 transition-colors',
-        isActive && 'border-primary bg-primary/5',
-        !isActive && 'hover:bg-muted/50'
-      )}
+      sx={{
+        p: 1.5,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderColor: isActive ? 'primary.main' : 'divider',
+        bgcolor: isActive ? 'action.selected' : 'transparent',
+        transition: 'background-color 120ms ease',
+        '&:hover': {
+          bgcolor: isActive ? 'action.selected' : 'action.hover',
+        },
+      }}
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-sm font-medium">{command.name}</span>
-          {status === 'success' && <CheckCircle className="h-4 w-4 text-green-500" />}
-          {status === 'error' && <XCircle className="h-4 w-4 text-red-500" />}
-        </div>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }} noWrap>
+            {command.name}
+          </Typography>
+          {status === 'success' && <CheckCircle fontSize="small" color="success" />}
+          {status === 'error' && <Cancel fontSize="small" color="error" />}
+        </Stack>
         {command.description && (
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{command.description}</p>
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ mt: 0.5, display: 'block' }}>
+            {command.description}
+          </Typography>
         )}
-      </div>
+      </Box>
 
       <Button
-        variant={isRunning ? 'secondary' : 'outline'}
-        size="sm"
+        variant={isRunning ? 'contained' : 'outlined'}
+        size="small"
         disabled={isRunning}
         onClick={() => onRun?.(command.name)}
-        className="ml-2 shrink-0"
+        sx={{ ml: 2, flexShrink: 0, minWidth: 40 }}
       >
-        {isRunning ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Play className="h-3.5 w-3.5" />
-        )}
+        {isRunning ? '...' : <PlayArrow fontSize="small" />}
       </Button>
-    </div>
+    </Paper>
   )
 }

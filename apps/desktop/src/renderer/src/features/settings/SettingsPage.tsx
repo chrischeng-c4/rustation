@@ -1,58 +1,14 @@
-import { useCallback, useEffect } from 'react'
-import { Sun, Moon, Monitor, FolderOpen } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { useCallback } from 'react'
+import { Box, Button, Paper, Stack, TextField, Typography } from '@mui/material'
+import { Brightness4, Brightness7, DesktopWindows, FolderOpen } from '@mui/icons-material'
 import { useSettingsState } from '@/hooks/useAppState'
 import type { Theme } from '@/types/state'
-
-/**
- * Apply theme to the document root element.
- * Uses Tailwind's dark mode class strategy.
- */
-function applyTheme(theme: Theme) {
-  const root = document.documentElement
-
-  if (theme === 'dark') {
-    root.classList.add('dark')
-  } else if (theme === 'light') {
-    root.classList.remove('dark')
-  } else {
-    // System preference
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    if (prefersDark) {
-      root.classList.add('dark')
-    } else {
-      root.classList.remove('dark')
-    }
-  }
-}
 
 /**
  * Settings Page - Global and Worktree configuration.
  */
 export function SettingsPage() {
   const { settings, dispatch, isLoading } = useSettingsState()
-
-  // Apply theme on mount and when it changes
-  useEffect(() => {
-    if (settings?.theme) {
-      applyTheme(settings.theme)
-    }
-  }, [settings?.theme])
-
-  // Listen for system theme changes when "system" is selected
-  useEffect(() => {
-    if (settings?.theme !== 'system') return
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = () => applyTheme('system')
-
-    mediaQuery.addEventListener('change', handleChange)
-    return () => mediaQuery.removeEventListener('change', handleChange)
-  }, [settings?.theme])
 
   const handleThemeChange = useCallback(
     async (theme: Theme) => {
@@ -74,119 +30,123 @@ export function SettingsPage() {
 
   if (isLoading || !settings) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Loading settings...</p>
-      </div>
+      <Stack alignItems="center" justifyContent="center" sx={{ height: '100%' }}>
+        <Typography variant="body2" color="text.secondary">
+          Loading settings...
+        </Typography>
+      </Stack>
     )
   }
 
   const currentTheme = settings.theme
 
   return (
-    <ScrollArea className="h-full">
-      <div className="space-y-6 p-4">
+    <Box sx={{ height: '100%', overflow: 'auto' }}>
+      <Stack spacing={3} sx={{ p: 3 }}>
         {/* Header */}
-        <div>
-          <h2 className="text-2xl font-semibold">Settings</h2>
-          <p className="mt-1 text-muted-foreground">Configure application preferences</p>
-        </div>
+        <Box>
+          <Typography variant="h5" fontWeight={600}>Settings</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Configure application preferences
+          </Typography>
+        </Box>
 
         {/* Appearance Card */}
-        <Card className="p-4">
-          <h3 className="mb-4 text-lg font-medium">Appearance</h3>
+        <Paper variant="outlined" sx={{ p: 3 }}>
+          <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+            Appearance
+          </Typography>
 
-          <div className="space-y-4">
-            <div>
-              <Label className="text-sm font-medium">Theme</Label>
-              <p className="text-xs text-muted-foreground mb-3">
-                Choose how the application looks
-              </p>
+          <Box>
+            <Typography variant="subtitle2">Theme</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+              Choose how the application looks
+            </Typography>
 
-              <div className="flex gap-2">
-                <Button
-                  variant={currentTheme === 'system' ? 'default' : 'outline'}
-                  className="flex-1 gap-2"
-                  onClick={() => handleThemeChange('system')}
-                >
-                  <Monitor className="h-4 w-4" />
-                  System
-                </Button>
-                <Button
-                  variant={currentTheme === 'light' ? 'default' : 'outline'}
-                  className="flex-1 gap-2"
-                  onClick={() => handleThemeChange('light')}
-                >
-                  <Sun className="h-4 w-4" />
-                  Light
-                </Button>
-                <Button
-                  variant={currentTheme === 'dark' ? 'default' : 'outline'}
-                  className="flex-1 gap-2"
-                  onClick={() => handleThemeChange('dark')}
-                >
-                  <Moon className="h-4 w-4" />
-                  Dark
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Card>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant={currentTheme === 'system' ? 'contained' : 'outlined'}
+                onClick={() => handleThemeChange('system')}
+                startIcon={<DesktopWindows fontSize="small" />}
+                sx={{ flex: 1 }}
+              >
+                System
+              </Button>
+              <Button
+                variant={currentTheme === 'light' ? 'contained' : 'outlined'}
+                onClick={() => handleThemeChange('light')}
+                startIcon={<Brightness7 fontSize="small" />}
+                sx={{ flex: 1 }}
+              >
+                Light
+              </Button>
+              <Button
+                variant={currentTheme === 'dark' ? 'contained' : 'outlined'}
+                onClick={() => handleThemeChange('dark')}
+                startIcon={<Brightness4 fontSize="small" />}
+                sx={{ flex: 1 }}
+              >
+                Dark
+              </Button>
+            </Stack>
+          </Box>
+        </Paper>
 
         {/* Projects Card */}
-        <Card className="p-4">
-          <h3 className="mb-4 text-lg font-medium">Projects</h3>
+        <Paper variant="outlined" sx={{ p: 3 }}>
+          <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+            Projects
+          </Typography>
 
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="default-path" className="text-sm font-medium">
-                Default Project Path
-              </Label>
-              <p className="text-xs text-muted-foreground mb-2">
-                Starting directory when opening new projects
-              </p>
+          <Box>
+            <Typography variant="subtitle2">Default Project Path</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              Starting directory when opening new projects
+            </Typography>
 
-              <div className="flex gap-2">
-                <Input
-                  id="default-path"
-                  value={settings.default_project_path ?? ''}
-                  readOnly
-                  placeholder="No default path set"
-                  className="font-mono text-sm"
-                />
-                <Button variant="outline" onClick={handleBrowseProjectPath}>
-                  <FolderOpen className="h-4 w-4 mr-2" />
-                  Browse
+            <Stack direction="row" spacing={2}>
+              <TextField
+                id="default-path"
+                value={settings.default_project_path ?? ''}
+                placeholder="No default path set"
+                size="small"
+                fullWidth
+                InputProps={{ readOnly: true }}
+              />
+              <Button variant="outlined" onClick={handleBrowseProjectPath} startIcon={<FolderOpen fontSize="small" />}>
+                Browse
+              </Button>
+              {settings.default_project_path && (
+                <Button variant="text" onClick={handleClearProjectPath}>
+                  Clear
                 </Button>
-                {settings.default_project_path && (
-                  <Button variant="ghost" onClick={handleClearProjectPath}>
-                    Clear
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        </Card>
+              )}
+            </Stack>
+          </Box>
+        </Paper>
 
         {/* About Card */}
-        <Card className="p-4">
-          <h3 className="mb-4 text-lg font-medium">About</h3>
+        <Paper variant="outlined" sx={{ p: 3 }}>
+          <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+            About
+          </Typography>
 
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Application</span>
-              <span>rstn</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Version</span>
-              <span className="font-mono">0.1.0</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Framework</span>
-              <span>Electron + React + napi-rs</span>
-            </div>
-          </div>
-        </Card>
-      </div>
-    </ScrollArea>
+          <Stack spacing={1}>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography variant="body2" color="text.secondary">Application</Typography>
+              <Typography variant="body2">rstn</Typography>
+            </Stack>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography variant="body2" color="text.secondary">Version</Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>0.1.0</Typography>
+            </Stack>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography variant="body2" color="text.secondary">Framework</Typography>
+              <Typography variant="body2">Electron + React + napi-rs</Typography>
+            </Stack>
+          </Stack>
+        </Paper>
+      </Stack>
+    </Box>
   )
 }

@@ -4,21 +4,42 @@
 
 ---
 
-## Implemented Features
+## Core Architecture
 
-*Currently working in production*
+*Foundation and Principles*
 
 | Document | Description |
 |----------|-------------|
-| [00. Architecture](implemented/00-architecture.md) | Electron + React + napi-rs architecture |
-| [01. UI Components](architecture/01-ui-component-architecture.md) | Frontend component hierarchy & patterns |
-| [01. State-First](implemented/01-state-first.md) | Core principle: JSON-serializable state |
-| [02. State Topology](implemented/02-state-topology.md) | AppState tree structure |
-| [03. Persistence](implemented/03-persistence.md) | Save/load application state |
-| [04. Project Management](implemented/04-project-management.md) | Multi-project tabs, worktrees |
-| [05. Docker Management](implemented/05-docker-management.md) | Container dashboard |
-| [06. Tasks (Justfile)](implemented/06-tasks-justfile.md) | Justfile command runner |
-| [07. Testing](implemented/07-testing.md) | Testing patterns |
+| [00. Overview](architecture/00-overview.md) | Electron + React + napi-rs architecture |
+| [01. State-First](architecture/01-state-first.md) | Core principle: JSON-serializable state |
+| [02. State Topology](architecture/02-state-topology.md) | AppState tree structure |
+| [03. Persistence](architecture/03-persistence.md) | Save/load application state |
+| [07. Testing](architecture/07-testing.md) | Testing patterns |
+
+---
+
+## Feature Specifications
+
+*Domain Logic and Features*
+
+| Document | Description |
+|----------|-------------|
+| [Project Management](features/project-management.md) | Multi-project tabs, worktrees |
+| [Docker Management](features/docker-management.md) | Container dashboard |
+| [Tasks (Justfile)](features/tasks-justfile.md) | Justfile command runner |
+
+---
+
+## Development Workflow
+
+*Processes and Standards*
+
+| Document | Description |
+|----------|-------------|
+| [Contribution Guide](workflow/contribution-guide.md) | Dev setup & PR workflow |
+| [SDD Workflow](workflow/sdd-workflow.md) | Specification-Driven Development |
+| [Testing Guide](workflow/testing-guide.md) | Test patterns |
+| [Definition of Done](workflow/definition-of-done.md) | PR checklist |
 
 ---
 
@@ -45,22 +66,11 @@
 
 ---
 
-## Development Workflow
-
-| Document | Description |
-|----------|-------------|
-| [Contribution Guide](workflow/contribution-guide.md) | Dev setup & PR workflow |
-| [SDD Workflow](workflow/sdd-workflow.md) | Specification-Driven Development |
-| [Testing Guide](workflow/testing-guide.md) | Test patterns |
-| [Definition of Done](workflow/definition-of-done.md) | PR checklist |
-
----
-
 ## Quick Reference
 
 ### Tech Stack
 - **Desktop**: Electron
-- **Frontend**: React 19 + Vite + Tailwind + shadcn/ui
+- **Frontend**: React 19 + Vite + MUI (Material UI)
 - **Backend**: napi-rs (Rust)
 - **State**: Rust AppState (JSON-serializable)
 
@@ -86,11 +96,3 @@ apps/desktop/src/     # Electron + React app
 kb/                   # This documentation
 docs/                 # User documentation
 ```
-
----
-
-## Documentation Principles
-
-1. **KB-First**: Design changes documented here *before* implementation
-2. **State-First**: All state must be JSON-serializable
-3. **No Business Logic in React**: Frontend is display-only

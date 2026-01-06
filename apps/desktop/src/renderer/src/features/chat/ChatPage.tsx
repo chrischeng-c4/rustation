@@ -1,16 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import {
-  MessageSquare,
-  Send,
-  RefreshCw,
-  Trash2,
-  User,
-  Bot,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Textarea } from '@/components/ui/textarea'
+import { Box, Button, IconButton, Paper, Stack, TextField, Typography } from '@mui/material'
+import { Autorenew, ChatBubbleOutline, DeleteOutline, Person, Send, SmartToy } from '@mui/icons-material'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -91,7 +81,7 @@ export function ChatPage() {
   if (!chat) {
     return (
       <EmptyState
-        icon={MessageSquare}
+        icon={ChatBubbleOutline}
         title="No Project Open"
         description="Open a project to start chatting with Claude."
       />
@@ -103,87 +93,91 @@ export function ChatPage() {
   const error = chat.error
 
   return (
-    <div className="flex h-full flex-col">
+    <Stack sx={{ height: '100%' }}>
       {/* Header */}
       <PageHeader
         title="Chat"
         description={`Chat with Claude about ${projectName}`}
-        icon={<MessageSquare className="h-5 w-5" />}
+        icon={<ChatBubbleOutline fontSize="small" />}
       >
         <Button
           variant="outline"
           size="sm"
           onClick={handleClear}
           disabled={messages.length === 0}
-          className="h-8 gap-1.5"
+          startIcon={<DeleteOutline fontSize="small" />}
         >
-          <Trash2 className="h-3.5 w-3.5" />
           Clear Chat
         </Button>
       </PageHeader>
 
       {/* Messages Area */}
-      <ScrollArea className="flex-1 p-4 pt-0" ref={scrollRef}>
+      <Box ref={scrollRef} sx={{ flex: 1, overflow: 'auto', p: 2, pt: 0 }}>
         {messages.length === 0 ? (
           <EmptyState
-            icon={Bot}
+            icon={SmartToy}
             title="Start a conversation"
             description="Ask questions about your project, generate code, or get help with development tasks."
-            className="py-12"
+            sx={{ py: 6 }}
           />
         ) : (
-          <div className="space-y-4">
+          <Stack spacing={2}>
             {messages.map((message) => (
               <MessageBubble key={message.id} message={message} />
             ))}
             {isTyping && (
-              <div className="flex items-center gap-2 text-muted-foreground text-sm pl-2">
-                <RefreshCw className="h-3 w-3 animate-spin" />
-                <span>Claude is thinking...</span>
-              </div>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ pl: 1 }}>
+                <Autorenew fontSize="small" sx={{ color: 'text.secondary', animation: 'spin 1s linear infinite' }} />
+                <Typography variant="body2" color="text.secondary">
+                  Claude is thinking...
+                </Typography>
+              </Stack>
             )}
-          </div>
+          </Stack>
         )}
-      </ScrollArea>
+      </Box>
 
       {/* Error Display */}
       {error && (
-        <div className="px-4 mb-2">
+        <Box sx={{ px: 2, mb: 2 }}>
           <ErrorBanner error={error} />
-          <Button variant="ghost" size="sm" onClick={handleClearError} className="mt-1 h-7 text-xs">
+          <Button variant="text" size="small" onClick={handleClearError} sx={{ mt: 1 }}>
             Dismiss Error
           </Button>
-        </div>
+        </Box>
       )}
 
       {/* Input Area */}
-      <div className="border-t p-4">
-        <div className="flex gap-2">
-          <Textarea
+      <Box sx={{ borderTop: 1, borderColor: 'divider', p: 2 }}>
+        <Stack direction="row" spacing={2}>
+          <TextField
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask Claude about your project..."
-            className="min-h-[80px] resize-none focus-visible:ring-primary/20"
+            multiline
+            minRows={3}
+            fullWidth
             disabled={isTyping}
           />
-          <Button
+          <IconButton
+            color="primary"
             onClick={handleSend}
             disabled={!inputValue.trim() || isTyping}
-            className="shrink-0 h-auto self-stretch px-4"
+            sx={{ alignSelf: 'stretch' }}
           >
             {isTyping ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <Autorenew fontSize="small" sx={{ animation: 'spin 1s linear infinite' }} />
             ) : (
-              <Send className="h-4 w-4" />
+              <Send fontSize="small" />
             )}
-          </Button>
-        </div>
-        <p className="mt-2 text-[10px] text-muted-foreground text-center">
-          Press <kbd className="pointer-events-none inline-flex h-4 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">Enter</kbd> to send, <kbd className="pointer-events-none inline-flex h-4 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">Shift+Enter</kbd> for new line
-        </p>
-      </div>
-    </div>
+          </IconButton>
+        </Stack>
+        <Typography variant="caption" color="text.secondary" align="center" sx={{ mt: 1, display: 'block' }}>
+          Press Enter to send, Shift+Enter for new line
+        </Typography>
+      </Box>
+    </Stack>
   )
 }
 
@@ -192,41 +186,42 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   const isSystem = message.role === 'system'
 
   return (
-    <div
-      className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}
-    >
+    <Stack direction={isUser ? 'row-reverse' : 'row'} spacing={1.5} alignItems="flex-start">
       {/* Avatar */}
-      <div
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-          isUser
-            ? 'bg-primary text-primary-foreground'
-            : isSystem
-              ? 'bg-muted text-muted-foreground'
-              : 'bg-violet-500 text-white'
-        }`}
+      <Box
+        sx={{
+          height: 32,
+          width: 32,
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: isUser ? 'primary.main' : isSystem ? 'action.hover' : 'secondary.main',
+          color: isUser ? 'primary.contrastText' : isSystem ? 'text.secondary' : 'secondary.contrastText',
+          flexShrink: 0,
+        }}
       >
-        {isUser ? (
-          <User className="h-4 w-4" />
-        ) : (
-          <Bot className="h-4 w-4" />
-        )}
-      </div>
+        {isUser ? <Person fontSize="small" /> : <SmartToy fontSize="small" />}
+      </Box>
 
       {/* Message Content */}
-      <Card
-        className={`max-w-[80%] px-4 py-2 ${
-          isUser
-            ? 'bg-primary text-primary-foreground'
-            : isSystem
-              ? 'bg-muted'
-              : 'bg-card'
-        }`}
+      <Paper
+        variant="outlined"
+        sx={{
+          maxWidth: '80%',
+          px: 2,
+          py: 1,
+          bgcolor: isUser ? 'primary.main' : isSystem ? 'action.hover' : 'background.paper',
+          color: isUser ? 'primary.contrastText' : 'text.primary',
+        }}
       >
-        <div className="whitespace-pre-wrap break-words">{message.content}</div>
+        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {message.content}
+        </Typography>
         {message.is_streaming && (
-          <span className="inline-block w-2 h-4 ml-1 bg-current animate-pulse" />
+          <Box component="span" sx={{ display: 'inline-block', width: 8, height: 16, ml: 0.5, bgcolor: 'currentColor', animation: 'pulse 1s ease-in-out infinite' }} />
         )}
-      </Card>
-    </div>
+      </Paper>
+    </Stack>
   )
 }

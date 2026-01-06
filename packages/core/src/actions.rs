@@ -595,6 +595,148 @@ pub enum Action {
 
     /// Clear all dev logs
     ClearDevLogs,
+
+    // ========================================================================
+    // UI Layout Actions (Right Icon Bar & Log Panels)
+    // ========================================================================
+    /// Toggle a log panel (expand if collapsed, collapse if same panel clicked)
+    ToggleLogPanel { panel_type: LogPanelTypeData },
+
+    /// Close the active log panel
+    CloseLogPanel,
+
+    /// Set panel width (user resizes)
+    SetLogPanelWidth { width: u32 },
+
+    // ========================================================================
+    // File Explorer Actions (Worktree scope)
+    // ========================================================================
+    /// Load directory content (async)
+    ExploreDir { path: String },
+
+    /// Set file entries (internal, after load)
+    SetExplorerEntries {
+        path: String,
+        entries: Vec<FileEntryData>,
+    },
+
+    /// Set comments for selected file (internal)
+    SetFileComments {
+        path: String,
+        comments: Vec<CommentData>,
+    },
+
+    /// Navigate back in history
+    NavigateBack,
+
+    /// Navigate forward in history
+    NavigateForward,
+
+    /// Go to parent directory
+    NavigateUp,
+
+    /// Select a file or directory (show details/preview)
+    SelectFile { path: Option<String> },
+
+    /// Set sorting preferences
+    SetExplorerSort {
+        field: SortFieldData,
+        direction: SortDirectionData,
+    },
+
+    /// Set filter query
+    SetExplorerFilter { query: String },
+
+    /// Create new file or directory
+    CreateFile {
+        path: String,
+        kind: FileKindData,
+    },
+
+    /// Rename file or directory
+    RenameFile {
+        old_path: String,
+        new_name: String,
+    },
+
+    /// Delete file or directory (move to trash)
+    DeleteFile { path: String },
+
+    /// Reveal file in OS file explorer (Finder/Explorer)
+    RevealInOS { path: String },
+
+    /// Add a comment to a file
+    AddFileComment {
+        path: String,
+        content: String,
+    },
+
+    /// Delete a comment from a file
+    DeleteFileComment {
+        path: String,
+        comment_id: String,
+    },
+}
+
+/// File kind for actions
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum FileKindData {
+    File,
+    Directory,
+    Symlink,
+}
+
+/// File entry data for actions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FileEntryData {
+    pub name: String,
+    pub path: String,
+    pub kind: FileKindData,
+    pub size: u64,
+    pub permissions: String,
+    pub updated_at: String,
+    pub comment_count: usize,
+    pub git_status: Option<GitFileStatusData>,
+}
+
+/// Comment data for actions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CommentData {
+    pub id: String,
+    pub content: String,
+    pub author: String,
+    pub created_at: String,
+}
+
+/// Git file status for actions
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum GitFileStatusData {
+    Modified,
+    Added,
+    Deleted,
+    Untracked,
+    Ignored,
+    Clean,
+}
+
+/// Sort field for explorer
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortFieldData {
+    Name,
+    Size,
+    Date,
+    Kind,
+}
+
+/// Sort direction for explorer
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortDirectionData {
+    Asc,
+    Desc,
 }
 
 /// Worktree data for actions (from `git worktree list`)
@@ -751,6 +893,7 @@ pub enum ActiveViewData {
     Mcp,
     Chat,
     Terminal,
+    Explorer,
 }
 
 /// Constitution mode for actions (Rules = modular, Presets = full prompt)
@@ -932,6 +1075,21 @@ pub struct ReviewContentData {
     pub content: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub file_changes: Vec<ReviewFileChangeData>,
+}
+
+// ============================================================================
+// UI Layout Data Types
+// ============================================================================
+
+/// Log panel type for actions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogPanelTypeData {
+    Actions,
+    Errors,
+    Info,
+    Debug,
+    Metrics,
 }
 
 // ============================================================================

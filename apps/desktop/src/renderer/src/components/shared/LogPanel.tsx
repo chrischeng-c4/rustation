@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react'
-import { Terminal, Copy, RefreshCw, Check } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Box, IconButton, Paper, Stack, Typography } from '@mui/material'
+import { CheckCircle, Code, ContentCopy, Refresh } from '@mui/icons-material'
 
 interface LogPanelProps {
   title?: string
@@ -39,45 +37,43 @@ export function LogPanel({
   }, [logs])
 
   return (
-    <div className="flex h-full flex-col rounded-lg border">
+    <Paper variant="outlined" sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
-      <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <Terminal className="h-4 w-4" />
-          <span className="text-sm font-medium">{title}</span>
-        </div>
-        <div className="flex gap-1">
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ borderBottom: 1, borderColor: 'divider', px: 2, py: 1 }}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Code fontSize="small" />
+          <Typography variant="subtitle2">{title}</Typography>
+        </Stack>
+        <Stack direction="row" spacing={0.5}>
           {showCopy && logs.length > 0 && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCopy}>
+            <IconButton size="small" onClick={handleCopy}>
               {copied ? (
-                <Check className="h-3.5 w-3.5 text-green-500" />
+                <CheckCircle fontSize="small" sx={{ color: 'success.main' }} />
               ) : (
-                <Copy className="h-3.5 w-3.5" />
+                <ContentCopy fontSize="small" />
               )}
-            </Button>
+            </IconButton>
           )}
           {onRefresh && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={onRefresh}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </Button>
+            <IconButton size="small" onClick={onRefresh} disabled={isRefreshing}>
+              <Refresh fontSize="small" sx={{ animation: isRefreshing ? 'spin 1s linear infinite' : undefined }} />
+            </IconButton>
           )}
-        </div>
-      </div>
+        </Stack>
+      </Stack>
 
       {/* Content */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <Box ref={scrollRef} sx={{ flex: 1, overflow: 'auto', p: 2 }}>
         {logs.length > 0 ? (
-          <pre className="whitespace-pre-wrap font-mono text-xs">{logs.join('\n')}</pre>
+          <Box component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+            {logs.join('\n')}
+          </Box>
         ) : (
-          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+          <Typography variant="body2" color="text.secondary">
+            {emptyMessage}
+          </Typography>
         )}
-      </ScrollArea>
-    </div>
+      </Box>
+    </Paper>
   )
 }

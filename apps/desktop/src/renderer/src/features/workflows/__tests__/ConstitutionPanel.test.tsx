@@ -155,6 +155,7 @@ describe('ConstitutionPanel', () => {
       })
 
       render(<ConstitutionPanel />)
+      expect(screen.getByText(/Constitution Management/)).toBeInTheDocument()
       expect(screen.getByText(/Initialize Constitution/)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Apply Default Template/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Create with Q&A/ })).toBeInTheDocument()
@@ -297,6 +298,7 @@ describe('ConstitutionPanel', () => {
       })
 
       render(<ConstitutionPanel />)
+      expect(screen.getByText(/Constitution Management/)).toBeInTheDocument()
       expect(screen.getByText(/Initialize Constitution/)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Apply Default Template/ })).toBeInTheDocument()
     })

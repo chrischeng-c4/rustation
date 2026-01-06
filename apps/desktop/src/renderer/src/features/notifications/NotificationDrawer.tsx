@@ -1,25 +1,25 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
+import { alpha } from '@mui/material/styles'
 import {
-  Bell,
-  Check,
-  CheckCheck,
-  Trash2,
-  X,
-  AlertCircle,
-  AlertTriangle,
-  Info,
-  CheckCircle2,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
+  Badge,
+  Box,
+  Button,
+  Drawer,
+  IconButton,
+  Stack,
+  Typography,
+} from '@mui/material'
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
-import { Badge } from '@/components/ui/badge'
+  Notifications,
+  Done,
+  DoneAll,
+  DeleteOutline,
+  Close,
+  ErrorOutline,
+  WarningAmber,
+  InfoOutlined,
+  CheckCircle,
+} from '@mui/icons-material'
 import { useNotificationsState } from '@/hooks/useAppState'
 import type { Notification, NotificationType } from '@/types/state'
 
@@ -29,34 +29,20 @@ import type { Notification, NotificationType } from '@/types/state'
 function getNotificationIcon(type: NotificationType) {
   switch (type) {
     case 'success':
-      return <CheckCircle2 className="h-4 w-4 text-green-500" />
+      return <CheckCircle fontSize="small" color="success" />
     case 'error':
-      return <AlertCircle className="h-4 w-4 text-destructive" />
+      return <ErrorOutline fontSize="small" color="error" />
     case 'warning':
-      return <AlertTriangle className="h-4 w-4 text-yellow-500" />
+      return <WarningAmber fontSize="small" color="warning" />
     case 'info':
     default:
-      return <Info className="h-4 w-4 text-blue-500" />
+      return <InfoOutlined fontSize="small" color="info" />
   }
 }
 
 /**
  * Get badge variant for notification type
  */
-function getNotificationBadgeVariant(type: NotificationType) {
-  switch (type) {
-    case 'success':
-      return 'default' as const
-    case 'error':
-      return 'destructive' as const
-    case 'warning':
-      return 'secondary' as const
-    case 'info':
-    default:
-      return 'outline' as const
-  }
-}
-
 /**
  * Format timestamp for display
  */
@@ -91,56 +77,62 @@ function NotificationItem({
   onMarkRead,
 }: NotificationItemProps) {
   return (
-    <div
-      className={`flex items-start gap-3 p-3 border-b last:border-b-0 ${
-        notification.read ? 'opacity-60' : 'bg-muted/30'
-      }`}
+    <Stack
+      direction="row"
+      spacing={1.5}
+      alignItems="flex-start"
+      sx={{
+        p: 1.5,
+        borderBottom: 1,
+        borderColor: 'divider',
+        bgcolor: notification.read ? 'transparent' : alpha('#90caf9', 0.08),
+        opacity: notification.read ? 0.6 : 1,
+      }}
     >
       {/* Icon */}
-      <div className="mt-0.5">
-        {getNotificationIcon(notification.notification_type)}
-      </div>
+      <Box sx={{ mt: 0.5 }}>{getNotificationIcon(notification.notification_type)}</Box>
 
       {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <Badge variant={getNotificationBadgeVariant(notification.notification_type)}>
-            {notification.notification_type}
-          </Badge>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+          <Badge
+            color="primary"
+            badgeContent={notification.notification_type}
+            sx={{
+              '& .MuiBadge-badge': {
+                position: 'static',
+                transform: 'none',
+                borderRadius: 8,
+                px: 1,
+                fontSize: '0.6rem',
+                textTransform: 'uppercase',
+              },
+            }}
+          />
           {!notification.read && (
-            <span className="h-2 w-2 rounded-full bg-blue-500" />
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'info.main' }} />
           )}
-        </div>
-        <p className="text-sm break-words">{notification.message}</p>
-        <p className="text-xs text-muted-foreground mt-1">
+        </Stack>
+        <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+          {notification.message}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
           {formatTimestamp(notification.created_at)}
-        </p>
-      </div>
+        </Typography>
+      </Box>
 
       {/* Actions */}
-      <div className="flex items-center gap-1">
+      <Stack direction="row" spacing={0.5}>
         {!notification.read && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => onMarkRead(notification.id)}
-            title="Mark as read"
-          >
-            <Check className="h-3.5 w-3.5" />
-          </Button>
+          <IconButton size="small" onClick={() => onMarkRead(notification.id)} title="Mark as read">
+            <Done fontSize="small" />
+          </IconButton>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => onDismiss(notification.id)}
-          title="Dismiss"
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-    </div>
+        <IconButton size="small" onClick={() => onDismiss(notification.id)} title="Dismiss">
+          <Close fontSize="small" />
+        </IconButton>
+      </Stack>
+    </Stack>
   )
 }
 
@@ -150,6 +142,7 @@ function NotificationItem({
  */
 export function NotificationDrawer() {
   const { notifications, unreadCount, dispatch } = useNotificationsState()
+  const [open, setOpen] = useState(false)
 
   const handleDismiss = useCallback(
     async (id: string) => {
@@ -179,72 +172,72 @@ export function NotificationDrawer() {
   )
 
   return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </Button>
-      </SheetTrigger>
-      <SheetContent className="w-[400px] sm:w-[540px]">
-        <SheetHeader className="border-b pb-4">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
-              Notifications
+    <>
+      <IconButton onClick={() => setOpen(true)} title="Notifications">
+        <Badge badgeContent={unreadCount > 9 ? '9+' : unreadCount} color="error" invisible={unreadCount === 0}>
+          <Notifications fontSize="small" />
+        </Badge>
+      </IconButton>
+      <Drawer anchor="right" open={open} onClose={() => setOpen(false)}>
+        <Box sx={{ width: { xs: 360, sm: 540 }, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ borderBottom: 1, borderColor: 'divider', px: 2, py: 2 }}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Notifications fontSize="small" />
+              <Typography variant="subtitle1" fontWeight={600}>
+                Notifications
+              </Typography>
               {unreadCount > 0 && (
-                <Badge variant="secondary">{unreadCount} unread</Badge>
+                <Badge
+                  badgeContent={`${unreadCount} unread`}
+                  color="primary"
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      position: 'static',
+                      transform: 'none',
+                      borderRadius: 8,
+                      px: 1,
+                    },
+                  }}
+                />
               )}
-            </SheetTitle>
-            <div className="flex items-center gap-2">
+            </Stack>
+            <Stack direction="row" spacing={1}>
               {unreadCount > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleMarkAllRead}
-                >
-                  <CheckCheck className="mr-2 h-4 w-4" />
+                <Button variant="outlined" size="small" onClick={handleMarkAllRead} startIcon={<DoneAll fontSize="small" />}>
                   Mark all read
                 </Button>
               )}
               {notifications.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleClearAll}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
+                <Button variant="outlined" size="small" onClick={handleClearAll} startIcon={<DeleteOutline fontSize="small" />}>
                   Clear all
                 </Button>
               )}
-            </div>
-          </div>
-        </SheetHeader>
+            </Stack>
+          </Stack>
 
-        <ScrollArea className="h-[calc(100vh-120px)] mt-4">
-          {sortedNotifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <Bell className="h-12 w-12 opacity-50" />
-              <p className="mt-4 text-sm">No notifications</p>
-            </div>
-          ) : (
-            <div className="space-y-0">
-              {sortedNotifications.map((notification) => (
-                <NotificationItem
-                  key={notification.id}
-                  notification={notification}
-                  onDismiss={handleDismiss}
-                  onMarkRead={handleMarkRead}
-                />
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-      </SheetContent>
-    </Sheet>
+          <Box sx={{ flex: 1, overflow: 'auto', mt: 2 }}>
+            {sortedNotifications.length === 0 ? (
+              <Stack alignItems="center" justifyContent="center" sx={{ py: 6, color: 'text.secondary' }}>
+                <Notifications sx={{ fontSize: 48, opacity: 0.5 }} />
+                <Typography variant="body2" sx={{ mt: 2 }}>
+                  No notifications
+                </Typography>
+              </Stack>
+            ) : (
+              <Box>
+                {sortedNotifications.map((notification) => (
+                  <NotificationItem
+                    key={notification.id}
+                    notification={notification}
+                    onDismiss={handleDismiss}
+                    onMarkRead={handleMarkRead}
+                  />
+                ))}
+              </Box>
+            )}
+          </Box>
+        </Box>
+      </Drawer>
+    </>
   )
 }

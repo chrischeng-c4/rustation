@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ListTodo, Settings, RefreshCw, FolderOpen, Server, MessageSquare, TerminalSquare, Workflow, BrainCircuit } from 'lucide-react'
+import { SyntheticEvent, useCallback, useEffect, useState } from 'react'
+import { Box, Button, CircularProgress, Stack, Tab, Tabs, Typography } from '@mui/material'
+import {
+  AccountTree,
+  Chat,
+  Code,
+  FolderOpen,
+  ListAlt,
+  Psychology,
+  Settings,
+  Storage,
+} from '@mui/icons-material'
 import { DockersPage } from '@/features/dockers/DockersPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { EnvPage } from '@/features/env'
@@ -14,9 +23,10 @@ import { A2UIPage } from '@/features/a2ui/A2UIPage'
 import { Toaster } from '@/features/notifications'
 import { CommandPalette } from '@/features/command-palette'
 import { DevLogPanel } from '@/components/shared/DevLogPanel'
+import { RightIconBar } from '@/components/layout/RightIconBar'
+import { LogPanel } from '@/components/layout/LogPanel'
 import { useActiveWorktree, useAppState } from '@/hooks/useAppState'
 import { ProjectTabs } from '@/features/projects/components/ProjectTabs'
-import { Button } from '@/components/ui/button'
 import type { ActiveView } from '@/types/state'
 
 // Dev mode check - only show DevLogPanel in development
@@ -33,15 +43,24 @@ function NoProjectView() {
   }
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
-      <FolderOpen className="h-16 w-16" />
-      <h2 className="text-xl font-medium">No Project Open</h2>
-      <p className="text-sm">Open a project folder to get started</p>
-      <Button onClick={handleOpenProject} className="mt-4">
-        <FolderOpen className="mr-2 h-4 w-4" />
+    <Stack
+      sx={{
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 2,
+        color: 'text.secondary',
+      }}
+    >
+      <FolderOpen sx={{ fontSize: 64 }} />
+      <Typography variant="h6" fontWeight={600}>
+        No Project Open
+      </Typography>
+      <Typography variant="body2">Open a project folder to get started</Typography>
+      <Button variant="contained" onClick={handleOpenProject} startIcon={<FolderOpen />}>
         Open Project
       </Button>
-    </div>
+    </Stack>
   )
 }
 
@@ -67,7 +86,7 @@ function App() {
   const activeView = state?.active_view ?? 'tasks'
 
   const handleSidebarChange = useCallback(
-    (view: string) => {
+    (_event: SyntheticEvent, view: string) => {
       dispatch({ type: 'SetActiveView', payload: { view: view as ActiveView } })
     },
     [dispatch]
@@ -76,9 +95,9 @@ function App() {
   // Show loading while state is initializing
   if (isLoading || !state) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <Stack sx={{ height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress size={32} />
+      </Stack>
     )
   }
 
@@ -121,7 +140,7 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: 'background.default' }}>
       {/* Command Palette (Cmd+K / Ctrl+K) */}
       <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
 
@@ -132,92 +151,101 @@ function App() {
       <ProjectTabs />
 
       {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
+      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Global scope views (Docker) work without a project */}
         {activeView === 'dockers' ? (
-          <div className="flex-1 overflow-auto p-6">
+          <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
             <DockersPage />
-          </div>
+          </Box>
         ) : worktree ? (
           /* Sidebar + Content when project is open */
-          <Tabs
-            value={getSidebarValue()}
-            onValueChange={handleSidebarChange}
-            orientation="vertical"
-            className="flex h-full w-full"
-          >
-            {/* Sidebar: Only worktree-scope features */}
-            <TabsList className="flex h-full w-16 flex-col items-center gap-2 rounded-none border-r bg-muted/40 p-2">
-              <TabsTrigger
+          <Box sx={{ display: 'flex', width: '100%', height: '100%' }}>
+            <Tabs
+              orientation="vertical"
+              value={getSidebarValue()}
+              onChange={handleSidebarChange}
+              variant="scrollable"
+              sx={{
+                minWidth: 72,
+                borderRight: 1,
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+                py: 1,
+              }}
+            >
+              <Tab
                 value="workflows"
-                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
-              >
-                <Workflow className="h-5 w-5" />
-                <span className="text-[10px]">Flows</span>
-              </TabsTrigger>
-              <TabsTrigger
+                icon={<AccountTree fontSize="small" />}
+                iconPosition="top"
+                label="Flows"
+                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
+              />
+              <Tab
                 value="claude-code"
-                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
-              >
-                <BrainCircuit className="h-5 w-5 text-purple-500" />
-                <span className="text-[10px]">Claude</span>
-              </TabsTrigger>
-              <TabsTrigger
+                icon={<Psychology fontSize="small" />}
+                iconPosition="top"
+                label="Claude"
+                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
+              />
+              <Tab
                 value="tasks"
-                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
-              >
-                <ListTodo className="h-5 w-5" />
-                <span className="text-[10px]">Tasks</span>
-              </TabsTrigger>
-              <TabsTrigger
+                icon={<ListAlt fontSize="small" />}
+                iconPosition="top"
+                label="Tasks"
+                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
+              />
+              <Tab
                 value="mcp"
-                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
-              >
-                <Server className="h-5 w-5" />
-                <span className="text-[10px]">rstn</span>
-              </TabsTrigger>
-              <TabsTrigger
+                icon={<Storage fontSize="small" />}
+                iconPosition="top"
+                label="rstn"
+                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
+              />
+              <Tab
                 value="chat"
-                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
-              >
-                <MessageSquare className="h-5 w-5" />
-                <span className="text-[10px]">Chat</span>
-              </TabsTrigger>
-              <TabsTrigger
+                icon={<Chat fontSize="small" />}
+                iconPosition="top"
+                label="Chat"
+                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
+              />
+              <Tab
                 value="a2ui"
-                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
-              >
-                <TerminalSquare className="h-5 w-5 text-purple-500" />
-                <span className="text-[10px]">A2UI</span>
-              </TabsTrigger>
-              <TabsTrigger
+                icon={<Code fontSize="small" />}
+                iconPosition="top"
+                label="A2UI"
+                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
+              />
+              <Tab
                 value="terminal"
-                className="flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
-              >
-                <TerminalSquare className="h-5 w-5" />
-                <span className="text-[10px]">Term</span>
-              </TabsTrigger>
-              <TabsTrigger
+                icon={<Code fontSize="small" />}
+                iconPosition="top"
+                label="Term"
+                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem' }}
+              />
+              <Tab
                 value="settings"
-                className="mt-auto flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-lg"
-              >
-                <Settings className="h-5 w-5" />
-                <span className="text-[10px]">Settings</span>
-              </TabsTrigger>
-            </TabsList>
+                icon={<Settings fontSize="small" />}
+                iconPosition="top"
+                label="Settings"
+                sx={{ minHeight: 64, minWidth: 64, fontSize: '0.65rem', mt: 'auto' }}
+              />
+            </Tabs>
 
-            {/* Main Content - renders based on activeView */}
-            <div className="flex-1 overflow-auto p-6">{renderContent()}</div>
-          </Tabs>
+            <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>{renderContent()}</Box>
+          </Box>
         ) : (
           /* No project open - show NoProjectView for worktree-scope views */
           <NoProjectView />
         )}
 
-        {/* Dev Log Panel (right side, dev mode only) */}
-        {IS_DEV && <DevLogPanel />}
-      </div>
-    </div>
+        {/* Right Icon Bar & Log Panel */}
+        <LogPanel />
+        <RightIconBar />
+
+        {/* Old Dev Log Panel (fallback, dev mode only) - can be removed after testing */}
+        {/* {IS_DEV && <DevLogPanel />} */}
+      </Box>
+    </Box>
   )
 }
 

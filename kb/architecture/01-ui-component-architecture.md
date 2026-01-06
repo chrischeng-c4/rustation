@@ -1,96 +1,107 @@
 ---
 title: "UI Component Architecture"
-description: "Architecture for the frontend component library and feature composition"
+description: "Material Design (MUI) based component architecture for rustation"
 category: architecture
-status: draft
-last_updated: 2025-01-04
-version: 1.0.0
-tags: [architecture, frontend, react, components, shadcn]
-weight: 2
+status: active
+last_updated: 2026-01-06
+version: 2.0.0
 ---
 
 # UI Component Architecture
 
-## 1. Core Principle
+## 1. Overview
 
-The frontend follows a strict **Composition over Creation** principle.
-- **Fixed Component Library**: We use a standardized set of UI primitives (shadcn/ui).
-- **No Ad-Hoc Components**: Specialized components must be composed of existing primitives.
-- **Feature Encapsulation**: Domain logic and feature-specific UI belong in `features/`, not `components/`.
+Rustation uses **Material UI (MUI) v7** as its primary design system. This ensures a consistent, professional, and accessible user interface that follows Google's Material Design 3 guidelines.
 
-## 2. Directory Structure
+### Tech Stack
+- **Framework**: React 19
+- **Design System**: Material UI (MUI) v7 (`@mui/material`)
+- **Styling**: Emotion (`@emotion/react`, `@emotion/styled`)
+- **Icons**: Material Icons (`@mui/icons-material`)
+
+---
+
+## 2. Design Principles
+
+### 2.1 Material 3 Foundation
+We adopt Material 3's key characteristics:
+- **Color**: Dynamic color system with clear Primary/Secondary/Surface roles.
+- **Typography**: Roboto/Inter based type scale.
+- **Shape**: Generous rounding (16px+ for cards, 20px+ for buttons).
+- **Elevation**: Usage of tonal surfaces instead of heavy drop shadows.
+
+### 2.2 Component Hierarchy
 
 ```
-apps/desktop/src/renderer/src/
-├── components/          # GLOBAL SHARED COMPONENTS
-│   ├── ui/              # ✅ THE "FIXED" LIBRARY (shadcn/ui)
-│   │   ├── button.tsx
-│   │   ├── dialog.tsx
-│   │   └── ...
-│   ├── shared/          # ✅ SHARED COMPOSITE COMPONENTS
-│   │   ├── LogPanel.tsx
-│   │   ├── SourceCodeViewer.tsx
-│   │   └── ...
-│   └── (No other files here) ❌
-│
-├── features/            # FEATURE MODULES
-│   ├── command-palette/ # Command palette feature
-│   ├── dockers/
-│   │   ├── components/  # Feature-specific components
-│   │   │   └── ServiceCard.tsx
-│   │   └── index.tsx    # Public API
-│   ├── projects/        # Project and Worktree management
-│   │   ├── components/
-│   │   │   ├── ProjectTabs.tsx
-│   │   │   └── AddWorktreeDialog.tsx
-│   │   └── ...
+src/renderer/src/
+├── components/
+│   └── shared/          # Reusable composites (e.g., PageHeader, LogPanel)
+├── features/
+│   ├── explorer/        # File Explorer feature components
+│   ├── docker/          # Docker management components
 │   └── ...
+├── theme/               # MUI Theme Definitions
+│   └── index.ts         # createTheme() configuration
+└── App.tsx              # Root with ThemeProvider
 ```
 
-## 3. Rules
+### 2.3 Composition Rules
 
-### 3.1 The "Fixed" Library (`components/ui`)
-- Contains **only** generic, style-agnostic primitives.
-- Based on `shadcn/ui`.
-- Modifications here affect the **entire application**.
-- **DO NOT** add business logic here.
+1.  **Prefer MUI Primitives**: Use `Box`, `Stack`, `Paper` for layout instead of raw `div`.
+2.  **Theming over Custom CSS**: Define colors and shapes in `theme/index.ts`. Avoid hardcoded hex values in components.
+3.  **Sx Prop**: Use the `sx` prop for one-off styles that need access to theme tokens.
 
-### 3.2 Shared Components (`components/shared`)
-- Components used by **multiple features** (e.g., `LogPanel` used by Docker and Tasks).
-- Must be generic and reusable.
-- Should accept props for data, not fetch data themselves (dumb components).
+---
 
-### 3.3 Feature Components (`features/*/components`)
-- Components specific to a single feature.
-- Can contain business logic or be tied to specific data structures.
-- Example: `AddWorktreeDialog` belongs to `features/projects` because it knows about "worktrees" and calls specific APIs.
+## 3. Core Components
 
-## 4. Workflow Composition
+### 3.1 Layout
+- **`Box`**: Replacement for `div`. Supports `sx` prop.
+- **`Stack`**: Flexbox layout with `spacing`.
+- **`Grid`**: 2D grid layout.
+- **`Paper`**: Surface container with elevation/outlined variants.
 
-Workflows (views) are composed by assembling components from the Fixed Library and Feature Components.
+### 3.2 Navigation
+- **`Tabs` / `Tab`**: Secondary navigation within features.
+- **`Breadcrumbs`**: Path navigation.
+- **`IconButton`**: Action triggers (e.g., Back, Refresh).
 
-**Example (Docker Page)**:
-```tsx
-// features/dockers/DockersPage.tsx
-import { Button } from '@/components/ui/button' // Fixed Library
-import { LogPanel } from '@/components/shared/LogPanel' // Shared Component
-import { ServiceList } from './components/ServiceList' // Feature Component
+### 3.3 Feedback
+- **`CircularProgress`**: Loading states.
+- **`Alert`**: Error/Warning messages.
+- **`Snackbar`**: Toast notifications.
 
-export function DockersPage() {
-  return (
-    <div className="p-4">
-      <ServiceList />
-      <LogPanel />
-      <Button>Refresh</Button>
-    </div>
-  )
-}
+---
+
+## 4. Theme Configuration
+
+Defined in `src/renderer/src/theme/index.ts`:
+
+```typescript
+export const theme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: { main: '#D0BCFF' }, // M3 Purple 80
+    background: {
+      default: '#1C1B1F',
+      paper: '#2B2930',
+    },
+  },
+  shape: {
+    borderRadius: 16,
+  },
+  // Component overrides...
+})
 ```
 
-## 5. Migration Strategy
+## 5. Migration Strategy (Legacy -> MUI)
 
-1.  **Phase 1**: Create `src/components/shared` directory.
-2.  **Phase 2**: Create `features/projects/components` directory.
-3.  **Phase 3**: Move `LogPanel.tsx`, `DevLogPanel.tsx`, `SourceCodeViewer.tsx` to `shared/`.
-4.  **Phase 4**: Move `ProjectTabs.tsx`, `AddWorktreeDialog.tsx` to `features/projects/components/`.
-5.  **Phase 5**: Update all imports and verify build.
+When refactoring existing components:
+1.  Replace Tailwind class lists with MUI layout components (`Stack`, `Box`, `Grid`) and `sx`.
+2.  Replace `lucide-react` icons with `@mui/icons-material`.
+3.  Replace custom buttons with `<Button variant="contained">`.
+4.  Remove legacy `components/ui` wrappers and all `shadcn/ui` imports.
+
+## 6. References
+- [MUI Documentation](https://mui.com/material-ui/getting-started/)
+- [Material Design 3](https://m3.material.io/)

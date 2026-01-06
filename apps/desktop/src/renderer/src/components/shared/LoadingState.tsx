@@ -1,9 +1,9 @@
-import { RefreshCw } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { CircularProgress, Stack, Typography } from '@mui/material'
+import type { SxProps, Theme } from '@mui/material/styles'
 
 interface LoadingStateProps {
   message?: string
-  className?: string
+  sx?: SxProps<Theme>
 }
 
 /**
@@ -11,17 +11,25 @@ interface LoadingStateProps {
  */
 export function LoadingState({
   message = "Loading...",
-  className,
+  sx,
 }: LoadingStateProps) {
   return (
-    <div
-      className={cn(
-        "flex h-full w-full flex-col items-center justify-center gap-4",
-        className
-      )}
+    <Stack
+      sx={{
+        height: '100%',
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 2,
+        ...sx,
+      }}
     >
-      <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-      <p className="text-sm font-medium text-muted-foreground">{message}</p>
-    </div>
+      <CircularProgress size={32} />
+      {message && (
+        <Typography variant="body2" color="text.secondary" fontWeight={500}>
+          {message}
+        </Typography>
+      )}
+    </Stack>
   )
 }

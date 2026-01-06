@@ -1,22 +1,23 @@
-import { AlertCircle } from 'lucide-react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { cn } from '@/lib/utils'
+import { Alert, Typography } from '@mui/material'
+import { ErrorOutline } from '@mui/icons-material'
+import type { SxProps, Theme } from '@mui/material/styles'
 
 interface ErrorBannerProps {
   error: string
-  className?: string
+  sx?: SxProps<Theme>
 }
 
 /**
  * ErrorBanner - Standardized error display for features.
  */
-export function ErrorBanner({ error, className }: ErrorBannerProps) {
+export function ErrorBanner({ error, sx }: ErrorBannerProps) {
   return (
-    <Alert variant="destructive" className={cn("mb-4", className)}>
-      <AlertCircle className="h-4 w-4" />
-      <AlertDescription className="text-sm">
-        {error}
-      </AlertDescription>
+    <Alert
+      severity="error"
+      icon={<ErrorOutline fontSize="small" />}
+      sx={{ mb: 2, ...sx }}
+    >
+      <Typography variant="body2">{error}</Typography>
     </Alert>
   )
 }

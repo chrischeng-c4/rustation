@@ -224,8 +224,8 @@ export function ConstitutionPanel() {
           description="Existing project instructions detected"
           icon={<FileCode className="h-5 w-5 text-blue-500" />}
         />
-        <div className="flex flex-1 flex-col p-4 pt-0">
-          <Card className="flex-1 flex flex-col border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20">
+        <div className="flex min-h-0 flex-1 flex-col p-4 pt-0">
+          <Card className="flex min-h-0 flex-1 flex-col border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20">
             <div className="p-4 border-b">
               <h3 className="text-sm font-medium mb-1">Use existing instructions?</h3>
               <p className="text-xs text-muted-foreground">
@@ -235,7 +235,7 @@ export function ConstitutionPanel() {
             </div>
 
             {/* Preview */}
-            <ScrollArea className="flex-1 p-4">
+            <ScrollArea className="flex min-h-0 flex-1 p-4">
               {claudeMdContent ? (
                 <div className="prose prose-sm dark:prose-invert max-w-none">
                   <ReactMarkdown>{claudeMdContent}</ReactMarkdown>
@@ -295,8 +295,8 @@ export function ConstitutionPanel() {
     return (
       <div className="flex h-full flex-col">
         <PageHeader
-          title="Initialize Constitution"
-          description="Define development standards for AI-assisted coding"
+          title="Constitution Management"
+          description="Initialize Constitution - Define development standards for AI-assisted coding"
           icon={<Scroll className="h-5 w-5" />}
         />
         <div className="flex flex-1 items-center justify-center p-4">

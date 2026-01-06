@@ -137,5 +137,5 @@ interface WorktreeState {
 
 ## References
 
-- [Architecture Overview](00-architecture.md)
-- [State Topology](02-state-topology.md)
+- [Architecture Overview](../architecture/00-overview.md)
+- [State Topology](../architecture/02-state-topology.md)

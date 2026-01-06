@@ -122,5 +122,5 @@ fn test_active_index_valid() {
 
 ## References
 
-- [Architecture Overview](00-architecture.md)
+- [Architecture Overview](00-overview.md)
 - [State Topology](02-state-topology.md)

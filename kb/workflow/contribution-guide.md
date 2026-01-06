@@ -24,7 +24,7 @@ Welcome to rustation v3! This version uses **Tauri v2** with a **React** fronten
 
 ### Recommended Tools
 - **Tauri CLI**: `cargo install tauri-cli`.
-- **VS Code Extensions**: Rust-analyzer, Tailwind CSS, ES7+ React/Redux/React-Native snippets.
+- **VS Code Extensions**: Rust-analyzer, ES7+ React/Redux/React-Native snippets.
 
 ---
 
@@ -157,7 +157,7 @@ flowchart LR
 
 ### 3. Code Style
 - **Rust**: Follow `clippy` and `rustfmt`. No `unwrap()` in command handlers.
-- **React**: Functional components, Tailwind CSS for styling, Shadcn UI for primitives.
+- **React**: Functional components, MUI components with Emotion styling.
 - **TypeScript**: Strict typing mandatory.
 
 ---

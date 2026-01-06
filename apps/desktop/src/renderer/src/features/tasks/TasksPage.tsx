@@ -1,7 +1,6 @@
 import { useEffect, useCallback } from 'react'
-import { RefreshCw, ListTodo } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Box, Button, Paper, Stack, Typography } from '@mui/material'
+import { ListAlt, Refresh } from '@mui/icons-material'
 import { LogPanel } from '@/components/shared/LogPanel'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -57,7 +56,7 @@ export function TasksPage() {
   if (!projectPath) {
     return (
       <EmptyState
-        icon={ListTodo}
+        icon={ListAlt}
         title="No Project Selected"
         description="Please select an open project from the tabs above to manage its tasks."
       />
@@ -65,14 +64,14 @@ export function TasksPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <Stack sx={{ height: '100%' }}>
       {/* Header */}
       <PageHeader
         title="Tasks"
         description="Run justfile commands for the current worktree"
       >
-        <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+        <Button variant="outlined" onClick={handleRefresh} disabled={isRefreshing}>
+          <Refresh fontSize="small" sx={{ mr: 1, animation: isRefreshing ? 'spin 1s linear infinite' : undefined }} />
           Refresh
         </Button>
       </PageHeader>
@@ -81,14 +80,14 @@ export function TasksPage() {
       {error && <ErrorBanner error={error} />}
 
       {/* Two-column layout */}
-      <div className="flex flex-1 gap-4 overflow-hidden">
+      <Stack direction="row" spacing={2} sx={{ flex: 1, overflow: 'hidden' }}>
         {/* Column 1: Commands List */}
-        <div className="w-1/2 overflow-hidden rounded-lg border">
-          <div className="border-b bg-muted/40 px-4 py-2">
-            <span className="text-sm font-medium">Commands</span>
-          </div>
-          <ScrollArea className="h-[calc(100%-40px)]">
-            <div className="space-y-2 p-4">
+        <Paper variant="outlined" sx={{ width: '50%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+            <Typography variant="subtitle2">Commands</Typography>
+          </Box>
+          <Box sx={{ flex: 1, overflow: 'auto' }}>
+            <Stack spacing={2} sx={{ p: 2 }}>
               {commands.map((cmd) => (
                 <TaskCard
                   key={cmd.name}
@@ -100,30 +99,30 @@ export function TasksPage() {
               ))}
               {commands.length === 0 && !isRefreshing && (
                 <EmptyState
-                  icon={RefreshCw}
+                  icon={Refresh}
                   title="No Commands"
                   description="No justfile found in project root."
                   action={{
                     label: "Scan Again",
                     onClick: handleRefresh,
-                    icon: RefreshCw
+                    icon: Refresh
                   }}
                 />
               )}
-            </div>
-          </ScrollArea>
-        </div>
+            </Stack>
+          </Box>
+        </Paper>
 
         {/* Column 2: Log Panel */}
-        <div className="w-1/2 overflow-hidden">
+        <Box sx={{ width: '50%', overflow: 'hidden' }}>
           <LogPanel
             title={activeCommand ? `just ${activeCommand}` : 'Output'}
             logs={output}
             showCopy={true}
             emptyMessage="Select a command to run"
           />
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Stack>
+    </Stack>
   )
 }

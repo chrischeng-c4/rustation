@@ -38,6 +38,9 @@ pub struct AppState {
     /// Dev logs for debugging (dev mode only, right panel)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dev_logs: Vec<DevLog>,
+    /// UI layout state (panel states, icon bar)
+    #[serde(default)]
+    pub ui_layout: UiLayoutState,
 }
 
 impl Default for AppState {
@@ -53,6 +56,7 @@ impl Default for AppState {
             notifications: Vec::new(),
             active_view: ActiveView::default(),
             dev_logs: Vec::new(),
+            ui_layout: UiLayoutState::default(),
         }
     }
 }
@@ -288,6 +292,9 @@ pub struct WorktreeState {
     /// Living Context state for CESDD Phase 3 (Living Context Layer)
     #[serde(default)]
     pub context: ContextState,
+    /// File explorer state
+    #[serde(default)]
+    pub explorer: FileExplorerState,
     // Note: Docker state moved to AppState.docker (global scope)
 }
 
@@ -296,7 +303,7 @@ impl WorktreeState {
     pub fn new(path: String, branch: String, is_main: bool) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
-            path,
+            path: path.clone(),
             branch,
             is_main,
             mcp: McpState::default(),
@@ -307,6 +314,10 @@ impl WorktreeState {
             tasks: TasksState::default(),
             changes: ChangesState::default(),
             context: ContextState::default(),
+            explorer: FileExplorerState {
+                current_path: path,
+                ..Default::default()
+            },
         }
     }
 }
@@ -518,6 +529,131 @@ pub enum ActiveView {
     Chat,
     /// Terminal page (worktree scope)
     Terminal,
+    /// File explorer page (worktree scope)
+    Explorer,
+}
+
+// ============================================================================
+// File Explorer State (Worktree-level)
+// ============================================================================
+
+/// File explorer state for a worktree
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FileExplorerState {
+    /// Currently viewed absolute path
+    pub current_path: String,
+    /// List of entries in the current directory
+    pub entries: Vec<FileEntry>,
+    /// Currently selected path (if any)
+    pub selected_path: Option<String>,
+    /// Comments for the currently selected file
+    #[serde(default)]
+    pub selected_comments: Vec<Comment>,
+    /// Sort configuration
+    pub sort_config: SortConfig,
+    /// Filter query string
+    pub filter_query: String,
+    /// Navigation history
+    pub history: NavigationHistory,
+    /// Loading state
+    pub is_loading: bool,
+    /// Error message
+    pub error: Option<String>,
+}
+
+impl Default for FileExplorerState {
+    fn default() -> Self {
+        Self {
+            current_path: String::new(),
+            entries: Vec::new(),
+            selected_path: None,
+            selected_comments: Vec::new(),
+            sort_config: SortConfig::default(),
+            filter_query: String::new(),
+            history: NavigationHistory::default(),
+            is_loading: false,
+            error: None,
+        }
+    }
+}
+
+/// Navigation history for explorer
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct NavigationHistory {
+    pub back_stack: Vec<String>,
+    pub forward_stack: Vec<String>,
+}
+
+/// Sort configuration for explorer
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SortConfig {
+    pub field: SortField,
+    pub direction: SortDirection,
+}
+
+impl Default for SortConfig {
+    fn default() -> Self {
+        Self {
+            field: SortField::Name,
+            direction: SortDirection::Asc,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortField {
+    Name,
+    Size,
+    Date,
+    Kind,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+/// File entry in explorer
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FileEntry {
+    pub name: String,
+    pub path: String,
+    pub kind: FileKind,
+    pub size: u64,
+    pub permissions: String,
+    pub updated_at: String,
+    pub comment_count: usize,
+    pub git_status: Option<GitFileStatus>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Comment {
+    pub id: String,
+    pub content: String,
+    pub author: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum FileKind {
+    File,
+    Directory,
+    Symlink,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum GitFileStatus {
+    Modified,
+    Added,
+    Deleted,
+    Untracked,
+    Ignored,
+    Clean,
 }
 
 // ============================================================================
@@ -814,6 +950,50 @@ impl From<crate::actions::ActiveViewData> for ActiveView {
             crate::actions::ActiveViewData::Mcp => ActiveView::Mcp,
             crate::actions::ActiveViewData::Chat => ActiveView::Chat,
             crate::actions::ActiveViewData::Terminal => ActiveView::Terminal,
+            crate::actions::ActiveViewData::Explorer => ActiveView::Explorer,
+        }
+    }
+}
+
+impl From<crate::actions::SortFieldData> for SortField {
+    fn from(data: crate::actions::SortFieldData) -> Self {
+        match data {
+            crate::actions::SortFieldData::Name => SortField::Name,
+            crate::actions::SortFieldData::Size => SortField::Size,
+            crate::actions::SortFieldData::Date => SortField::Date,
+            crate::actions::SortFieldData::Kind => SortField::Kind,
+        }
+    }
+}
+
+impl From<crate::actions::SortDirectionData> for SortDirection {
+    fn from(data: crate::actions::SortDirectionData) -> Self {
+        match data {
+            crate::actions::SortDirectionData::Asc => SortDirection::Asc,
+            crate::actions::SortDirectionData::Desc => SortDirection::Desc,
+        }
+    }
+}
+
+impl From<crate::actions::FileKindData> for FileKind {
+    fn from(data: crate::actions::FileKindData) -> Self {
+        match data {
+            crate::actions::FileKindData::File => FileKind::File,
+            crate::actions::FileKindData::Directory => FileKind::Directory,
+            crate::actions::FileKindData::Symlink => FileKind::Symlink,
+        }
+    }
+}
+
+impl From<crate::actions::GitFileStatusData> for GitFileStatus {
+    fn from(data: crate::actions::GitFileStatusData) -> Self {
+        match data {
+            crate::actions::GitFileStatusData::Modified => GitFileStatus::Modified,
+            crate::actions::GitFileStatusData::Added => GitFileStatus::Added,
+            crate::actions::GitFileStatusData::Deleted => GitFileStatus::Deleted,
+            crate::actions::GitFileStatusData::Untracked => GitFileStatus::Untracked,
+            crate::actions::GitFileStatusData::Ignored => GitFileStatus::Ignored,
+            crate::actions::GitFileStatusData::Clean => GitFileStatus::Clean,
         }
     }
 }
@@ -896,6 +1076,18 @@ impl From<crate::actions::ConstitutionModeData> for ConstitutionMode {
         match data {
             crate::actions::ConstitutionModeData::Rules => ConstitutionMode::Rules,
             crate::actions::ConstitutionModeData::Presets => ConstitutionMode::Presets,
+        }
+    }
+}
+
+impl From<crate::actions::LogPanelTypeData> for LogPanelType {
+    fn from(data: crate::actions::LogPanelTypeData) -> Self {
+        match data {
+            crate::actions::LogPanelTypeData::Actions => LogPanelType::Actions,
+            crate::actions::LogPanelTypeData::Errors => LogPanelType::Errors,
+            crate::actions::LogPanelTypeData::Info => LogPanelType::Info,
+            crate::actions::LogPanelTypeData::Debug => LogPanelType::Debug,
+            crate::actions::LogPanelTypeData::Metrics => LogPanelType::Metrics,
         }
     }
 }
@@ -1319,6 +1511,47 @@ pub enum Theme {
 }
 
 // ============================================================================
+// UI Layout State (Right Icon Bar & Log Panels)
+// ============================================================================
+
+/// UI layout state for panel management
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UiLayoutState {
+    /// Currently active log panel (None = all panels collapsed)
+    pub active_panel: Option<LogPanelType>,
+    /// Panel width in pixels (when expanded)
+    pub panel_width: u32,
+    /// Whether panel is expanded
+    pub panel_expanded: bool,
+}
+
+impl Default for UiLayoutState {
+    fn default() -> Self {
+        Self {
+            active_panel: None,
+            panel_width: 300, // Default 300px as per KB spec
+            panel_expanded: false,
+        }
+    }
+}
+
+/// Types of log panels in the right icon bar
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogPanelType {
+    /// Actions log (📋)
+    Actions,
+    /// Error log (⚠️)
+    Errors,
+    /// Info log (ℹ️)
+    Info,
+    /// Debug log (🔍)
+    Debug,
+    /// Performance metrics (📊)
+    Metrics,
+}
+
+// ============================================================================
 // ReviewGate State (CESDD ReviewGate Layer)
 // ============================================================================
 
@@ -1734,5 +1967,67 @@ mod tests {
             serde_json::to_string(&ReviewStatus::Rejected).unwrap(),
             "\"rejected\""
         );
+    }
+
+    // ========================================================================
+    // UI Layout State Tests
+    // ========================================================================
+
+    #[test]
+    fn test_ui_layout_state_default() {
+        let state = UiLayoutState::default();
+        assert_eq!(state.active_panel, None);
+        assert_eq!(state.panel_width, 300);
+        assert!(!state.panel_expanded);
+    }
+
+    #[test]
+    fn test_ui_layout_state_serialization_roundtrip() {
+        let state = UiLayoutState {
+            active_panel: Some(LogPanelType::Actions),
+            panel_width: 350,
+            panel_expanded: true,
+        };
+        let json = serde_json::to_string(&state).unwrap();
+        let loaded: UiLayoutState = serde_json::from_str(&json).unwrap();
+        assert_eq!(state, loaded);
+    }
+
+    #[test]
+    fn test_log_panel_type_serialization() {
+        assert_eq!(
+            serde_json::to_string(&LogPanelType::Actions).unwrap(),
+            "\"actions\""
+        );
+        assert_eq!(
+            serde_json::to_string(&LogPanelType::Errors).unwrap(),
+            "\"errors\""
+        );
+        assert_eq!(
+            serde_json::to_string(&LogPanelType::Info).unwrap(),
+            "\"info\""
+        );
+        assert_eq!(
+            serde_json::to_string(&LogPanelType::Debug).unwrap(),
+            "\"debug\""
+        );
+        assert_eq!(
+            serde_json::to_string(&LogPanelType::Metrics).unwrap(),
+            "\"metrics\""
+        );
+    }
+
+    #[test]
+    fn test_app_state_with_ui_layout_roundtrip() {
+        let mut state = AppState::default();
+        state.ui_layout = UiLayoutState {
+            active_panel: Some(LogPanelType::Errors),
+            panel_width: 400,
+            panel_expanded: true,
+        };
+
+        let json = serde_json::to_string_pretty(&state).unwrap();
+        let loaded: AppState = serde_json::from_str(&json).unwrap();
+        assert_eq!(state.ui_layout, loaded.ui_layout);
     }
 }

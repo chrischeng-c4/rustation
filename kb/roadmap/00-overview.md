@@ -3,7 +3,7 @@ title: "Roadmap Overview"
 description: "Planned features for future development"
 category: roadmap
 status: planned
-last_updated: 2025-12-26
+last_updated: 2026-01-06
 version: 3.0.0
 ---
 
@@ -23,6 +23,13 @@ version: 3.0.0
 ---
 
 ## Planned Features
+
+### Phase 0: UI System Consolidation
+**Status**: In progress
+
+- Replace Tailwind/shadcn/Radix UI with MUI-only components
+- Migrate icons to `@mui/icons-material`
+- Remove legacy `components/ui` wrappers and related CSS utilities
 
 ### Phase 1: Settings UI
 **Status**: Partial (state exists, no UI)
@@ -77,6 +84,6 @@ No specific dates - features implemented as needed.
 ## Contributing
 
 1. Check this roadmap for planned features
-2. Read [kb/implemented/](../implemented/) for architecture
+2. Read [Core Architecture](../architecture/) for architecture
 3. Follow state-first principles
 4. Add tests for all new code

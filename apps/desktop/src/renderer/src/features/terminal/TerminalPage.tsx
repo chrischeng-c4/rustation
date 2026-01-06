@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
-import {
-  TerminalSquare,
-  RefreshCw,
-  X,
-  Maximize2,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { Box, Button, Paper, Stack, Typography } from '@mui/material'
+import { Close, OpenInFull, Terminal } from '@mui/icons-material'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -74,7 +68,7 @@ export function TerminalPage() {
   if (!terminal) {
     return (
       <EmptyState
-        icon={TerminalSquare}
+        icon={Terminal}
         title="No Project Open"
         description="Open a project to access the integrated terminal."
       />
@@ -84,12 +78,12 @@ export function TerminalPage() {
   const hasSession = !!terminal.session_id
 
   return (
-    <div className="flex h-full flex-col">
+    <Stack sx={{ height: '100%' }}>
       {/* Header */}
       <PageHeader
         title="Terminal"
         description={hasSession ? `Shell session in ${projectName}` : "No active session"}
-        icon={<TerminalSquare className="h-5 w-5" />}
+        icon={<Terminal fontSize="small" />}
       >
         {hasSession ? (
           <>
@@ -98,15 +92,16 @@ export function TerminalPage() {
               size="sm"
               onClick={handleResize}
             >
-              <Maximize2 className="mr-2 h-4 w-4" />
+              <OpenInFull fontSize="small" sx={{ mr: 1 }} />
               Expand
             </Button>
             <Button
-              variant="destructive"
-              size="sm"
+              variant="contained"
+              color="error"
+              size="small"
               onClick={handleKill}
             >
-              <X className="mr-2 h-4 w-4" />
+              <Close fontSize="small" sx={{ mr: 1 }} />
               Kill
             </Button>
           </>
@@ -114,60 +109,63 @@ export function TerminalPage() {
           <Button
             onClick={handleSpawn}
           >
-            <TerminalSquare className="mr-2 h-4 w-4" />
+            <Terminal fontSize="small" sx={{ mr: 1 }} />
             Spawn Shell
           </Button>
         )}
       </PageHeader>
 
       {/* Terminal Area */}
-      <div className="flex-1 p-4 pt-0">
+      <Box sx={{ flex: 1, p: 2, pt: 0 }}>
         {hasSession ? (
-          <Card className="h-full bg-black p-2 font-mono text-sm">
+          <Paper sx={{ height: '100%', bgcolor: '#000', p: 2, fontFamily: 'monospace', fontSize: '0.875rem' }}>
             {/* Terminal Container - xterm.js will attach here */}
             <div
               ref={terminalRef}
-              className="h-full w-full"
               style={{
+                height: '100%',
+                width: '100%',
                 minHeight: `${(terminal.rows ?? DEFAULT_ROWS) * 18}px`,
               }}
             >
               {/* Placeholder until xterm.js is integrated */}
-              <div className="text-green-400">
-                <p>Session: {terminal.session_id}</p>
-                <p>Size: {terminal.cols ?? DEFAULT_COLS}x{terminal.rows ?? DEFAULT_ROWS}</p>
-                <p className="mt-2 text-muted-foreground">
+              <Box sx={{ color: '#66bb6a' }}>
+                <Typography variant="body2">Session: {terminal.session_id}</Typography>
+                <Typography variant="body2">Size: {terminal.cols ?? DEFAULT_COLS}x{terminal.rows ?? DEFAULT_ROWS}</Typography>
+                <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
                   PTY connected. xterm.js integration pending.
-                </p>
-                <p className="mt-4 text-green-500">$ _</p>
-              </div>
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 3, color: '#4caf50' }}>
+                  $ _
+                </Typography>
+              </Box>
             </div>
-          </Card>
+          </Paper>
         ) : (
           <EmptyState
-            icon={TerminalSquare}
+            icon={Terminal}
             title="No Active Session"
             description={`Click "Spawn Shell" to start a new terminal session in ${worktreePath}.`}
             action={{
               label: "Spawn Shell",
               onClick: handleSpawn,
-              icon: TerminalSquare
+              icon: Terminal
             }}
           />
         )}
-      </div>
+      </Box>
 
       {/* Status Bar */}
       {hasSession && (
-        <div className="border-t px-4 py-2 text-xs text-muted-foreground flex items-center justify-between">
-          <span>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ borderTop: 1, borderColor: 'divider', px: 2, py: 1 }}>
+          <Typography variant="caption" color="text.secondary">
             Working directory: {worktreePath}
-          </span>
-          <span>
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
             {terminal.cols ?? DEFAULT_COLS} cols x {terminal.rows ?? DEFAULT_ROWS} rows
-          </span>
-        </div>
+          </Typography>
+        </Stack>
       )}
-    </div>
+    </Stack>
   )
 }

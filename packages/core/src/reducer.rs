@@ -2039,6 +2039,175 @@ pub fn reduce(state: &mut AppState, action: Action) {
         }
 
         // ====================================================================
+        // UI Layout Actions (Right Icon Bar & Log Panels)
+        // ====================================================================
+        Action::ToggleLogPanel { panel_type } => {
+            let panel_type: crate::app_state::LogPanelType = panel_type.into();
+
+            // If clicking the same panel, collapse it
+            if state.ui_layout.active_panel == Some(panel_type) {
+                state.ui_layout.active_panel = None;
+                state.ui_layout.panel_expanded = false;
+            } else {
+                // Otherwise, switch to the new panel
+                state.ui_layout.active_panel = Some(panel_type);
+                state.ui_layout.panel_expanded = true;
+            }
+        }
+
+        Action::CloseLogPanel => {
+            state.ui_layout.active_panel = None;
+            state.ui_layout.panel_expanded = false;
+        }
+
+        Action::SetLogPanelWidth { width } => {
+            state.ui_layout.panel_width = width;
+        }
+
+        // ====================================================================
+        // File Explorer Actions (Worktree scope)
+        // ====================================================================
+        Action::ExploreDir { ref path } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    // Update history back stack before changing path
+                    let old_path = worktree.explorer.current_path.clone();
+                    if !old_path.is_empty() && &old_path != path {
+                        worktree.explorer.history.back_stack.push(old_path);
+                        worktree.explorer.history.forward_stack.clear();
+                    }
+                    
+                    worktree.explorer.current_path = path.clone();
+                    worktree.explorer.is_loading = true;
+                    worktree.explorer.error = None;
+                }
+            }
+        }
+
+        Action::SetExplorerEntries { path, entries } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    // Only update if it matches the current path (ignore stale async results)
+                    if worktree.explorer.current_path == path {
+                        worktree.explorer.entries = entries.into_iter().map(|e| crate::app_state::FileEntry {
+                            name: e.name,
+                            path: e.path,
+                            kind: e.kind.into(),
+                            size: e.size,
+                            permissions: e.permissions,
+                            updated_at: e.updated_at,
+                            comment_count: e.comment_count,
+                            git_status: e.git_status.map(|s| s.into()),
+                        }).collect();
+                        worktree.explorer.is_loading = false;
+                    }
+                }
+            }
+        }
+
+        Action::SetFileComments { path, comments } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    // Only update if it's the currently selected file
+                    if worktree.explorer.selected_path == Some(path) {
+                        worktree.explorer.selected_comments = comments.into_iter().map(|c| crate::app_state::Comment {
+                            id: c.id,
+                            content: c.content,
+                            author: c.author,
+                            created_at: c.created_at,
+                        }).collect();
+                    }
+                }
+            }
+        }
+
+        Action::NavigateBack => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(prev_path) = worktree.explorer.history.back_stack.pop() {
+                        let current = worktree.explorer.current_path.clone();
+                        worktree.explorer.history.forward_stack.push(current);
+                        worktree.explorer.current_path = prev_path;
+                        worktree.explorer.is_loading = true;
+                    }
+                }
+            }
+        }
+
+        Action::NavigateForward => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    if let Some(next_path) = worktree.explorer.history.forward_stack.pop() {
+                        let current = worktree.explorer.current_path.clone();
+                        worktree.explorer.history.back_stack.push(current);
+                        worktree.explorer.current_path = next_path;
+                        worktree.explorer.is_loading = true;
+                    }
+                }
+            }
+        }
+
+        Action::NavigateUp => {
+            if let Some(project) = state.active_project_mut() {
+                let project_path = project.path.clone();
+                if let Some(worktree) = project.active_worktree_mut() {
+                    let current = std::path::Path::new(&worktree.explorer.current_path);
+                    if let Some(parent) = current.parent() {
+                        let parent_path = parent.to_string_lossy().to_string();
+                        // Only navigate up if it's still within project scope
+                        if parent_path.starts_with(&project_path) {
+                            let old_path = worktree.explorer.current_path.clone();
+                            worktree.explorer.history.back_stack.push(old_path);
+                            worktree.explorer.history.forward_stack.clear();
+                            worktree.explorer.current_path = parent_path;
+                            worktree.explorer.is_loading = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        Action::SelectFile { path } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.explorer.selected_path = path;
+                }
+            }
+        }
+
+        Action::SetExplorerSort { field, direction } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.explorer.sort_config = crate::app_state::SortConfig {
+                        field: field.into(),
+                        direction: direction.into(),
+                    };
+                    // Note: Actual sorting of worktree.explorer.entries 
+                    // should happen here or in the UI. 
+                    // To keep reducer pure, we just update config.
+                }
+            }
+        }
+
+        Action::SetExplorerFilter { query } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.explorer.filter_query = query;
+                }
+            }
+        }
+
+        // Async-only Explorer Actions
+        Action::CreateFile { .. }
+        | Action::RenameFile { .. }
+        | Action::DeleteFile { .. }
+        | Action::RevealInOS { .. }
+        | Action::AddFileComment { .. }
+        | Action::DeleteFileComment { .. } => {
+            // Handled by async dispatcher in lib.rs
+        }
+
+        // ====================================================================
         // Async-only Actions (no synchronous state change)
         // ====================================================================
         // These are handled by handle_async_action() in lib.rs
@@ -2208,6 +2377,11 @@ fn log_action_if_interesting(state: &mut AppState, action: &Action) {
         Action::AddMcpLogEntry { .. } => ("AddMcpLogEntry", false),
         Action::AddDevLog { .. } => ("AddDevLog", false), // Avoid infinite loop!
         Action::ClearDevLogs => ("ClearDevLogs", false),
+
+        // UI Layout actions
+        Action::ToggleLogPanel { .. } => ("ToggleLogPanel", true),
+        Action::CloseLogPanel => ("CloseLogPanel", true),
+        Action::SetLogPanelWidth { .. } => ("SetLogPanelWidth", false),
 
         // Other actions - log for completeness but with lower priority
         _ => ("OtherAction", false),
@@ -4624,5 +4798,255 @@ mod tests {
         let session = worktree.tasks.review_gate.sessions.get(session_id).unwrap();
         assert_eq!(session.content.content_type, crate::app_state::ReviewContentType::Plan);
         assert!(session.content.content.contains("Test Plan"));
+    }
+
+    // ========================================================================
+    // UI Layout State Transition Tests
+    // ========================================================================
+
+    #[test]
+    fn test_toggle_log_panel_expands_when_closed() {
+        // Test: Clicking an icon when no panel is active should expand that panel
+        let mut state = AppState::default();
+        assert_eq!(state.ui_layout.active_panel, None);
+        assert!(!state.ui_layout.panel_expanded);
+
+        reduce(
+            &mut state,
+            Action::ToggleLogPanel {
+                panel_type: crate::actions::LogPanelTypeData::Actions,
+            },
+        );
+
+        assert_eq!(
+            state.ui_layout.active_panel,
+            Some(crate::app_state::LogPanelType::Actions)
+        );
+        assert!(state.ui_layout.panel_expanded);
+    }
+
+    #[test]
+    fn test_toggle_log_panel_collapses_when_same_panel_active() {
+        // Test: Clicking the same active icon should collapse the panel
+        let mut state = AppState::default();
+        state.ui_layout.active_panel = Some(crate::app_state::LogPanelType::Errors);
+        state.ui_layout.panel_expanded = true;
+
+        reduce(
+            &mut state,
+            Action::ToggleLogPanel {
+                panel_type: crate::actions::LogPanelTypeData::Errors,
+            },
+        );
+
+        assert_eq!(state.ui_layout.active_panel, None);
+        assert!(!state.ui_layout.panel_expanded);
+    }
+
+    #[test]
+    fn test_toggle_log_panel_switches_to_different_panel() {
+        // Test: Clicking a different icon should switch to that panel without collapsing
+        let mut state = AppState::default();
+        state.ui_layout.active_panel = Some(crate::app_state::LogPanelType::Actions);
+        state.ui_layout.panel_expanded = true;
+
+        reduce(
+            &mut state,
+            Action::ToggleLogPanel {
+                panel_type: crate::actions::LogPanelTypeData::Errors,
+            },
+        );
+
+        assert_eq!(
+            state.ui_layout.active_panel,
+            Some(crate::app_state::LogPanelType::Errors)
+        );
+        assert!(state.ui_layout.panel_expanded);
+    }
+
+    #[test]
+    fn test_close_log_panel() {
+        // Test: CloseLogPanel action should collapse any active panel
+        let mut state = AppState::default();
+        state.ui_layout.active_panel = Some(crate::app_state::LogPanelType::Debug);
+        state.ui_layout.panel_expanded = true;
+
+        reduce(&mut state, Action::CloseLogPanel);
+
+        assert_eq!(state.ui_layout.active_panel, None);
+        assert!(!state.ui_layout.panel_expanded);
+    }
+
+    #[test]
+    fn test_close_log_panel_when_already_closed() {
+        // Test: CloseLogPanel on already closed panel should remain closed (idempotent)
+        let mut state = AppState::default();
+        assert_eq!(state.ui_layout.active_panel, None);
+        assert!(!state.ui_layout.panel_expanded);
+
+        reduce(&mut state, Action::CloseLogPanel);
+
+        assert_eq!(state.ui_layout.active_panel, None);
+        assert!(!state.ui_layout.panel_expanded);
+    }
+
+    #[test]
+    fn test_set_log_panel_width() {
+        // Test: SetLogPanelWidth should update the panel width
+        let mut state = AppState::default();
+        assert_eq!(state.ui_layout.panel_width, 300); // Default width
+
+        reduce(
+            &mut state,
+            Action::SetLogPanelWidth { width: 450 },
+        );
+
+        assert_eq!(state.ui_layout.panel_width, 450);
+    }
+
+    #[test]
+    fn test_set_log_panel_width_preserves_other_state() {
+        // Test: Changing width should not affect active panel or expanded state
+        let mut state = AppState::default();
+        state.ui_layout.active_panel = Some(crate::app_state::LogPanelType::Info);
+        state.ui_layout.panel_expanded = true;
+
+        reduce(
+            &mut state,
+            Action::SetLogPanelWidth { width: 500 },
+        );
+
+        assert_eq!(state.ui_layout.panel_width, 500);
+        assert_eq!(
+            state.ui_layout.active_panel,
+            Some(crate::app_state::LogPanelType::Info)
+        );
+        assert!(state.ui_layout.panel_expanded);
+    }
+
+    #[test]
+    fn test_all_log_panel_types_can_be_activated() {
+        // Test: Verify all LogPanelType variants can be activated
+        let panel_types = vec![
+            crate::actions::LogPanelTypeData::Actions,
+            crate::actions::LogPanelTypeData::Errors,
+            crate::actions::LogPanelTypeData::Info,
+            crate::actions::LogPanelTypeData::Debug,
+            crate::actions::LogPanelTypeData::Metrics,
+        ];
+
+        for panel_type in panel_types {
+            let mut state = AppState::default();
+            reduce(
+                &mut state,
+                Action::ToggleLogPanel { panel_type },
+            );
+            assert!(state.ui_layout.panel_expanded);
+            assert!(state.ui_layout.active_panel.is_some());
+        }
+    }
+
+    // ========================================================================
+    // File Explorer Tests
+    // ========================================================================
+
+    #[test]
+    fn test_reduce_explore_dir_updates_history() {
+        let mut state = state_with_project();
+        let initial_path = "/test/project".to_string();
+        
+        // Navigate to /test/project/src
+        let next_path = "/test/project/src".to_string();
+        reduce(&mut state, Action::ExploreDir { path: next_path.clone() });
+        
+        let worktree = active_worktree(&state);
+        assert_eq!(worktree.explorer.current_path, next_path);
+        assert_eq!(worktree.explorer.history.back_stack, vec![initial_path]);
+        assert!(worktree.explorer.is_loading);
+
+        // Navigate further to /test/project/src/components
+        let further_path = "/test/project/src/components".to_string();
+        reduce(&mut state, Action::ExploreDir { path: further_path.clone() });
+        
+        let worktree = active_worktree(&state);
+        assert_eq!(worktree.explorer.current_path, further_path);
+        assert_eq!(worktree.explorer.history.back_stack, vec!["/test/project".to_string(), "/test/project/src".to_string()]);
+    }
+
+    #[test]
+    fn test_reduce_explorer_navigation_back_forward() {
+        let mut state = state_with_project();
+        let path1 = "/test/project".to_string();
+        let path2 = "/test/project/a".to_string();
+        let path3 = "/test/project/b".to_string();
+
+        reduce(&mut state, Action::ExploreDir { path: path2.clone() });
+        reduce(&mut state, Action::ExploreDir { path: path3.clone() });
+
+        // Currently at path3, back stack: [path1, path2]
+        assert_eq!(active_worktree(&state).explorer.current_path, path3);
+
+        // Back to path2
+        reduce(&mut state, Action::NavigateBack);
+        assert_eq!(active_worktree(&state).explorer.current_path, path2);
+        assert_eq!(active_worktree(&state).explorer.history.forward_stack, vec![path3.clone()]);
+
+        // Forward to path3
+        reduce(&mut state, Action::NavigateForward);
+        assert_eq!(active_worktree(&state).explorer.current_path, path3);
+        assert_eq!(active_worktree(&state).explorer.history.back_stack, vec![path1, path2]);
+    }
+
+    #[test]
+    fn test_reduce_explorer_navigate_up() {
+        let mut state = state_with_project();
+        let _root = "/test/project".to_string();
+        let sub = "/test/project/src/ui".to_string();
+        let parent = "/test/project/src".to_string();
+
+        reduce(&mut state, Action::ExploreDir { path: sub.clone() });
+        
+        // Navigate Up
+        reduce(&mut state, Action::NavigateUp);
+        
+        let worktree = active_worktree(&state);
+        assert_eq!(worktree.explorer.current_path, parent);
+        assert_eq!(worktree.explorer.history.back_stack.last().unwrap(), &sub);
+    }
+
+    #[test]
+    fn test_reduce_explorer_select_file() {
+        let mut state = state_with_project();
+        let file_path = "/test/project/src/main.rs".to_string();
+
+        reduce(&mut state, Action::SelectFile { path: Some(file_path.clone()) });
+        assert_eq!(active_worktree(&state).explorer.selected_path, Some(file_path));
+
+        // Deselect
+        reduce(&mut state, Action::SelectFile { path: None });
+        assert_eq!(active_worktree(&state).explorer.selected_path, None);
+    }
+
+    #[test]
+    fn test_reduce_explorer_set_filter() {
+        let mut state = state_with_project();
+        
+        reduce(&mut state, Action::SetExplorerFilter { query: "search-term".to_string() });
+        assert_eq!(active_worktree(&state).explorer.filter_query, "search-term");
+    }
+
+    #[test]
+    fn test_reduce_explorer_set_sort() {
+        use crate::actions::{SortFieldData, SortDirectionData};
+        let mut state = state_with_project();
+        
+        reduce(&mut state, Action::SetExplorerSort { 
+            field: SortFieldData::Size, 
+            direction: SortDirectionData::Desc 
+        });
+        
+        let worktree = active_worktree(&state);
+        assert_eq!(worktree.explorer.sort_config.field, crate::app_state::SortField::Size);
+        assert_eq!(worktree.explorer.sort_config.direction, crate::app_state::SortDirection::Desc);
     }
 }

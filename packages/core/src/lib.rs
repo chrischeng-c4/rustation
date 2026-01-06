@@ -12,6 +12,8 @@ pub mod archive;
 pub mod claude_cli;
 pub mod constitution;
 pub mod context;
+pub mod db;
+pub mod explorer;
 pub mod context_engine;
 pub mod context_generate;
 pub mod context_sync;
@@ -48,13 +50,18 @@ static MCP_SERVER_MANAGER: OnceLock<Arc<McpServerManager>> = OnceLock::new();
 // Global application state
 static APP_STATE: OnceCell<Arc<RwLock<AppState>>> = OnceCell::const_new();
 
+// Global DB manager
+static DB_MANAGER: OnceCell<Arc<db::DbManager>> = OnceCell::const_new();
+
 // State update listener (callback to JavaScript)
 static STATE_LISTENER: OnceCell<ThreadsafeFunction<String>> = OnceCell::const_new();
 
-// DEFAULT_CONSTITUTION moved to constitution.rs module (modular templates)
-
 fn get_app_state() -> &'static Arc<RwLock<AppState>> {
     APP_STATE.get().expect("AppState not initialized. Call state_init first.")
+}
+
+fn get_db_manager() -> Option<Arc<db::DbManager>> {
+    DB_MANAGER.get().cloned()
 }
 
 /// Push state update to JavaScript listener
@@ -949,6 +956,12 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         }
 
         Action::OpenProject { ref path } => {
+            // Initialize database for the project
+            let project_path = std::path::Path::new(path);
+            if let Ok(manager) = db::DbManager::init(project_path) {
+                let _ = DB_MANAGER.set(Arc::new(manager));
+            }
+
             // After opening a project, refresh worktrees from git
             refresh_worktrees_for_path(path).await;
 
@@ -3430,6 +3443,154 @@ Execute the plan now. Start implementing."#,
         Action::AppendContextSyncOutput { .. } | Action::CompleteContextSync { .. } | Action::SetChangeArchived { .. } => {
             // These are handled by reducer (sync state updates)
             // No async work needed
+        }
+
+        // UI Layout actions (sync - state-only updates)
+        Action::ToggleLogPanel { .. } | Action::CloseLogPanel | Action::SetLogPanelWidth { .. } => {
+            // These are handled by reducer (sync state updates)
+            // No async work needed
+        }
+
+        // File Explorer actions
+        Action::ExploreDir { ref path } => {
+            let project_root = {
+                let state = get_app_state().read().await;
+                state.active_project().map(|p| p.path.clone())
+            };
+
+            if let Some(root) = project_root {
+                let path_buf = std::path::PathBuf::from(path);
+                let root_buf = std::path::PathBuf::from(root);
+                let db_mgr = get_db_manager();
+                
+                match explorer::read_directory(&path_buf, &root_buf, db_mgr.as_deref()) {
+                    Ok(entries) => {
+                        // Convert back to Action data types for SetExplorerEntries
+                        let entry_data: Vec<actions::FileEntryData> = entries
+                            .into_iter()
+                            .map(|e| actions::FileEntryData {
+                                name: e.name,
+                                path: e.path,
+                                kind: match e.kind {
+                                    app_state::FileKind::File => actions::FileKindData::File,
+                                    app_state::FileKind::Directory => actions::FileKindData::Directory,
+                                    app_state::FileKind::Symlink => actions::FileKindData::Symlink,
+                                },
+                                size: e.size,
+                                permissions: e.permissions,
+                                updated_at: e.updated_at,
+                                comment_count: e.comment_count,
+                                git_status: e.git_status.map(|s| match s {
+                                    app_state::GitFileStatus::Modified => actions::GitFileStatusData::Modified,
+                                    app_state::GitFileStatus::Added => actions::GitFileStatusData::Added,
+                                    app_state::GitFileStatus::Deleted => actions::GitFileStatusData::Deleted,
+                                    app_state::GitFileStatus::Untracked => actions::GitFileStatusData::Untracked,
+                                    app_state::GitFileStatus::Ignored => actions::GitFileStatusData::Ignored,
+                                    app_state::GitFileStatus::Clean => actions::GitFileStatusData::Clean,
+                                }),
+                            })
+                            .collect();
+
+                        let mut state = get_app_state().write().await;
+                        reduce(&mut state, Action::SetExplorerEntries { 
+                            path: path.clone(), 
+                            entries: entry_data 
+                        });
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to explore dir: {}", e);
+                    }
+                }
+            }
+        }
+
+        Action::SelectFile { ref path } => {
+            if let Some(p) = path {
+                // Get project root to calculate relative path for SQLite
+                let project_root = {
+                    let state = get_app_state().read().await;
+                    state.active_project().map(|proj| proj.path.clone())
+                };
+
+                if let Some(root) = project_root {
+                    let rel_path = std::path::Path::new(p)
+                        .strip_prefix(&root)
+                        .unwrap_or(std::path::Path::new(p))
+                        .to_string_lossy()
+                        .to_string();
+
+                    if let Some(db_mgr) = get_db_manager() {
+                        if let Ok(rows) = db_mgr.get_comments(&rel_path) {
+                            let comments: Vec<actions::CommentData> = rows
+                                .into_iter()
+                                .map(|r| actions::CommentData {
+                                    id: r.id,
+                                    content: r.content,
+                                    author: r.author,
+                                    created_at: r.created_at,
+                                })
+                                .collect();
+
+                            let mut state = get_app_state().write().await;
+                            reduce(&mut state, Action::SetFileComments { 
+                                path: p.clone(), 
+                                comments 
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        Action::AddFileComment { ref path, ref content } => {
+            let project_root = {
+                let state = get_app_state().read().await;
+                state.active_project().map(|proj| proj.path.clone())
+            };
+
+            if let Some(root) = project_root {
+                let rel_path = std::path::Path::new(path)
+                    .strip_prefix(&root)
+                    .unwrap_or(std::path::Path::new(path))
+                    .to_string_lossy()
+                    .to_string();
+
+                if let Some(db_mgr) = get_db_manager() {
+                    if let Ok(_id) = db_mgr.add_comment(&rel_path, content, "User") {
+                        // Reload comments after adding
+                        Box::pin(handle_async_action(Action::SelectFile { path: Some(path.clone()) })).await?;
+                        
+                        // Also trigger ExploreDir to update comment_count in list
+                        let current_dir = std::path::Path::new(path).parent()
+                            .map(|p| p.to_string_lossy().to_string());
+                        if let Some(dir) = current_dir {
+                            Box::pin(handle_async_action(Action::ExploreDir { path: dir })).await?;
+                        }
+                    }
+                }
+            }
+        }
+
+        Action::DeleteFileComment { .. } => {
+            // TODO: Implement delete
+        }
+
+        Action::SetExplorerEntries { .. }
+        | Action::SetFileComments { .. }
+        | Action::NavigateBack
+        | Action::NavigateForward
+        | Action::NavigateUp
+        | Action::SetExplorerSort { .. }
+        | Action::SetExplorerFilter { .. } => {
+            // Handled by reducer (sync state updates)
+        }
+
+        Action::CreateFile { .. }
+        | Action::RenameFile { .. }
+        | Action::DeleteFile { .. }
+        | Action::RevealInOS { .. }
+        | Action::DeleteFileComment { .. } => {
+            // To be implemented in Phase B2.2
         }
 
         // Terminal actions (async - PTY operations)

@@ -227,4 +227,4 @@ Tests run on every PR:
 ## References
 
 - [State-First Principle](01-state-first.md)
-- [Architecture Overview](00-architecture.md)
+- [Architecture Overview](00-overview.md)

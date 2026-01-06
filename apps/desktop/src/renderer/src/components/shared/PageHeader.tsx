@@ -1,12 +1,12 @@
 import React from 'react'
-import { Separator } from '@/components/ui/separator'
-import { cn } from '@/lib/utils'
+import { Box, Divider, Stack, Typography } from '@mui/material'
+import type { SxProps, Theme } from '@mui/material/styles'
 
 interface PageHeaderProps {
   title: string
   description?: string
   children?: React.ReactNode
-  className?: string
+  sx?: SxProps<Theme>
   icon?: React.ReactNode
 }
 
@@ -18,28 +18,30 @@ export function PageHeader({
   title,
   description,
   children,
-  className,
+  sx,
   icon,
 }: PageHeaderProps) {
   return (
-    <div className={cn("mb-6 flex flex-col gap-4", className)}>
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            {icon && <div className="text-muted-foreground">{icon}</div>}
-            <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
-          </div>
+    <Stack spacing={2} sx={{ mb: 3, ...sx }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Box>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            {icon && <Box sx={{ color: 'text.secondary' }}>{icon}</Box>}
+            <Typography variant="h5" fontWeight={600}>
+              {title}
+            </Typography>
+          </Stack>
           {description && (
-            <p className="text-sm text-muted-foreground">
+            <Typography variant="body2" color="text.secondary">
               {description}
-            </p>
+            </Typography>
           )}
-        </div>
-        <div className="flex items-center gap-2">
+        </Box>
+        <Stack direction="row" alignItems="center" spacing={1}>
           {children}
-        </div>
-      </div>
-      <Separator />
-    </div>
+        </Stack>
+      </Stack>
+      <Divider />
+    </Stack>
   )
 }

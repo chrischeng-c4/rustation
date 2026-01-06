@@ -26,15 +26,15 @@ A mapping table (`registry.tsx`) that connects JSON `type` strings to actual Rea
 
 **Supported Components**:
 - **Primitives**: `div`, `span`, `text`
-- **shadcn/ui**: `card`, `button`, `input`, `badge`, `alert`, `scroll-area`
+- **MUI**: `card`, `button`, `text-field`, `chip`, `alert`, `scroll-area`
 - **Icons**: `icon-alert`, `icon-info`, etc.
 
 ### 2.3 Protocol (Simplified)
 
-```json
+```pseudo-code
 {
   "type": "card",
-  "props": { "className": "p-4" },
+  "props": { "sx": { "p": 2 } },
   "children": [
     { "type": "card-title", "children": ["Hello World"] },
     {
@@ -67,7 +67,7 @@ stateDiagram-v2
 ## 4. Current Status
 
 - [x] **Renderer**: Implemented and recursive.
-- [x] **Registry**: Mapped to standard shadcn/ui library.
+- [x] **Registry**: Mapped to standard MUI components.
 - [x] **Page**: Added `A2UIPage` with a static demo payload.
 - [ ] **MCP Tool**: Backend needs to expose a tool to accept JSON and push event to frontend.
 - [ ] **Interactive**: Handling `action` events and sending them back to the backend.

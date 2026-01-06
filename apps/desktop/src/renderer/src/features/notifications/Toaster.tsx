@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
-import { X, AlertCircle, AlertTriangle, Info, CheckCircle2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { alpha } from '@mui/material/styles'
+import { Box, IconButton, Paper, Stack, Typography, useTheme } from '@mui/material'
+import { CheckCircle, Close, ErrorOutline, InfoOutlined, WarningAmber } from '@mui/icons-material'
 import { useNotificationsState } from '@/hooks/useAppState'
 import type { Notification, NotificationType } from '@/types/state'
 
@@ -16,40 +16,42 @@ const AUTO_DISMISS_MS = 5000
 function getToastIcon(type: NotificationType) {
   switch (type) {
     case 'success':
-      return <CheckCircle2 className="h-5 w-5 text-green-500" />
+      return <CheckCircle fontSize="small" color="success" />
     case 'error':
-      return <AlertCircle className="h-5 w-5 text-destructive" />
+      return <ErrorOutline fontSize="small" color="error" />
     case 'warning':
-      return <AlertTriangle className="h-5 w-5 text-yellow-500" />
+      return <WarningAmber fontSize="small" color="warning" />
     case 'info':
     default:
-      return <Info className="h-5 w-5 text-blue-500" />
+      return <InfoOutlined fontSize="small" color="info" />
   }
 }
 
 /**
  * Get background color for notification type
  */
-function getToastBg(type: NotificationType) {
-  switch (type) {
-    case 'success':
-      return 'border-green-500/50 bg-green-500/10'
-    case 'error':
-      return 'border-destructive/50 bg-destructive/10'
-    case 'warning':
-      return 'border-yellow-500/50 bg-yellow-500/10'
-    case 'info':
-    default:
-      return 'border-blue-500/50 bg-blue-500/10'
-  }
-}
-
 interface ToastItemProps {
   notification: Notification
   onDismiss: (id: string) => void
 }
 
 function ToastItem({ notification, onDismiss }: ToastItemProps) {
+  const theme = useTheme()
+
+  const accentColor = (() => {
+    switch (notification.notification_type) {
+      case 'success':
+        return theme.palette.success.main
+      case 'error':
+        return theme.palette.error.main
+      case 'warning':
+        return theme.palette.warning.main
+      case 'info':
+      default:
+        return theme.palette.info.main
+    }
+  })()
+
   useEffect(() => {
     // Auto-dismiss after timeout
     const timer = setTimeout(() => {
@@ -60,24 +62,28 @@ function ToastItem({ notification, onDismiss }: ToastItemProps) {
   }, [notification.id, onDismiss])
 
   return (
-    <Card
-      className={`flex items-start gap-3 p-4 shadow-lg border animate-in slide-in-from-right-full duration-300 ${getToastBg(notification.notification_type)}`}
+    <Paper
+      variant="outlined"
+      sx={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 1.5,
+        p: 2,
+        borderColor: alpha(accentColor, 0.5),
+        bgcolor: alpha(accentColor, 0.08),
+        boxShadow: 6,
+      }}
     >
-      <div className="shrink-0">
-        {getToastIcon(notification.notification_type)}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">{notification.message}</p>
-      </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6 shrink-0 -mr-1 -mt-1"
-        onClick={() => onDismiss(notification.id)}
-      >
-        <X className="h-4 w-4" />
-      </Button>
-    </Card>
+      <Box sx={{ flexShrink: 0 }}>{getToastIcon(notification.notification_type)}</Box>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="body2" fontWeight={500}>
+          {notification.message}
+        </Typography>
+      </Box>
+      <IconButton size="small" onClick={() => onDismiss(notification.id)} sx={{ mt: -0.5 }}>
+        <Close fontSize="small" />
+      </IconButton>
+    </Paper>
   )
 }
 
@@ -132,7 +138,7 @@ export function Toaster() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+    <Stack spacing={1} sx={{ position: 'fixed', bottom: 16, right: 16, zIndex: 50, maxWidth: 360 }}>
       {displayedToasts.map((notification) => (
         <ToastItem
           key={notification.id}
@@ -140,6 +146,6 @@ export function Toaster() {
           onDismiss={handleDismiss}
         />
       ))}
-    </div>
+    </Stack>
   )
 }

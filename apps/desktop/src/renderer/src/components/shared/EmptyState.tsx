@@ -1,18 +1,17 @@
 import React from 'react'
-import { LucideIcon } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { Box, Button, Stack, Typography } from '@mui/material'
+import type { SxProps, Theme } from '@mui/material/styles'
 
 interface EmptyStateProps {
-  icon: LucideIcon
+  icon: React.ElementType
   title: string
   description: string
   action?: {
     label: string
     onClick: () => void
-    icon?: LucideIcon
+    icon?: React.ElementType
   }
-  className?: string
+  sx?: SxProps<Theme>
 }
 
 /**
@@ -23,32 +22,43 @@ export function EmptyState({
   title,
   description,
   action,
-  className,
+  sx,
 }: EmptyStateProps) {
   return (
-    <div
-      className={cn(
-        "flex h-full flex-col items-center justify-center p-8 text-center",
-        className
-      )}
+    <Stack
+      alignItems="center"
+      justifyContent="center"
+      spacing={2}
+      sx={{ height: '100%', p: 4, textAlign: 'center', ...sx }}
     >
-      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
-        <Icon className="h-10 w-10 text-muted-foreground" />
-      </div>
-      <h3 className="mt-4 text-lg font-semibold">{title}</h3>
-      <p className="mt-2 text-sm text-muted-foreground max-w-[250px]">
+      <Box
+        sx={{
+          height: 80,
+          width: 80,
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: 'action.hover',
+        }}
+      >
+        <Icon sx={{ fontSize: 40, color: 'text.secondary' }} />
+      </Box>
+      <Typography variant="h6" fontWeight={600}>
+        {title}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 250 }}>
         {description}
-      </p>
+      </Typography>
       {action && (
         <Button
-          variant="outline"
-          className="mt-6"
+          variant="outlined"
           onClick={action.onClick}
+          startIcon={action.icon ? <action.icon /> : undefined}
         >
-          {action.icon && <action.icon className="mr-2 h-4 w-4" />}
           {action.label}
         </Button>
       )}
-    </div>
+    </Stack>
   )
 }

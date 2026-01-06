@@ -1,8 +1,7 @@
 import * as React from 'react'
 import { useEffect, useState } from 'react'
-import { AlertCircle, FileCode, Loader2 } from 'lucide-react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Alert, Box, CircularProgress, Paper, Stack, Typography } from '@mui/material'
+import { Code, ErrorOutline } from '@mui/icons-material'
 
 interface SourceCodeViewerProps {
   /** Absolute or relative path to the file */
@@ -106,18 +105,19 @@ export function SourceCodeViewer({
 
   if (state.status === 'loading') {
     return (
-      <div className="flex items-center justify-center py-8 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" />
-        <span>Loading file...</span>
-      </div>
+      <Stack direction="row" alignItems="center" justifyContent="center" spacing={1} sx={{ py: 4 }}>
+        <CircularProgress size={20} />
+        <Typography variant="body2" color="text.secondary">
+          Loading file...
+        </Typography>
+      </Stack>
     )
   }
 
   if (state.status === 'error') {
     return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{state.message}</AlertDescription>
+      <Alert severity="error" icon={<ErrorOutline fontSize="small" />}>
+        <Typography variant="body2">{state.message}</Typography>
       </Alert>
     )
   }
@@ -125,34 +125,52 @@ export function SourceCodeViewer({
   const lines = state.content.split('\n')
 
   return (
-    <div className="rounded-md border bg-muted/50">
-      <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 text-sm text-muted-foreground">
-        <FileCode className="h-4 w-4" />
-        <span className="font-mono text-xs">{path}</span>
-      </div>
-      <ScrollArea style={{ maxHeight }} className="p-0">
-        <pre className="p-3 text-sm font-mono overflow-x-auto">
-          <code>
+    <Paper variant="outlined" sx={{ bgcolor: 'action.hover' }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+        <Code fontSize="small" />
+        <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+          {path}
+        </Typography>
+      </Stack>
+      <Box sx={{ maxHeight, overflow: 'auto' }}>
+        <Box component="pre" sx={{ m: 0, p: 2, fontSize: '0.875rem', fontFamily: 'monospace', overflowX: 'auto' }}>
+          <Box component="code">
             {showLineNumbers ? (
-              <table className="border-collapse w-full">
-                <tbody>
+              <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>
+                <Box component="tbody">
                   {lines.map((line, index) => (
-                    <tr key={index} className="hover:bg-muted/50">
-                      <td className="pr-4 text-right text-muted-foreground select-none w-[1%] whitespace-nowrap">
+                    <Box
+                      component="tr"
+                      key={index}
+                      sx={{ '&:hover': { bgcolor: 'action.selected' } }}
+                    >
+                      <Box
+                        component="td"
+                        sx={{
+                          pr: 2,
+                          textAlign: 'right',
+                          color: 'text.secondary',
+                          userSelect: 'none',
+                          whiteSpace: 'nowrap',
+                          width: '1%',
+                        }}
+                      >
                         {index + 1}
-                      </td>
-                      <td className="whitespace-pre">{line}</td>
-                    </tr>
+                      </Box>
+                      <Box component="td" sx={{ whiteSpace: 'pre' }}>
+                        {line}
+                      </Box>
+                    </Box>
                   ))}
-                </tbody>
-              </table>
+                </Box>
+              </Box>
             ) : (
               state.content
             )}
-          </code>
-        </pre>
-      </ScrollArea>
-    </div>
+          </Box>
+        </Box>
+      </Box>
+    </Paper>
   )
 }
 
