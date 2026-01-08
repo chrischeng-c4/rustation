@@ -1,6 +1,9 @@
 ---
-name: openspec-apply
+name: openspec:apply
 description: Implement an approved OpenSpec change by working through tasks sequentially, updating the checklist as work progresses. Use when the user says "implement it", "proceed", "apply the proposal", "start implementation", or approves a proposal. Requires an existing validated proposal.
+user-invocable: true
+category: OpenSpec
+tags: [openspec, apply, implementation]
 ---
 
 # OpenSpec Apply Skill

@@ -1,6 +1,9 @@
 ---
-name: openspec-proposal
+name: openspec:proposal
 description: Generate OpenSpec proposals using Gemini CLI. Gemini explores codebase and creates files directly via WriteFile tool. Cost-efficient with 1M token context.
+user-invocable: true
+category: OpenSpec
+tags: [openspec, proposal, gemini]
 ---
 
 # OpenSpec Proposal Skill (Gemini-Powered)

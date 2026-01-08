@@ -1,6 +1,9 @@
 ---
-name: openspec-archive
+name: openspec:archive
 description: Archive a deployed OpenSpec change by merging spec deltas into main specs and moving to archive. Use when the user says "deployed", "merged to main", "in production", "released", "archive this", or confirms the change is live. Requires completed implementation and deployment.
+user-invocable: true
+category: OpenSpec
+tags: [openspec, archive, deployment]
 ---
 
 # OpenSpec Archive Skill
