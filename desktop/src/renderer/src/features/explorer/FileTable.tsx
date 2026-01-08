@@ -10,7 +10,7 @@ import {
   Chip,
   useTheme
 } from '@mui/material'
-import { FixedSizeList as List } from 'react-window'
+import { List } from 'react-window'
 import { useActiveWorktree } from '@/hooks/useAppState'
 import type { FileEntry, GitFileStatus } from '@/types/state'
 
@@ -20,19 +20,16 @@ export function FileTable() {
   const explorer = worktree?.explorer
   const entries = explorer?.entries ?? []
   const selectedPath = explorer?.selected_path
-  
+
   const containerRef = useRef<HTMLDivElement>(null)
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
+  const [height, setHeight] = useState(0)
 
   useEffect(() => {
     if (!containerRef.current) return
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setDimensions({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height
-        })
+        setHeight(entry.contentRect.height)
       }
     })
 
@@ -69,15 +66,27 @@ export function FileTable() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
   }
 
-  const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
-    const entry = entries[index]
-    const isSelected = selectedPath === entry.path
+  const RowComponent = ({
+    index,
+    style,
+    ariaAttributes,
+    entries: rowEntries,
+    selectedPath: rowSelectedPath,
+    theme: rowTheme,
+    getGitColor: rowGetGitColor,
+    formatSize: rowFormatSize,
+    handleRowClick: rowHandleRowClick,
+    handleRowDoubleClick: rowHandleRowDoubleClick
+  }: any) => {
+    const entry = rowEntries[index]
+    const isSelected = rowSelectedPath === entry.path
 
     return (
       <Box
         style={style}
-        onClick={() => handleRowClick(entry.path)}
-        onDoubleClick={() => handleRowDoubleClick(entry)}
+        onClick={() => rowHandleRowClick(entry.path)}
+        onDoubleClick={() => rowHandleRowDoubleClick(entry)}
+        {...ariaAttributes}
         sx={{
           display: 'flex',
           alignItems: 'center',
@@ -93,27 +102,27 @@ export function FileTable() {
       >
         <Box sx={{ width: '40%', display: 'flex', alignItems: 'center', gap: 1.5, overflow: 'hidden' }}>
           {entry.kind === 'directory' ? (
-            <Folder sx={{ fontSize: 18, color: theme.palette.primary.light, flexShrink: 0 }} />
+            <Folder sx={{ fontSize: 18, color: rowTheme.palette.primary.light, flexShrink: 0 }} />
           ) : (
             <File sx={{ fontSize: 18, color: 'text.secondary', flexShrink: 0 }} />
           )}
-          <Typography 
-            variant="body2" 
-            noWrap 
-            sx={{ 
-              color: getGitColor(entry.git_status),
+          <Typography
+            variant="body2"
+            noWrap
+            sx={{
+              color: rowGetGitColor(entry.git_status),
               fontWeight: isSelected ? 600 : 400
             }}
           >
             {entry.name}
           </Typography>
           {entry.comment_count > 0 && (
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 0.5, 
-              px: 0.5, 
-              borderRadius: 1, 
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              px: 0.5,
+              borderRadius: 1,
               bgcolor: 'action.selected',
               border: 1,
               borderColor: 'divider',
@@ -126,27 +135,27 @@ export function FileTable() {
             </Box>
           )}
         </Box>
-        
+
         <Box sx={{ width: '15%', px: 1 }}>
           <Typography variant="caption" color="text.secondary" noWrap>
-            {entry.kind === 'file' ? formatSize(entry.size) : '--'}
+            {entry.kind === 'file' ? rowFormatSize(entry.size) : '--'}
           </Typography>
         </Box>
 
         <Box sx={{ width: '20%', px: 1 }}>
           {entry.git_status && entry.git_status !== 'clean' && (
-            <Chip 
-              label={entry.git_status} 
-              size="small" 
+            <Chip
+              label={entry.git_status}
+              size="small"
               variant="outlined"
-              sx={{ 
-                height: 18, 
-                fontSize: '9px', 
+              sx={{
+                height: 18,
+                fontSize: '9px',
                 textTransform: 'uppercase',
-                color: getGitColor(entry.git_status),
-                borderColor: getGitColor(entry.git_status),
+                color: rowGetGitColor(entry.git_status),
+                borderColor: rowGetGitColor(entry.git_status),
                 opacity: 0.8
-              }} 
+              }}
             />
           )}
         </Box>
@@ -180,15 +189,22 @@ export function FileTable() {
         <Typography variant="caption" fontWeight={700} sx={{ width: '25%', textAlign: 'right' }}>Modified</Typography>
       </Box>
       
-      {dimensions.height > 0 && (
+      {height > 0 && (
         <List
-          height={dimensions.height - 40} // Subtract header height
-          itemCount={entries.length}
-          itemSize={40}
-          width={dimensions.width}
-        >
-          {Row}
-        </List>
+          rowComponent={RowComponent}
+          rowCount={entries.length}
+          rowHeight={40}
+          rowProps={{
+            entries,
+            selectedPath,
+            theme,
+            getGitColor,
+            formatSize,
+            handleRowClick,
+            handleRowDoubleClick
+          }}
+          style={{ height: height - 40 }}
+        />
       )}
     </Box>
   )

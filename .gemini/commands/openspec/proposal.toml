@@ -1,22 +1,59 @@
-description = "Scaffold a new OpenSpec change and validate strictly."
+description = "Generate OpenSpec proposal with FILE markers for automated file creation."
 
 prompt = """
 <!-- OPENSPEC:START -->
+**Role**: You are an OpenSpec proposal generator. Read code, explore codebase, and generate spec files with FILE markers. DO NOT write implementation code.
+
 **Guardrails**
 - Favor straightforward, minimal implementations first and add complexity only when it is requested or clearly required.
 - Keep changes tightly scoped to the requested outcome.
-- Refer to `openspec/AGENTS.md` (located inside the `openspec/` directory—run `ls openspec` or `openspec update` if you don't see it) if you need additional OpenSpec conventions or clarifications.
-- Identify any vague or ambiguous details and ask the necessary follow-up questions before editing files.
-- Do not write any code during the proposal stage. Only create design documents (proposal.md, tasks.md, design.md, and spec deltas). Implementation happens in the apply stage after approval.
+- Refer to `openspec/AGENTS.md` and `openspec/project.md` for conventions
+- Identify any vague or ambiguous details and ask the necessary follow-up questions
+- **CRITICAL**: Do NOT write any implementation code (.rs, .ts, .tsx files). Only generate spec/doc files
+- Output MUST use FILE markers for automated parsing
 
 **Steps**
-1. Review `openspec/project.md`, run `openspec list` and `openspec list --specs`, and inspect related code or docs (e.g., via `rg`/`ls`) to ground the proposal in current behaviour; note any gaps that require clarification.
-2. Choose a unique verb-led `change-id` and scaffold `proposal.md`, `tasks.md`, and `design.md` (when needed) under `openspec/changes/<id>/`.
-3. Map the change into concrete capabilities or requirements, breaking multi-scope efforts into distinct spec deltas with clear relationships and sequencing.
-4. Capture architectural reasoning in `design.md` when the solution spans multiple systems, introduces new patterns, or demands trade-off discussion before committing to specs.
-5. Draft spec deltas in `changes/<id>/specs/<capability>/spec.md` (one folder per capability) using `## ADDED|MODIFIED|REMOVED Requirements` with at least one `#### Scenario:` per requirement and cross-reference related capabilities when relevant.
-6. Draft `tasks.md` as an ordered list of small, verifiable work items that deliver user-visible progress, include validation (tests, tooling), and highlight dependencies or parallelizable work.
-7. Validate with `openspec validate <id> --strict` and resolve every issue before sharing the proposal.
+1. Review `openspec/project.md`, run `openspec list` and `openspec list --specs`, inspect code to understand current behavior
+2. Choose unique verb-led `change-id` (e.g., add-feature, update-module)
+3. Generate ALL files using FILE markers (see Output Format below)
+4. Include design.md ONLY if architectural complexity requires it
+5. Use `## ADDED|MODIFIED|REMOVED Requirements` in spec deltas
+6. **CRITICAL**: All scenarios MUST use `#### Scenario:` format (4 hashtags)
+
+**Output Format** (MANDATORY)
+You MUST structure your response with FILE markers:
+
+=== FILE: proposal.md ===
+# Change: [Brief description]
+
+## Why
+[1-2 sentences]
+
+## What Changes
+- [Bullet points]
+
+## Impact
+- Affected specs: [capabilities]
+- Affected code: [files]
+=== END FILE ===
+
+=== FILE: tasks.md ===
+## 1. Implementation
+- [ ] 1.1 [Task for implementer]
+
+## 2. Testing
+- [ ] 2.1 [Test to write]
+=== END FILE ===
+
+=== FILE: specs/<capability-name>/spec.md ===
+## ADDED Requirements
+### Requirement: Name
+System SHALL [description]
+
+#### Scenario: Success
+- **WHEN** [condition]
+- **THEN** [result]
+=== END FILE ===
 
 **Reference**
 - Use `openspec show <id> --json --deltas-only` or `openspec show <spec> --type spec` to inspect details when validation fails.

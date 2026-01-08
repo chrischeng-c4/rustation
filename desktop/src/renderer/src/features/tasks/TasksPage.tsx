@@ -53,7 +53,7 @@ export function TasksPage() {
   if (!projectPath) {
     return (
       <EmptyState
-        icon={ListAlt}
+        icon={<ListAlt />}
         title="No Project Selected"
         description="Please select an open project from the tabs above to manage its tasks."
       />
@@ -96,13 +96,13 @@ export function TasksPage() {
               ))}
               {commands.length === 0 && !isRefreshing && (
                 <EmptyState
-                  icon={Refresh}
+                  icon={<Refresh />}
                   title="No Commands"
                   description="No justfile found in project root."
                   action={{
                     label: "Scan Again",
                     onClick: handleRefresh,
-                    icon: Refresh
+                    icon: <Refresh />
                   }}
                 />
               )}

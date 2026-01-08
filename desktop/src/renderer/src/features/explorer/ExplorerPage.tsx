@@ -45,10 +45,6 @@ export function ExplorerPage() {
     dispatch({ type: 'ExploreDir', payload: { path } })
   }, [dispatch])
 
-  if (isLoading || !explorer) {
-    return <LoadingState message="Loading file explorer..." />
-  }
-
   if (!worktree) {
     return (
       <EmptyState
@@ -56,6 +52,10 @@ export function ExplorerPage() {
         description="Please select a project worktree to explore files."
       />
     )
+  }
+
+  if (isLoading || !explorer) {
+    return <LoadingState message="Loading file explorer..." />
   }
 
   return (

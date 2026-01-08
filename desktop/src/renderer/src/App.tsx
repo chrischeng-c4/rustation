@@ -7,6 +7,7 @@ import { useAppState, useActiveWorktree } from '@/hooks/useAppState'
 import type { ActiveView } from '@/types/state'
 import { DockersPage } from '@/features/dockers/DockersPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
+import { ExplorerPage } from '@/features/explorer/ExplorerPage'
 import { EnvPage } from '@/features/env'
 import { SettingsPage } from '@/features/settings'
 import { McpPage } from '@/features/mcp'
@@ -100,6 +101,8 @@ function App() {
     switch (activeView) {
       case 'tasks':
         return <TasksPage />
+      case 'explorer':
+        return <ExplorerPage />
       case 'settings':
         return <SettingsPage />
       case 'dockers':

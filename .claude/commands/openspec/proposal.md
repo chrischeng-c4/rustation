@@ -1,28 +1,90 @@
 ---
-name: OpenSpec: Proposal
-description: Scaffold a new OpenSpec change and validate strictly.
+name: OpenSpec: Proposal (Gemini)
+description: Generate OpenSpec proposal using Gemini CLI. Cost-efficient (40x cheaper) with large context (1M tokens) for heavy codebase exploration.
 category: OpenSpec
-tags: [openspec, change]
+tags: [openspec, change, gemini]
 ---
 <!-- OPENSPEC:START -->
+**What This Does**
+This command delegates proposal generation to Gemini CLI, which reads GEMINI.md and executes `.gemini/commands/openspec/proposal.toml`. Gemini will explore the codebase and generate all spec files with FILE markers.
+
 **Guardrails**
-- Favor straightforward, minimal implementations first and add complexity only when it is requested or clearly required.
-- Keep changes tightly scoped to the requested outcome.
-- Refer to `openspec/AGENTS.md` (located inside the `openspec/` directory—run `ls openspec` or `openspec update` if you don't see it) if you need additional OpenSpec conventions or clarifications.
-- Identify any vague or ambiguous details and ask the necessary follow-up questions before editing files.
-- Do not write any code during the proposal stage. Only create design documents (proposal.md, tasks.md, design.md, and spec deltas). Implementation happens in the apply stage after approval.
+- This is a **wrapper command** that calls `gemini /openspec:proposal`
+- Gemini will read code and generate specs, but NOT write implementation code
+- You (Claude) orchestrate: prepare → call Gemini → parse → validate → present
+- Ask clarifying questions BEFORE calling Gemini if user request is ambiguous
 
 **Steps**
-1. Review `openspec/project.md`, run `openspec list` and `openspec list --specs`, and inspect related code or docs (e.g., via `rg`/`ls`) to ground the proposal in current behaviour; note any gaps that require clarification.
-2. Choose a unique verb-led `change-id` and scaffold `proposal.md`, `tasks.md`, and `design.md` (when needed) under `openspec/changes/<id>/`.
-3. Map the change into concrete capabilities or requirements, breaking multi-scope efforts into distinct spec deltas with clear relationships and sequencing.
-4. Capture architectural reasoning in `design.md` when the solution spans multiple systems, introduces new patterns, or demands trade-off discussion before committing to specs.
-5. Draft spec deltas in `changes/<id>/specs/<capability>/spec.md` (one folder per capability) using `## ADDED|MODIFIED|REMOVED Requirements` with at least one `#### Scenario:` per requirement and cross-reference related capabilities when relevant.
-6. Draft `tasks.md` as an ordered list of small, verifiable work items that deliver user-visible progress, include validation (tests, tooling), and highlight dependencies or parallelizable work.
-7. Validate with `openspec validate <id> --strict` and resolve every issue before sharing the proposal.
+
+1. **Preparation**
+   - Ask user for `change-id` if not provided (must be verb-led kebab-case like `add-feature`)
+   - Clarify the user's request to ensure Gemini has clear instructions
+   - Create change directory:
+     ```bash
+     mkdir -p "openspec/changes/<change-id>/specs"
+     ```
+
+2. **Gather context for Gemini**
+   Run these commands and include their output in the Gemini prompt:
+   ```bash
+   openspec list --specs
+   openspec list
+   ```
+
+3. **Call Gemini command**
+   Build a comprehensive prompt for Gemini and call the command:
+   ```bash
+   gemini /openspec:proposal "
+   ## User Request
+   <user's description>
+
+   ## Change ID
+   <change-id>
+
+   ## Existing Specs
+   $(openspec list --specs)
+
+   ## Active Changes
+   $(openspec list)
+
+   ## Instructions
+   Read openspec/project.md and openspec/AGENTS.md for conventions.
+   Explore the codebase to understand patterns.
+   Generate complete proposal with FILE markers.
+   " -o text > /tmp/gemini-proposal-<change-id>.txt
+   ```
+
+4. **Parse output and create files**
+   ```bash
+   cat /tmp/gemini-proposal-<change-id>.txt | \
+     .claude/skills/openspec-proposal/scripts/parse-and-create-files.sh "<change-id>"
+   ```
+
+5. **Validate**
+   ```bash
+   openspec validate <change-id> --strict
+   ```
+
+   If validation fails:
+   - Show errors to user
+   - Identify common issues (scenario format, MODIFIED requirements)
+   - Offer to fix manually or re-run Gemini with clarifications
+
+6. **Present results**
+   - Read and summarize `openspec/changes/<change-id>/proposal.md`
+   - Count tasks from `tasks.md`
+   - List generated spec deltas
+   - Show validation status
+   - Ask: "Should I proceed with implementation?" (use `/openspec:apply`)
 
 **Reference**
-- Use `openspec show <id> --json --deltas-only` or `openspec show <spec> --type spec` to inspect details when validation fails.
-- Search existing requirements with `rg -n "Requirement:|Scenario:" openspec/specs` before writing new ones.
-- Explore the codebase with `rg <keyword>`, `ls`, or direct file reads so proposals align with current implementation realities.
+- Gemini command: `.gemini/commands/openspec/proposal.toml`
+- Gemini system prompt: `GEMINI.md` (OpenSpec Instructions section)
+- Parser script: `.claude/skills/openspec-proposal/scripts/parse-and-create-files.sh`
+- Validation: `openspec validate --strict`
+
+**Cost Comparison**
+- Gemini 2.0 Flash: $0.075/M tokens (1M context limit)
+- Claude Sonnet: $3/M tokens (200K context limit)
+- **40x cheaper** for proposal generation with 5x more context
 <!-- OPENSPEC:END -->

@@ -25,30 +25,14 @@ Respond in English (U.S.) by default. Use Traditional Chinese only when user wri
 
 ---
 
-<kb-first-principle>
-## KB-First = Spec-First
+<coding-principles>
+## Code Quality & Simplicity
 
-**Core Development Philosophy**: The entire project architecture and logic can be derived from the Knowledge Base. KB-First equals Spec-First.
-
-### Principle
-
-- **Knowledge Base (`dev-docs/`) as Source of Truth**: Contains authoritative engineering documentation:
-  - Architecture decisions and patterns
-  - Workflows and processes
-  - Internal API references
-  - Design specifications
-
-- **User Documentation (`docs/`)**: Contains user-facing guides:
-  - Installation and Quick Start
-  - Manuals and Command References
-
-- **Code Implements KB**: Implementation follows what is specified in the Knowledge Base.
-
-### Simplicity & Minimalism
-
-- **YAGNI (You Aren't Gonna Need It)**: Start with minimal viable solution
-- **Delete Aggressively**: Remove unused code and UI elements
-- **Minimal Complexity**: Only add features that are immediately needed
+### YAGNI (You Aren't Gonna Need It)
+- Start with minimal viable solution
+- Delete aggressively - Remove unused code and UI elements
+- Only add features that are immediately needed
+- Avoid over-engineering and premature abstraction
 
 ### Code File Size Limits
 
@@ -56,11 +40,6 @@ Respond in English (U.S.) by default. Use Traditional Chinese only when user wri
 
 - **500 lines**: Consider splitting the file into smaller modules
 - **1000 lines**: MUST split the file - no exceptions
-- **Benefits**:
-  - Easier code review and navigation
-  - Better module boundaries and separation of concerns
-  - Reduced cognitive load
-  - Prevents god classes/modules
 
 **When to split**:
 - Extract related functions into a submodule
@@ -83,38 +62,13 @@ After:
     └── tests.rs        (350 lines)
 ```
 
-### Examples
+### Documentation Structure
 
-**Tauri Command Design** (KB-First approach):
-1. Define command interface in `dev-docs/architecture/01-system-specification.md`
-2. Implement in `src-tauri/src/commands/`
-3. Frontend invokes via `invoke('command_name', params)`
+- **`openspec/specs/`**: Feature specifications (Requirements + Scenarios) - What features do
+- **`dev-docs/`**: Engineering Handbook (Architecture + Dev Guides) - Why & How to contribute
+- **`docs/`**: User Manual (Guides + Tutorials) - How to use rustation
 
-**State Machine Workflows** (KB-First approach):
-1. Document workflow architecture in `dev-docs/architecture/` (e.g., 09-workflow-prompt-claude.md)
-2. Define state transitions and validation rules in KB
-3. Implement state machine in Rust based on KB specification
-
-### Benefits
-
-1. **Single Source of Truth**: No confusion about intended behavior or architecture
-2. **Onboarding Efficiency**: New contributors can understand the system from KB alone
-3. **Consistency**: All implementations follow documented patterns
-
-### Workflow Integration
-
-**Policy**: KB-First is the default workflow.
-- Write design/architecture/workflow docs in `dev-docs/`.
-- Write user guides in `docs/`.
-
-**Before implementing ANY feature**:
-1. Check `dev-docs/` for existing patterns.
-2. Update `dev-docs/` if architectural changes are needed.
-3. Update `docs/` if user-facing behavior changes.
-
-See: `dev-docs/README.md` for Engineering Handbook.
-See: `docs/README.md` for User Documentation.
-</kb-first-principle>
+</coding-principles>
 
 ---
 
@@ -141,8 +95,16 @@ See: `docs/README.md` for User Documentation.
 3. **Proactive Test-First Development**
    - MUST write integration tests that verify end-to-end functionality
    - MUST use property-based testing for complex logic
-   - MUST mock external dependencies to enable isolated testing
+   - Mock ONLY external dependencies (network, filesystem, time)
+   - NEVER mock internal application behavior or library APIs
    - Tests are the primary documentation of expected behavior
+
+4. **Over-Mocking Anti-Pattern** 🚨
+   - Tests passing ≠ Feature working
+   - Mocking hides real integration issues (API version mismatches, missing types, runtime errors)
+   - Test real render paths, not just edge cases
+   - Verify against actual package exports (check node_modules), not assumptions
+   - Example: ResizeObserver mock with empty `observe()` → dimensions never update → List never renders → test passes but app crashes
 
 ### Anti-Patterns to Avoid
 
@@ -154,6 +116,12 @@ See: `docs/README.md` for User Documentation.
 
 ❌ **BAD**: "Check if the API returns the right data"
 ✓ **GOOD**: Write an integration test that calls the API and validates the response structure
+
+❌ **BAD**: Mock component internals → test passes but component crashes
+✓ **GOOD**: Mock only external APIs, test real component behavior
+
+❌ **BAD**: Assume library API from docs → use wrong version → runtime undefined
+✓ **GOOD**: Check `node_modules/package/dist/` exports before using
 
 ### Implementation Guidelines
 
@@ -686,6 +654,9 @@ rustation/
 <rule severity="NEVER">Claim feature complete without verifying all layers → Fake complete → Run DoD checklist in dev-docs/workflow/definition-of-done.md</rule>
 <rule severity="NEVER">Write E2E tests that only test MOCK UI → Tests prove nothing → E2E must test real backend behavior</rule>
 <rule severity="NEVER">Skip integration test after binding → Can't verify JS→Rust connection → Test binding works before building UI</rule>
+<rule severity="NEVER">Over-mock in tests → Tests pass but app crashes → Mock ONLY external deps (network, fs, time), NEVER internal behavior or library APIs</rule>
+<rule severity="NEVER">Assume library API from documentation → Runtime undefined/version mismatch → Check actual exports in node_modules/package/dist/ first</rule>
+<rule severity="NEVER">Trust "tests passing" as proof of correctness → Over-mocking hides real issues → Verify tests exercise real code paths, not just mocks</rule>
 
 </negative-constraints>
 

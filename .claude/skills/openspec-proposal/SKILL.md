@@ -1,18 +1,18 @@
 ---
 name: openspec-proposal
-description: Scaffold a new OpenSpec change proposal with spec deltas, tasks, and design docs. Use when the user requests a new feature, capability, architecture change, or says "create a proposal", "spec this out", "plan a feature", or mentions adding requirements. For non-trivial changes (>500 LOC, >5 files, new capabilities).
+description: Generate OpenSpec proposals using Gemini CLI for cost-efficient exploration. Gemini reads all context, explores codebase, and generates complete proposal files. 40x cheaper than Claude with 1M token context.
 ---
 
-# OpenSpec Proposal Skill
+# OpenSpec Proposal Skill (Gemini-Powered)
 
-Create specification-driven change proposals following the OpenSpec workflow.
+Generate specification-driven change proposals using Gemini CLI in headless mode.
 
 ## When to Use This Skill
 
 Automatically use when the user:
 - Requests a **new feature** or **capability**
 - Asks to **add/modify requirements**
-- Says "**create a proposal**", "**spec this**", "**plan this feature**"
+- Says "**create a proposal**", "**spec this**", "**plan a feature**"
 - Mentions **architecture changes** or **new patterns**
 - Describes work that's **non-trivial** (>500 LOC, >5 files, complex logic)
 
@@ -26,43 +26,62 @@ Automatically use when the user:
 ## Instructions
 
 ### Guardrails
-- Favor straightforward, minimal implementations first; add complexity only when clearly required
+- This skill uses **Gemini CLI** to generate proposals (cost-efficient, large context)
+- Gemini will **read code and generate spec files**, but **NOT write implementation code**
+- System prompt is in `/GEMINI.md` (OpenSpec Instructions section)
 - Keep changes tightly scoped to the requested outcome
-- Refer to `openspec/AGENTS.md` if you need OpenSpec conventions or clarifications
-- Identify vague or ambiguous details and ask follow-up questions
-- **Do NOT write code** during the proposal stage—only create design documents
+- Identify vague or ambiguous details and ask follow-up questions before calling Gemini
 
 ### Steps
 
-1. **Review context**
-   - Read `openspec/project.md` to understand project conventions
-   - Run `openspec list` and `openspec list --specs` to see existing changes and specs
-   - Use `rg` or `ls` to inspect related code/docs
-   - Note any gaps requiring clarification
+1. **Preparation**
+   - Ask user for `change-id` if not provided (must be verb-led kebab-case: `add-*`, `update-*`, etc.)
+   - Clarify the user's request - ensure you understand what they want
+   - Create change directory:
+     ```bash
+     mkdir -p "openspec/changes/<change-id>/specs"
+     ```
 
-2. **Create proposal structure**
-   - Choose a unique verb-led `change-id` (e.g., `add-docker-compose`, `refactor-mcp-tools`)
-   - Scaffold under `openspec/changes/<id>/`:
-     - `proposal.md` - Overview and rationale
-     - `tasks.md` - Ordered implementation checklist
-     - `design.md` - Architecture decisions (if complex)
+2. **Call Gemini via command**
+   Use Gemini's OpenSpec command (defined in `.gemini/commands/openspec/proposal.toml`):
 
-3. **Define spec deltas**
-   - Create `changes/<id>/specs/<capability>/spec.md` for each new capability
-   - Use `## ADDED Requirements`, `## MODIFIED Requirements`, `## REMOVED Requirements`
-   - Each requirement needs at least one `#### Scenario:` with WHEN/THEN bullets
-   - Cross-reference related capabilities when relevant
+   ```bash
+   # Call Gemini command and save output
+   gemini /openspec:proposal "<user-request>" -o text > /tmp/gemini-proposal-output.txt
+   ```
 
-4. **Draft tasks**
-   - Break down into small, verifiable work items
-   - Ensure tasks deliver user-visible progress
-   - Include validation steps (tests, tooling)
-   - Highlight dependencies or parallelizable work
+   This will:
+   - Automatically read `GEMINI.md` for system prompt (OpenSpec Instructions section)
+   - Execute the proposal command logic
+   - Return output with FILE markers
 
-5. **Validate**
-   - Run `openspec validate <id> --strict`
-   - Fix all validation errors before presenting to user
-   - Use `openspec show <id> --json --deltas-only` to inspect details
+3. **Parse Gemini output and create files**
+   Use the parser script:
+   ```bash
+   cat /tmp/gemini-proposal-output.txt | \
+     .claude/skills/openspec-proposal/scripts/parse-and-create-files.sh "<change-id>"
+   ```
+
+   This extracts FILE markers and creates files in `openspec/changes/<change-id>/`
+
+4. **Validate with OpenSpec**
+   ```bash
+   openspec validate <change-id> --strict
+   ```
+
+   If validation fails:
+   - Show errors to user
+   - Debug with: `openspec show <change-id> --json --deltas-only`
+   - Offer to fix common issues (scenario format, MODIFIED requirements, etc.)
+   - Can manually edit files or re-run Gemini with clarifications
+
+5. **Present results to user**
+   Show:
+   - ✅ Generated files list
+   - ✅ Validation status (pass/fail with details)
+   - 📄 Summary of proposal.md (read and summarize key points)
+   - 📋 Task count (count from tasks.md)
+   - ⏭️ Next steps: "Review → Approve → Use `openspec-apply` to implement"
 
 ---
 

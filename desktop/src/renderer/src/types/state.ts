@@ -18,7 +18,64 @@ export type FeatureTab = 'tasks' | 'dockers' | 'settings'
  * - dockers: Global scope
  * - env: Project scope
  */
-export type ActiveView = 'tasks' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal' | 'workflows' | 'claude-code' | 'a2ui'
+export type ActiveView = 'tasks' | 'explorer' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal' | 'workflows' | 'claude-code' | 'a2ui'
+
+// ============================================================================
+// File Explorer Types
+// ============================================================================
+
+export type FileKind = 'file' | 'directory' | 'symlink'
+
+export type GitFileStatus =
+  | 'modified'
+  | 'added'
+  | 'deleted'
+  | 'untracked'
+  | 'ignored'
+  | 'clean'
+
+export interface FileEntry {
+  name: string
+  path: string
+  kind: FileKind
+  size: number
+  permissions: string
+  updated_at: string
+  comment_count: number
+  git_status?: GitFileStatus
+}
+
+export interface Comment {
+  id: string
+  content: string
+  author: string
+  created_at: string
+}
+
+export type SortField = 'name' | 'size' | 'date' | 'kind'
+export type SortDirection = 'asc' | 'desc'
+
+export interface SortConfig {
+  field: SortField
+  direction: SortDirection
+}
+
+export interface NavigationHistory {
+  back_stack: string[]
+  forward_stack: string[]
+}
+
+export interface FileExplorerState {
+  current_path: string
+  entries: FileEntry[]
+  selected_path?: string
+  selected_comments: Comment[]
+  sort_config: SortConfig
+  filter_query: string
+  history: NavigationHistory
+  is_loading: boolean
+  error?: string
+}
 
 // ============================================================================
 // Docker State
@@ -429,6 +486,7 @@ export interface WorktreeState {
   mcp: McpState
   chat: ChatState
   terminal: TerminalState
+  explorer: FileExplorerState
   is_modified: boolean
   active_tab: FeatureTab
   tasks: TasksState
@@ -1449,7 +1507,7 @@ export interface EnvCopyResultData {
 
 export type NotificationTypeData = 'info' | 'success' | 'warning' | 'error'
 
-export type ActiveViewData = 'tasks' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal' | 'workflows' | 'claude-code' | 'a2ui'
+export type ActiveViewData = 'tasks' | 'explorer' | 'settings' | 'dockers' | 'env' | 'mcp' | 'chat' | 'terminal' | 'workflows' | 'claude-code' | 'a2ui'
 
 // Constitution Mode & Presets Data Types
 export type ConstitutionModeData = 'rules' | 'presets'
@@ -1527,6 +1585,66 @@ export interface SetFileLoadingAction {
 export interface SetA2UIPayloadAction {
   type: 'SetA2UIPayload'
   payload: { payload: any | null }
+}
+
+// File Explorer Actions
+export interface ExploreDirAction {
+  type: 'ExploreDir'
+  payload: { path: string }
+}
+
+export interface SetExplorerEntriesAction {
+  type: 'SetExplorerEntries'
+  payload: {
+    path: string
+    entries: FileEntry[]
+  }
+}
+
+export interface SelectFileAction {
+  type: 'SelectFile'
+  payload: { path?: string }
+}
+
+export interface NavigateBackAction {
+  type: 'NavigateBack'
+}
+
+export interface NavigateForwardAction {
+  type: 'NavigateForward'
+}
+
+export interface NavigateUpAction {
+  type: 'NavigateUp'
+}
+
+export interface SetFileCommentsAction {
+  type: 'SetFileComments'
+  payload: {
+    path: string
+    comments: Comment[]
+  }
+}
+
+export interface AddFileCommentAction {
+  type: 'AddFileComment'
+  payload: {
+    path: string
+    content: string
+  }
+}
+
+export interface SetExplorerSortAction {
+  type: 'SetExplorerSort'
+  payload: {
+    field: SortField
+    direction: SortDirection
+  }
+}
+
+export interface SetExplorerFilterAction {
+  type: 'SetExplorerFilter'
+  payload: { query: string }
 }
 
 // Union type of all actions
@@ -1697,6 +1815,16 @@ export type Action =
   | SetFileContentAction
   | SetFileLoadingAction
   | SetA2UIPayloadAction
+  | ExploreDirAction
+  | SetExplorerEntriesAction
+  | SelectFileAction
+  | NavigateBackAction
+  | NavigateForwardAction
+  | NavigateUpAction
+  | SetFileCommentsAction
+  | AddFileCommentAction
+  | SetExplorerSortAction
+  | SetExplorerFilterAction
 
 // ============================================================================
 // UI Helpers
