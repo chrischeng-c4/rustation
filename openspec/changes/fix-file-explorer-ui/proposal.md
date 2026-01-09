@@ -7,7 +7,7 @@ The current File Explorer has significant usability issues:
 3.  **Broken Features**: The comment functionality is present in the UI but fails to persist or display comments correctly.
 
 ## What Changes
--   **Auto-load on Tab Entry**: When user navigates to Explorer tab, automatically dispatch `ExploreDir` with the current worktree root path. Remove the need to click "Project" button first.
+-   **Auto-load on Tab Entry**: When user navigates to Explorer tab, automatically dispatch `ExploreDir` with the current worktree root path. The "🏠 Project" button remains as a quick way to return to project root.
 -   **UI Layout Rebalance**: The File List should be narrower (sidebar-like), and the Detail/Preview panel should occupy the majority of the width.
 -   **Comment Fixes**: The `AddFileComment` action flow will be properly connected to the SQLite backend and state reducer.
 

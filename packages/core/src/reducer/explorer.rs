@@ -11,9 +11,10 @@ pub fn reduce(state: &mut AppState, action: Action) {
             }
         }
 
-        Action::SetExplorerEntries { entries, .. } => {
+        Action::SetExplorerEntries { path, entries } => {
             if let Some(project) = state.active_project_mut() {
                 if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.explorer.current_path = path;
                     worktree.explorer.entries = entries.into_iter().map(|e| e.into()).collect();
                     worktree.explorer.is_loading = false;
                 }

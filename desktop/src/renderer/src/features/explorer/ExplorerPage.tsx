@@ -5,7 +5,7 @@ import {
   ArrowUpward as ArrowUp,
   FolderOpen
 } from '@mui/icons-material'
-import { Box, IconButton, Divider, Paper, Stack, Typography } from '@mui/material'
+import { Box, IconButton, Paper, Stack } from '@mui/material'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -109,12 +109,12 @@ export function ExplorerPage() {
       </Paper>
 
       <Box sx={{ flex: 1, display: 'flex', gap: 2, minHeight: 0 }}>
-        {/* Main Table Panel */}
+        {/* File List Panel (Sidebar) */}
         <Paper
           variant="outlined"
           sx={{
-            flex: 1,
-            minWidth: 0,
+            width: 300,
+            flexShrink: 0,
             overflow: 'hidden',
             borderRadius: 4,
             bgcolor: 'background.paper'
@@ -123,12 +123,12 @@ export function ExplorerPage() {
           <FileTable />
         </Paper>
 
-        {/* Detail Panel */}
+        {/* Detail/Preview Panel (Main Content) */}
         <Paper
           variant="outlined"
           sx={{
-            width: 360,
-            flexShrink: 0,
+            flex: 1,
+            minWidth: 0,
             overflow: 'hidden',
             borderRadius: 4,
             bgcolor: 'background.paper'

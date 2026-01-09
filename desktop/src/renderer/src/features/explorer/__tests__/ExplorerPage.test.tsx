@@ -102,4 +102,42 @@ describe('ExplorerPage - with worktree', () => {
       expect(screen.getByText('folder1')).toBeInTheDocument()
     })
   })
+
+  it('auto-dispatches ExploreDir when component mounts without current_path', async () => {
+    // Setup worktree without current_path (initial state)
+    const worktreeWithoutPath = {
+      ...mockWorktree,
+      explorer: {
+        ...mockWorktree.explorer,
+        current_path: undefined,
+      },
+    }
+
+    mockUseActiveWorktree = vi.fn(() => ({
+      worktree: worktreeWithoutPath,
+      dispatch: mockDispatch,
+      isLoading: false,
+    }))
+
+    render(<ExplorerPage />)
+
+    // Wait for auto-dispatch to occur
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith({
+        type: 'ExploreDir',
+        payload: { path: '/test/path' },
+      })
+    })
+  })
+
+  it('does not auto-dispatch ExploreDir when current_path already exists', async () => {
+    render(<ExplorerPage />)
+
+    // Should not dispatch because current_path already exists
+    await waitFor(() => {
+      expect(mockDispatch).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'ExploreDir' })
+      )
+    })
+  })
 })
