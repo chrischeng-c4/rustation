@@ -18,15 +18,9 @@ import { ClaudeCodePage } from '@/features/claude-code/ClaudeCodePage'
 import { A2UIPage } from '@/features/a2ui/A2UIPage'
 import { Toaster } from '@/features/notifications'
 import { CommandPalette } from '@/features/command-palette'
-import { DevLogPanel } from '@/components/shared/DevLogPanel'
-import { RightIconBar } from '@/components/layout/RightIconBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { ProjectTabs } from '@/features/projects/ProjectTabs'
 import { WorktreeTabs } from '@/features/worktrees'
-import { LogPanel } from '@/components/shared/LogPanel'
-
-// Dev mode check - only show DevLogPanel in development
-const IS_DEV = import.meta.env.DEV
 
 function NoProjectView() {
   const { dispatch } = useAppState()
@@ -170,12 +164,6 @@ function App() {
           <NoProjectView />
         )}
 
-        {/* Right Icon Bar & Log Panel */}
-        <LogPanel />
-        <RightIconBar />
-
-        {/* Old Dev Log Panel (fallback, dev mode only) - can be removed after testing */}
-        {/* {IS_DEV && <DevLogPanel />} */}
       </Box>
     </Box>
   )
