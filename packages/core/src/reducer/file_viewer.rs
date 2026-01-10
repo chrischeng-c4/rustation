@@ -20,6 +20,23 @@ pub fn reduce(state: &mut AppState, action: Action) {
         Action::SetFileLoading { is_loading } => {
             state.file_viewer.is_loading = is_loading;
         }
+
+        Action::ReadBinaryFile { path } => {
+            state.file_viewer.path = Some(path);
+            state.file_viewer.is_loading = true;
+            state.file_viewer.binary_content = None;
+            state.file_viewer.content = None;
+            state.file_viewer.error = None;
+        }
+
+        Action::SetBinaryFileContent { path, content, error } => {
+            state.file_viewer.path = Some(path);
+            state.file_viewer.binary_content = content;
+            state.file_viewer.content = None; // Clear text content
+            state.file_viewer.error = error;
+            state.file_viewer.is_loading = false;
+        }
+
         _ => {}
     }
 }

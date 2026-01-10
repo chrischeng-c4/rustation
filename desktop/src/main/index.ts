@@ -87,6 +87,22 @@ function setupStateIPC(): void {
 }
 
 // ============================================================================
+// Explorer Handlers
+// ============================================================================
+
+function setupExplorerIPC(): void {
+  // List directory entries without mutating state (for tree view expansion)
+  ipcMain.handle('explorer:listDirectory', async (_event, path: string, projectRoot: string) => {
+    try {
+      return core.explorerListDirectory(path, projectRoot)
+    } catch (error) {
+      console.error('Explorer list directory error:', error)
+      throw error
+    }
+  })
+}
+
+// ============================================================================
 // Dialog Handlers
 // ============================================================================
 
@@ -196,6 +212,7 @@ app.whenReady().then(async () => {
   // Initialize state management (State-first architecture)
   initializeState()
   setupStateIPC()
+  setupExplorerIPC()
   setupDialogIPC()
   setupScreenshotIPC()
 

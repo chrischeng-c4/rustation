@@ -300,6 +300,94 @@ pub fn file_read(path: String, project_root: String) -> napi::Result<String> {
     })
 }
 
+/// Read a binary file with security validation.
+///
+/// Returns raw bytes as a Buffer. For security, files must be within:
+/// - project_root or its subdirectories
+/// - ~/.rstn/ or its subdirectories
+///
+/// Only files within project_root or ~/.rstn/ can be read.
+///
+/// # Errors
+/// - FILE_NOT_FOUND: File does not exist
+/// - PERMISSION_DENIED: OS permission denied
+/// - SECURITY_VIOLATION: Path outside allowed scope
+/// - FILE_TOO_LARGE: File exceeds 10MB limit
+#[napi]
+pub fn file_read_binary(path: String, project_root: String) -> napi::Result<napi::bindgen_prelude::Buffer> {
+    file_reader::read_binary_file(&path, &project_root)
+        .map(|bytes| bytes.into())
+        .map_err(|e| {
+            let code = match &e {
+                file_reader::FileReadError::NotFound(_) => "FILE_NOT_FOUND",
+                file_reader::FileReadError::PermissionDenied(_) => "PERMISSION_DENIED",
+                file_reader::FileReadError::SecurityViolation(_) => "SECURITY_VIOLATION",
+                file_reader::FileReadError::FileTooLarge { .. } => "FILE_TOO_LARGE",
+                file_reader::FileReadError::NotUtf8 => "NOT_UTF8",
+                file_reader::FileReadError::Io(_) => "IO_ERROR",
+            };
+            napi::Error::from_reason(format!("{}: {}", code, e))
+        })
+}
+
+// ============================================================================
+// Explorer functions (standalone, not state-mutating)
+// ============================================================================
+
+/// File entry for napi export (tree view)
+#[napi(object)]
+pub struct NapiFileEntry {
+    pub name: String,
+    pub path: String,
+    pub kind: String, // "file" | "directory" | "symlink"
+    pub size: i64,
+    pub permissions: String,
+    pub updated_at: String,
+    pub comment_count: i64,
+    pub git_status: Option<String>,
+}
+
+/// List files in a directory without mutating state.
+/// Used for tree view expansion.
+#[napi]
+pub fn explorer_list_directory(
+    path: String,
+    project_root: String,
+) -> napi::Result<Vec<NapiFileEntry>> {
+    use crate::app_state::FileKind;
+    use std::path::Path;
+
+    let path = Path::new(&path);
+    let project_root = Path::new(&project_root);
+
+    // Get database for comment counts (global singleton)
+    let db = get_db_manager();
+
+    // Get project_id from project_root for DB isolation
+    let project_id = persistence::get_project_id(&project_root.to_string_lossy());
+
+    let entries = explorer::read_directory(path, project_root, &project_id, db.as_deref())
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+
+    Ok(entries
+        .into_iter()
+        .map(|e| NapiFileEntry {
+            name: e.name,
+            path: e.path,
+            kind: match e.kind {
+                FileKind::File => "file".to_string(),
+                FileKind::Directory => "directory".to_string(),
+                FileKind::Symlink => "symlink".to_string(),
+            },
+            size: e.size as i64,
+            permissions: e.permissions,
+            updated_at: e.updated_at,
+            comment_count: e.comment_count as i64,
+            git_status: e.git_status.map(|s| format!("{:?}", s).to_lowercase()),
+        })
+        .collect())
+}
+
 // ============================================================================
 // Worktree functions
 // ============================================================================
@@ -987,10 +1075,12 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         }
 
         Action::OpenProject { ref path } => {
-            // Initialize database for the project
-            let project_path = std::path::Path::new(path);
-            if let Ok(manager) = db::DbManager::init(project_path) {
-                let _ = DB_MANAGER.set(Arc::new(manager));
+            // Initialize global database (user-scope, not project-specific)
+            // Only initialize once, on first project open
+            if get_db_manager().is_none() {
+                if let Ok(manager) = db::DbManager::init() {
+                    let _ = DB_MANAGER.set(Arc::new(manager));
+                }
             }
 
             // After opening a project, refresh worktrees from git
@@ -1346,6 +1436,7 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         | Action::SetBranchesLoading { .. }
         | Action::SetFileContent { .. }
         | Action::SetFileLoading { .. }
+        | Action::SetBinaryFileContent { .. }
         | Action::SetA2UIPayload { .. }
         | Action::SetJustfileCommands { .. }
         | Action::SetTaskStatus { .. }
@@ -1387,14 +1478,28 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
         | Action::SetActiveView { .. }
         | Action::SetExplorerEntries { .. }
         | Action::SetFileComments { .. }
-        | Action::NavigateBack
-        | Action::NavigateForward
-        | Action::NavigateUp
         | Action::SetExplorerSort { .. }
         | Action::SetExplorerFilter { .. }
         // Dev log actions (sync)
         | Action::AddDevLog { .. } => {
             // Already handled synchronously
+        }
+
+        // Navigation actions need to trigger directory read after state update
+        Action::NavigateBack | Action::NavigateForward | Action::NavigateUp => {
+            // State was already updated by reducer, now trigger directory read
+            let current_path = {
+                let state = get_app_state().read().await;
+                state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .map(|w| w.explorer.current_path.clone())
+            };
+
+            if let Some(path) = current_path {
+                // Recursively call ExploreDir to load the directory contents
+                Box::pin(handle_async_action(Action::ExploreDir { path })).await?;
+            }
         }
         Action::ClearDevLogs => {
             // Already handled synchronously
@@ -1428,6 +1533,40 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                             path: path.clone(), 
                             content: None, 
                             error: Some(e.to_string()) 
+                        });
+                    }
+                }
+            }
+        }
+
+        Action::ReadBinaryFile { ref path } => {
+            let project_root = {
+                let state = get_app_state().read().await;
+                state.active_project().map(|p| p.path.clone())
+            };
+
+            if let Some(root) = project_root {
+                let abs_path = if std::path::Path::new(path).is_absolute() {
+                    path.clone()
+                } else {
+                    std::path::Path::new(&root).join(path).to_string_lossy().to_string()
+                };
+
+                match file_reader::read_binary_file(&abs_path, &root) {
+                    Ok(content) => {
+                        let mut state = get_app_state().write().await;
+                        reduce(&mut state, Action::SetBinaryFileContent {
+                            path: path.clone(),
+                            content: Some(content),
+                            error: None
+                        });
+                    }
+                    Err(e) => {
+                        let mut state = get_app_state().write().await;
+                        reduce(&mut state, Action::SetBinaryFileContent {
+                            path: path.clone(),
+                            content: None,
+                            error: Some(e.to_string())
                         });
                     }
                 }
@@ -3646,10 +3785,12 @@ Execute the plan now. Start implementing."#,
 
             if let Some(root) = project_root {
                 let path_buf = std::path::PathBuf::from(path);
-                let root_buf = std::path::PathBuf::from(root);
+                let root_buf = std::path::PathBuf::from(&root);
                 let db_mgr = get_db_manager();
-                
-                match explorer::read_directory(&path_buf, &root_buf, db_mgr.as_deref()) {
+                let project_id = persistence::get_project_id(&root);
+
+                match explorer::read_directory(&path_buf, &root_buf, &project_id, db_mgr.as_deref())
+                {
                     Ok(entries) => {
                         // Convert back to Action data types for SetExplorerEntries
                         let entry_data: Vec<actions::FileEntryData> = entries
@@ -3699,6 +3840,7 @@ Execute the plan now. Start implementing."#,
                 };
 
                 if let Some(root) = project_root {
+                    let project_id = persistence::get_project_id(&root);
                     let rel_path = std::path::Path::new(p)
                         .strip_prefix(&root)
                         .unwrap_or(std::path::Path::new(p))
@@ -3706,54 +3848,97 @@ Execute the plan now. Start implementing."#,
                         .to_string();
 
                     if let Some(db_mgr) = get_db_manager() {
-                        if let Ok(rows) = db_mgr.get_comments(&rel_path) {
-                            let comments: Vec<actions::CommentData> = rows
-                                .into_iter()
-                                .map(|r| actions::CommentData {
-                                    id: r.id,
-                                    content: r.content,
-                                    author: r.author,
-                                    created_at: r.created_at,
-                                })
-                                .collect();
+                        match db_mgr.get_comments(&project_id, &rel_path) {
+                            Ok(rows) => {
+                                let comments: Vec<actions::CommentData> = rows
+                                    .into_iter()
+                                    .map(|r| actions::CommentData {
+                                        id: r.id,
+                                        content: r.content.clone(),
+                                        author: r.author.clone(),
+                                        created_at: r.created_at.clone(),
+                                        line_number: r.line_number,
+                                    })
+                                    .collect();
 
-                            let mut state = get_app_state().write().await;
-                            reduce(&mut state, Action::SetFileComments { 
-                                path: p.clone(), 
-                                comments 
-                            });
+                                eprintln!("[Backend] SelectFile: Loaded {} comments for {}", comments.len(), rel_path);
+                                for comment in &comments {
+                                    eprintln!("[Backend]   - Line {}: {}", comment.line_number.unwrap_or(0), comment.content);
+                                }
+
+                                let mut state = get_app_state().write().await;
+                                reduce(
+                                    &mut state,
+                                    Action::SetFileComments {
+                                        path: p.clone(),
+                                        comments,
+                                    },
+                                );
+
+                                eprintln!("[Backend] SetFileComments dispatched for {}", p);
+                            }
+                            Err(e) => {
+                                eprintln!("[Backend] Failed to load comments: {}", e);
+                            }
                         }
                     }
                 }
             }
         }
 
-        Action::AddFileComment { ref path, ref content } => {
+        Action::AddFileComment {
+            ref path,
+            ref content,
+            line_number,
+        } => {
+            eprintln!("[Backend] AddFileComment: path={}, line={:?}, content={}", path, line_number, content);
+
             let project_root = {
                 let state = get_app_state().read().await;
                 state.active_project().map(|proj| proj.path.clone())
             };
 
             if let Some(root) = project_root {
+                let project_id = persistence::get_project_id(&root);
                 let rel_path = std::path::Path::new(path)
                     .strip_prefix(&root)
                     .unwrap_or(std::path::Path::new(path))
                     .to_string_lossy()
                     .to_string();
 
+                eprintln!("[Backend] Saving comment: project={}, rel_path={}", project_id, rel_path);
+
                 if let Some(db_mgr) = get_db_manager() {
-                    if let Ok(_id) = db_mgr.add_comment(&rel_path, content, "User") {
-                        // Reload comments after adding
-                        Box::pin(handle_async_action(Action::SelectFile { path: Some(path.clone()) })).await?;
-                        
-                        // Also trigger ExploreDir to update comment_count in list
-                        let current_dir = std::path::Path::new(path).parent()
-                            .map(|p| p.to_string_lossy().to_string());
-                        if let Some(dir) = current_dir {
-                            Box::pin(handle_async_action(Action::ExploreDir { path: dir })).await?;
+                    match db_mgr.add_comment(&project_id, &rel_path, content, "User", line_number) {
+                        Ok(comment_id) => {
+                            eprintln!("[Backend] Comment saved with ID: {}", comment_id);
+
+                            // Reload comments after adding
+                            eprintln!("[Backend] Reloading file to fetch updated comments...");
+                            Box::pin(handle_async_action(Action::SelectFile {
+                                path: Some(path.clone()),
+                            }))
+                            .await?;
+
+                            // Also trigger ExploreDir to update comment_count in list
+                            let current_dir = std::path::Path::new(path)
+                                .parent()
+                                .map(|p| p.to_string_lossy().to_string());
+                            if let Some(dir) = current_dir {
+                                Box::pin(handle_async_action(Action::ExploreDir { path: dir })).await?;
+                            }
+
+                            eprintln!("[Backend] AddFileComment completed successfully");
+                        }
+                        Err(e) => {
+                            eprintln!("[Backend] Failed to save comment: {}", e);
                         }
                     }
+                } else {
+                    eprintln!("[Backend] No database manager available!");
                 }
+            } else {
+                eprintln!("[Backend] No active project found!");
             }
         }
 
@@ -3763,6 +3948,14 @@ Execute the plan now. Start implementing."#,
         | Action::RevealInOS { .. }
         | Action::DeleteFileComment { .. } => {
             // To be implemented in Phase B2.2
+        }
+
+        // Tab actions - pure state transitions, no async I/O needed
+        Action::OpenFileTab { .. }
+        | Action::PinTab { .. }
+        | Action::CloseTab { .. }
+        | Action::SwitchTab { .. } => {
+            // These are handled by the reducer (pure state transitions)
         }
 
         // Terminal actions (async - PTY operations)

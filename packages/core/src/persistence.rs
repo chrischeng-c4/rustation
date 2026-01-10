@@ -111,12 +111,19 @@ pub fn get_project_state_path(project_path: &str) -> PathBuf {
 }
 
 /// Convert a path to a short hash (first 8 chars of SHA256)
-fn path_to_hash(path: &str) -> String {
+/// Used as project_id for database isolation
+pub fn path_to_hash(path: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(path.as_bytes());
     let result = hasher.finalize();
     // Take first 8 hex chars
     hex::encode(&result[..4])
+}
+
+/// Get the project ID (hash) for a project path
+/// This is the same as path_to_hash but with a more descriptive name
+pub fn get_project_id(project_path: &str) -> String {
+    path_to_hash(project_path)
 }
 
 // ============================================================================

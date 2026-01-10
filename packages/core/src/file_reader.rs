@@ -85,6 +85,52 @@ pub fn read_file(path: &str, project_root: &str) -> Result<String, FileReadError
     })
 }
 
+/// Read a binary file with security validation.
+///
+/// # Arguments
+/// * `path` - Path to file to read
+/// * `project_root` - Project root directory (allowed scope)
+///
+/// # Security
+/// File must be within:
+/// - `project_root` or its subdirectories
+/// - `~/.rstn/` or its subdirectories
+///
+/// # Returns
+/// File contents as raw bytes (Vec<u8>), or error
+pub fn read_binary_file(path: &str, project_root: &str) -> Result<Vec<u8>, FileReadError> {
+    let file_path = Path::new(path);
+
+    // Canonicalize paths for security
+    let canonical_path = file_path.canonicalize().map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => FileReadError::NotFound(path.to_string()),
+        std::io::ErrorKind::PermissionDenied => FileReadError::PermissionDenied(path.to_string()),
+        _ => FileReadError::Io(e.to_string()),
+    })?;
+
+    // Build allowed roots
+    let allowed_roots = build_allowed_roots(project_root)?;
+
+    // Security check: path must be within allowed roots
+    if !is_path_allowed(&canonical_path, &allowed_roots) {
+        return Err(FileReadError::SecurityViolation(path.to_string()));
+    }
+
+    // Check file size
+    let metadata =
+        std::fs::metadata(&canonical_path).map_err(|e| FileReadError::Io(e.to_string()))?;
+
+    if metadata.len() > MAX_FILE_SIZE {
+        return Err(FileReadError::FileTooLarge {
+            size: metadata.len(),
+            limit: MAX_FILE_SIZE,
+        });
+    }
+
+    // Read file as binary
+    std::fs::read(&canonical_path).map_err(|e| FileReadError::Io(e.to_string()))
+}
+
 /// Build list of allowed root directories
 fn build_allowed_roots(project_root: &str) -> Result<Vec<PathBuf>, FileReadError> {
     let mut roots = Vec::new();

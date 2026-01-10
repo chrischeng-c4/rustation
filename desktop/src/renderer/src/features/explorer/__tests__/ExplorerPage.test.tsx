@@ -4,6 +4,15 @@ import { ExplorerPage } from '../ExplorerPage'
 
 // ResizeObserver mock is now centralized in test/setup.ts
 
+// Mock window.explorerApi
+const mockListDirectory = vi.fn().mockResolvedValue([])
+Object.defineProperty(window, 'explorerApi', {
+  value: {
+    listDirectory: mockListDirectory,
+  },
+  writable: true,
+})
+
 // Mock the hooks
 const mockDispatch = vi.fn().mockResolvedValue(undefined)
 
@@ -93,28 +102,28 @@ describe('ExplorerPage - with worktree', () => {
     expect(screen.getByText('Browse files, view metadata, and manage comments')).toBeInTheDocument()
   })
 
-  it('renders FileTable with entries when worktree has explorer data', async () => {
+  it('renders FileTreeView with entries when worktree has explorer data', async () => {
     render(<ExplorerPage />)
 
-    // Verify FileTable renders inside ExplorerPage
+    // Verify FileTreeView renders inside ExplorerPage
     await waitFor(() => {
       expect(screen.getByText('file1.txt')).toBeInTheDocument()
       expect(screen.getByText('folder1')).toBeInTheDocument()
     })
   })
 
-  it('auto-dispatches ExploreDir when component mounts without current_path', async () => {
-    // Setup worktree without current_path (initial state)
-    const worktreeWithoutPath = {
+  it('auto-dispatches ExploreDir when component mounts with empty entries', async () => {
+    // Setup worktree with current_path but no entries (needs initial load)
+    const worktreeWithEmptyEntries = {
       ...mockWorktree,
       explorer: {
         ...mockWorktree.explorer,
-        current_path: undefined,
+        entries: [],
       },
     }
 
     mockUseActiveWorktree = vi.fn(() => ({
-      worktree: worktreeWithoutPath,
+      worktree: worktreeWithEmptyEntries,
       dispatch: mockDispatch,
       isLoading: false,
     }))

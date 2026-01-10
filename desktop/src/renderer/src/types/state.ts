@@ -50,6 +50,8 @@ export interface Comment {
   content: string
   author: string
   created_at: string
+  /** Line number for inline comments (null for file-level comments) */
+  line_number: number | null
 }
 
 export type SortField = 'name' | 'size' | 'date' | 'kind'
@@ -65,6 +67,12 @@ export interface NavigationHistory {
   forward_stack: string[]
 }
 
+/** A single file tab in the explorer (VSCode-style) */
+export interface FileTab {
+  path: string
+  is_pinned: boolean
+}
+
 export interface FileExplorerState {
   current_path: string
   entries: FileEntry[]
@@ -75,6 +83,10 @@ export interface FileExplorerState {
   history: NavigationHistory
   is_loading: boolean
   error?: string
+  /** Open file tabs (VSCode-style preview tabs) */
+  tabs: FileTab[]
+  /** Currently active tab path */
+  active_tab_path?: string
 }
 
 // ============================================================================
@@ -557,7 +569,10 @@ export interface DevLog {
 
 export interface FileViewerState {
   path: string | null
+  /** Text file content (UTF-8) */
   content: string | null
+  /** Binary file content (raw bytes) */
+  binary_content: Uint8Array | null
   is_loading: boolean
   error: string | null
 }
@@ -1582,6 +1597,20 @@ export interface SetFileLoadingAction {
   payload: { is_loading: boolean }
 }
 
+export interface ReadBinaryFileAction {
+  type: 'ReadBinaryFile'
+  payload: { path: string }
+}
+
+export interface SetBinaryFileContentAction {
+  type: 'SetBinaryFileContent'
+  payload: {
+    path: string
+    content: Uint8Array | null
+    error: string | null
+  }
+}
+
 export interface SetA2UIPayloadAction {
   type: 'SetA2UIPayload'
   payload: { payload: any | null }
@@ -1631,6 +1660,8 @@ export interface AddFileCommentAction {
   payload: {
     path: string
     content: string
+    /** Line number for inline comments (null for file-level comments) */
+    line_number: number | null
   }
 }
 
@@ -1645,6 +1676,27 @@ export interface SetExplorerSortAction {
 export interface SetExplorerFilterAction {
   type: 'SetExplorerFilter'
   payload: { query: string }
+}
+
+// Tab Management Actions (VSCode-style preview tabs)
+export interface OpenFileTabAction {
+  type: 'OpenFileTab'
+  payload: { path: string }
+}
+
+export interface PinTabAction {
+  type: 'PinTab'
+  payload: { path: string }
+}
+
+export interface CloseTabAction {
+  type: 'CloseTab'
+  payload: { path: string }
+}
+
+export interface SwitchTabAction {
+  type: 'SwitchTab'
+  payload: { path: string }
 }
 
 // Union type of all actions
@@ -1814,6 +1866,8 @@ export type Action =
   | ReadFileAction
   | SetFileContentAction
   | SetFileLoadingAction
+  | ReadBinaryFileAction
+  | SetBinaryFileContentAction
   | SetA2UIPayloadAction
   | ExploreDirAction
   | SetExplorerEntriesAction
@@ -1825,6 +1879,10 @@ export type Action =
   | AddFileCommentAction
   | SetExplorerSortAction
   | SetExplorerFilterAction
+  | OpenFileTabAction
+  | PinTabAction
+  | CloseTabAction
+  | SwitchTabAction
 
 // ============================================================================
 // UI Helpers

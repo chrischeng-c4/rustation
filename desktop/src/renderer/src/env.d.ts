@@ -70,12 +70,28 @@ interface StateApi {
   onStateUpdate(callback: (stateJson: string) => void): () => void
 }
 
+interface ExplorerFileEntry {
+  name: string
+  path: string
+  kind: string // "file" | "directory" | "symlink"
+  size: number
+  permissions: string
+  updated_at: string
+  comment_count: number
+  git_status: string | null
+}
+
+interface ExplorerApi {
+  listDirectory(path: string, projectRoot: string): Promise<ExplorerFileEntry[]>
+}
+
 // Augment global Window interface
 declare global {
   interface Window {
     electron: ElectronAPI
     api: Api
     stateApi: StateApi
+    explorerApi: ExplorerApi
     dialogApi: DialogApi
     screenshotApi: ScreenshotApi
   }

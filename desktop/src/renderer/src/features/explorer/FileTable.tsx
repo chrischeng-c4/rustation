@@ -1,13 +1,16 @@
 import { useCallback, useRef, useEffect, useState } from 'react'
-import { 
-  InsertDriveFileOutlined as File, 
-  Folder as Folder, 
-  ChatBubbleOutline as MessageSquare 
+import {
+  ChatBubbleOutline as CommentIcon,
+  Circle as CircleIcon,
+  Add as AddIcon,
+  Remove as RemoveIcon,
+  QuestionMark as QuestionIcon
 } from '@mui/icons-material'
-import { 
+import { FileIcon } from '@/components/shared/FileIcon'
+import {
   Box,
   Typography,
-  Chip,
+  Tooltip,
   useTheme
 } from '@mui/material'
 import { List } from 'react-window'
@@ -47,23 +50,48 @@ export function FileTable() {
     }
   }, [dispatch])
 
-  const getGitColor = (status?: GitFileStatus) => {
+  // Git status color mapping (IDE-style)
+  const getGitStatusInfo = (status?: GitFileStatus): { color: string; icon: React.ReactNode; label: string } | null => {
     switch (status) {
-      case 'modified': return '#E3B341' // M3 Yellow
-      case 'added': return '#81C784'    // M3 Green
-      case 'untracked': return '#64B5F6' // M3 Blue
-      case 'deleted': return '#E57373'   // M3 Red
-      case 'ignored': return theme.palette.text.disabled
-      default: return 'inherit'
+      case 'modified':
+        return {
+          color: '#E3B341', // Yellow/Orange
+          icon: <CircleIcon sx={{ fontSize: 8 }} />,
+          label: 'Modified'
+        }
+      case 'added':
+        return {
+          color: '#81C784', // Green
+          icon: <AddIcon sx={{ fontSize: 10, strokeWidth: 2 }} />,
+          label: 'Added'
+        }
+      case 'untracked':
+        return {
+          color: '#64B5F6', // Blue
+          icon: <QuestionIcon sx={{ fontSize: 10 }} />,
+          label: 'Untracked'
+        }
+      case 'deleted':
+        return {
+          color: '#E57373', // Red
+          icon: <RemoveIcon sx={{ fontSize: 10 }} />,
+          label: 'Deleted'
+        }
+      case 'ignored':
+        return {
+          color: theme.palette.text.disabled,
+          icon: null,
+          label: 'Ignored'
+        }
+      default:
+        return null
     }
   }
 
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+  // Get text color for file name based on git status
+  const getNameColor = (status?: GitFileStatus) => {
+    const info = getGitStatusInfo(status)
+    return info?.color || 'inherit'
   }
 
   const RowComponent = ({
@@ -73,13 +101,14 @@ export function FileTable() {
     entries: rowEntries,
     selectedPath: rowSelectedPath,
     theme: rowTheme,
-    getGitColor: rowGetGitColor,
-    formatSize: rowFormatSize,
+    getNameColor: rowGetNameColor,
+    getGitStatusInfo: rowGetGitStatusInfo,
     handleRowClick: rowHandleRowClick,
     handleRowDoubleClick: rowHandleRowDoubleClick
   }: any) => {
     const entry = rowEntries[index]
     const isSelected = rowSelectedPath === entry.path
+    const gitInfo = rowGetGitStatusInfo(entry.git_status)
 
     return (
       <Box
@@ -90,120 +119,100 @@ export function FileTable() {
         sx={{
           display: 'flex',
           alignItems: 'center',
-          px: 2,
+          px: 1.5,
+          gap: 0.5,
           cursor: 'pointer',
-          borderBottom: 1,
-          borderColor: 'divider',
           bgcolor: isSelected ? 'rgba(208, 188, 255, 0.12)' : 'transparent',
           '&:hover': {
             bgcolor: isSelected ? 'rgba(208, 188, 255, 0.16)' : 'action.hover',
           }
         }}
       >
-        <Box sx={{ width: '40%', display: 'flex', alignItems: 'center', gap: 1.5, overflow: 'hidden' }}>
-          {entry.kind === 'directory' ? (
-            <Folder sx={{ fontSize: 18, color: rowTheme.palette.primary.light, flexShrink: 0 }} />
-          ) : (
-            <File sx={{ fontSize: 18, color: 'text.secondary', flexShrink: 0 }} />
+        {/* Git status indicator - left side */}
+        <Box sx={{ width: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {gitInfo?.icon && (
+            <Tooltip title={gitInfo.label} placement="left">
+              <Box sx={{ color: gitInfo.color, display: 'flex', alignItems: 'center' }}>
+                {gitInfo.icon}
+              </Box>
+            </Tooltip>
           )}
-          <Typography
-            variant="body2"
-            noWrap
-            sx={{
-              color: rowGetGitColor(entry.git_status),
-              fontWeight: isSelected ? 600 : 400
-            }}
-          >
-            {entry.name}
-          </Typography>
-          {entry.comment_count > 0 && (
+        </Box>
+
+        {/* File/folder icon */}
+        <FileIcon filename={entry.name} kind={entry.kind} size={18} />
+
+        {/* File name */}
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{
+            flex: 1,
+            color: rowGetNameColor(entry.git_status),
+            fontWeight: isSelected ? 600 : 400,
+            fontSize: '0.8125rem'
+          }}
+        >
+          {entry.name}
+        </Typography>
+
+        {/* Comment indicator - right side */}
+        {entry.comment_count > 0 && (
+          <Tooltip title={`${entry.comment_count} comment${entry.comment_count > 1 ? 's' : ''}`}>
             <Box sx={{
               display: 'flex',
               alignItems: 'center',
-              gap: 0.5,
-              px: 0.5,
-              borderRadius: 1,
-              bgcolor: 'action.selected',
-              border: 1,
-              borderColor: 'divider',
+              gap: 0.25,
+              color: 'text.secondary',
               flexShrink: 0
             }}>
-              <MessageSquare sx={{ fontSize: 10, color: 'text.secondary' }} />
-              <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>
+              <CommentIcon sx={{ fontSize: 12 }} />
+              <Typography sx={{ fontSize: 10 }}>
                 {entry.comment_count}
               </Typography>
             </Box>
-          )}
-        </Box>
-
-        <Box sx={{ width: '15%', px: 1 }}>
-          <Typography variant="caption" color="text.secondary" noWrap>
-            {entry.kind === 'file' ? rowFormatSize(entry.size) : '--'}
-          </Typography>
-        </Box>
-
-        <Box sx={{ width: '20%', px: 1 }}>
-          {entry.git_status && entry.git_status !== 'clean' && (
-            <Chip
-              label={entry.git_status}
-              size="small"
-              variant="outlined"
-              sx={{
-                height: 18,
-                fontSize: '9px',
-                textTransform: 'uppercase',
-                color: rowGetGitColor(entry.git_status),
-                borderColor: rowGetGitColor(entry.git_status),
-                opacity: 0.8
-              }}
-            />
-          )}
-        </Box>
-
-        <Box sx={{ width: '25%', textAlign: 'right' }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
-            {new Date(entry.updated_at).toLocaleDateString()}
-          </Typography>
-        </Box>
+          </Tooltip>
+        )}
       </Box>
     )
   }
 
   return (
     <Box ref={containerRef} sx={{ height: '100%', width: '100%', overflow: 'hidden' }}>
-      <Box sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        px: 2, 
-        py: 1.5, 
-        borderBottom: 1, 
+      {/* Simple header - no columns, just file count */}
+      <Box sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        px: 1.5,
+        py: 1,
+        borderBottom: 1,
         borderColor: 'divider',
         bgcolor: 'background.paper',
-        position: 'sticky',
-        top: 0,
-        zIndex: 1
       }}>
-        <Typography variant="caption" fontWeight={700} sx={{ width: '40%' }}>Name</Typography>
-        <Typography variant="caption" fontWeight={700} sx={{ width: '15%', px: 1 }}>Size</Typography>
-        <Typography variant="caption" fontWeight={700} sx={{ width: '20%', px: 1 }}>Status</Typography>
-        <Typography variant="caption" fontWeight={700} sx={{ width: '25%', textAlign: 'right' }}>Modified</Typography>
+        <Typography variant="caption" fontWeight={600} color="text.secondary">
+          Files
+        </Typography>
+        <Typography variant="caption" color="text.disabled">
+          {entries.length} items
+        </Typography>
       </Box>
-      
+
       {height > 0 && (
         <List
           rowComponent={RowComponent}
           rowCount={entries.length}
-          rowHeight={40}
+          rowHeight={32}
           rowProps={{
             entries,
             selectedPath,
             theme,
-            getGitColor,
-            formatSize,
+            getNameColor,
+            getGitStatusInfo,
             handleRowClick,
             handleRowDoubleClick
           }}
-          style={{ height: height - 40 }}
+          style={{ height: height - 36 }}
         />
       )}
     </Box>

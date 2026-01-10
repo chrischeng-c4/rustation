@@ -1,17 +1,12 @@
-import { useEffect, useCallback } from 'react'
-import {
-  ArrowBack as ArrowLeft,
-  ArrowForward as ArrowRight,
-  ArrowUpward as ArrowUp,
-  FolderOpen
-} from '@mui/icons-material'
-import { Box, IconButton, Paper, Stack } from '@mui/material'
+import { useEffect } from 'react'
+import { FolderOpen } from '@mui/icons-material'
+import { Box, Paper } from '@mui/material'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { useActiveWorktree } from '@/hooks/useAppState'
-import { PathBreadcrumbs } from './PathBreadcrumbs'
-import { FileTable } from './FileTable'
+import { FileTreeView } from './FileTreeView'
+import { FileTabs } from './FileTabs'
 import { DetailPanel } from './DetailPanel'
 
 export function ExplorerPage() {
@@ -19,31 +14,13 @@ export function ExplorerPage() {
 
   const explorer = worktree?.explorer
   const currentPath = explorer?.current_path
-  const canGoBack = (explorer?.history.back_stack.length ?? 0) > 0
-  const canGoForward = (explorer?.history.forward_stack.length ?? 0) > 0
 
-  // Initial load
+  // Initial load - trigger when we have a path but no entries loaded yet
   useEffect(() => {
-    if (worktree?.path && !currentPath) {
-      dispatch({ type: 'ExploreDir', payload: { path: worktree.path } })
+    if (currentPath && explorer?.entries.length === 0 && !explorer?.is_loading) {
+      dispatch({ type: 'ExploreDir', payload: { path: currentPath } })
     }
-  }, [worktree?.path, currentPath, dispatch])
-
-  const handleNavigateBack = useCallback(() => {
-    dispatch({ type: 'NavigateBack' })
-  }, [dispatch])
-
-  const handleNavigateForward = useCallback(() => {
-    dispatch({ type: 'NavigateForward' })
-  }, [dispatch])
-
-  const handleNavigateUp = useCallback(() => {
-    dispatch({ type: 'NavigateUp' })
-  }, [dispatch])
-
-  const handlePathClick = useCallback((path: string) => {
-    dispatch({ type: 'ExploreDir', payload: { path } })
-  }, [dispatch])
+  }, [currentPath, explorer?.entries.length, explorer?.is_loading, dispatch])
 
   if (!worktree) {
     return (
@@ -64,77 +41,40 @@ export function ExplorerPage() {
         title="File Explorer"
         description="Browse files, view metadata, and manage comments"
         icon={<FolderOpen />}
-      >
-        <Stack direction="row" spacing={0.5} alignItems="center">
-          <IconButton
-            size="small"
-            disabled={!canGoBack}
-            onClick={handleNavigateBack}
-          >
-            <ArrowLeft fontSize="small" />
-          </IconButton>
-          <IconButton
-            size="small"
-            disabled={!canGoForward}
-            onClick={handleNavigateForward}
-          >
-            <ArrowRight fontSize="small" />
-          </IconButton>
-          <IconButton
-            size="small"
-            onClick={handleNavigateUp}
-          >
-            <ArrowUp fontSize="small" />
-          </IconButton>
-        </Stack>
-      </PageHeader>
-
-      <Paper
-        variant="outlined"
-        sx={{
-          mb: 2,
-          px: 2,
-          py: 1,
-          bgcolor: 'surfaceContainerLow.main',
-          borderRadius: 2,
-          display: 'flex',
-          alignItems: 'center'
-        }}
-      >
-        <PathBreadcrumbs
-          currentPath={currentPath ?? ''}
-          rootPath={worktree.path}
-          onNavigate={handlePathClick}
-        />
-      </Paper>
+      />
 
       <Box sx={{ flex: 1, display: 'flex', gap: 2, minHeight: 0 }}>
-        {/* File List Panel (Sidebar) */}
+        {/* File Tree Panel (Sidebar) - VSCode style */}
         <Paper
           variant="outlined"
           sx={{
-            width: 300,
+            width: 280,
             flexShrink: 0,
             overflow: 'hidden',
-            borderRadius: 4,
+            borderRadius: 2,
             bgcolor: 'background.paper'
           }}
         >
-          <FileTable />
+          <FileTreeView />
         </Paper>
 
-        {/* Detail/Preview Panel (Main Content) */}
+        {/* Detail/Preview Panel (Main Content) with Tabs */}
         <Paper
           variant="outlined"
           sx={{
             flex: 1,
             minWidth: 0,
             overflow: 'hidden',
-            borderRadius: 4,
-            bgcolor: 'background.paper'
+            borderRadius: 2,
+            bgcolor: 'background.paper',
+            display: 'flex',
+            flexDirection: 'column'
           }}
         >
-          <DetailPanel />
+          <FileTabs />
+          <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <DetailPanel />
+          </Box>
         </Paper>
       </Box>
     </Box>

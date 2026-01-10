@@ -564,6 +564,16 @@ pub enum ActiveView {
 // File Explorer State (Worktree-level)
 // ============================================================================
 
+/// A single file tab in the explorer
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FileTab {
+    /// Absolute file path
+    pub path: String,
+    /// Whether this tab is pinned (vs preview)
+    /// Preview tabs are italic and get replaced on next single-click
+    pub is_pinned: bool,
+}
+
 /// File explorer state for a worktree
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FileExplorerState {
@@ -571,7 +581,7 @@ pub struct FileExplorerState {
     pub current_path: String,
     /// List of entries in the current directory
     pub entries: Vec<FileEntry>,
-    /// Currently selected path (if any)
+    /// Currently selected path (if any) - DEPRECATED: use active_tab_path instead
     pub selected_path: Option<String>,
     /// Comments for the currently selected file
     #[serde(default)]
@@ -586,6 +596,12 @@ pub struct FileExplorerState {
     pub is_loading: bool,
     /// Error message
     pub error: Option<String>,
+    /// Open file tabs (VSCode-style: preview + pinned)
+    #[serde(default)]
+    pub tabs: Vec<FileTab>,
+    /// Currently active tab path (the tab being viewed)
+    #[serde(default)]
+    pub active_tab_path: Option<String>,
 }
 
 impl Default for FileExplorerState {
@@ -600,6 +616,8 @@ impl Default for FileExplorerState {
             history: NavigationHistory::default(),
             is_loading: false,
             error: None,
+            tabs: Vec::new(),
+            active_tab_path: None,
         }
     }
 }
@@ -662,6 +680,8 @@ pub struct Comment {
     pub content: String,
     pub author: String,
     pub created_at: String,
+    /// Line number for inline comments (None for file-level comments)
+    pub line_number: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -1748,7 +1768,11 @@ pub struct ReviewGateState {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct FileViewerState {
     pub path: Option<String>,
+    /// Text file content (UTF-8)
     pub content: Option<String>,
+    /// Binary file content (raw bytes)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binary_content: Option<Vec<u8>>,
     pub is_loading: bool,
     pub error: Option<String>,
 }

@@ -110,6 +110,7 @@ impl From<CommentData> for Comment {
             content: data.content,
             author: data.author,
             created_at: data.created_at,
+            line_number: data.line_number,
         }
     }
 }

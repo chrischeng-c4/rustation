@@ -680,10 +680,12 @@ pub enum Action {
     /// Reveal file in OS file explorer (Finder/Explorer)
     RevealInOS { path: String },
 
-    /// Add a comment to a file
+    /// Add a comment to a file (with optional line number for inline comments)
     AddFileComment {
         path: String,
         content: String,
+        /// Line number for inline comments (None for file-level comments)
+        line_number: Option<usize>,
     },
 
     /// Delete a comment from a file
@@ -691,6 +693,23 @@ pub enum Action {
         path: String,
         comment_id: String,
     },
+
+    // ========================================================================
+    // Tab Management Actions (VSCode-style preview tabs)
+    // ========================================================================
+    /// Open a file in a tab (single-click behavior - opens as preview tab)
+    /// Preview tabs are shown in italic and get replaced by next preview
+    OpenFileTab { path: String },
+
+    /// Pin the current tab (double-click behavior - converts preview to pinned)
+    /// Pinned tabs are shown in normal font and persist until explicitly closed
+    PinTab { path: String },
+
+    /// Close a tab by path
+    CloseTab { path: String },
+
+    /// Switch to a different tab (activate it)
+    SwitchTab { path: String },
 
     // ========================================================================
     // File Viewer Actions
@@ -707,6 +726,16 @@ pub enum Action {
 
     /// Set file viewer loading state
     SetFileLoading { is_loading: bool },
+
+    /// Read a binary file for viewing (images, PDFs, videos, etc.)
+    ReadBinaryFile { path: String },
+
+    /// Set binary file content
+    SetBinaryFileContent {
+        path: String,
+        content: Option<Vec<u8>>,
+        error: Option<String>,
+    },
 
     // ========================================================================
     // A2UI Actions (Experimental)
@@ -744,6 +773,8 @@ pub struct CommentData {
     pub content: String,
     pub author: String,
     pub created_at: String,
+    /// Line number for inline comments (None for file-level comments)
+    pub line_number: Option<usize>,
 }
 
 /// Git file status for actions

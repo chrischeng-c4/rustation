@@ -13,9 +13,10 @@ use std::process::Command;
 /// Read a directory and return a list of file entries with Git status.
 /// Respects .gitignore rules.
 pub fn read_directory(
-    path: &Path, 
-    project_root: &Path, 
-    db: Option<&DbManager>
+    path: &Path,
+    project_root: &Path,
+    project_id: &str,
+    db: Option<&DbManager>,
 ) -> anyhow::Result<Vec<FileEntry>> {
     let mut entries = Vec::new();
     
@@ -75,9 +76,9 @@ pub fn read_directory(
 
         let git_status = git_status_map.get(&rel_path).cloned();
         
-        // Fetch comment count from SQLite
+        // Fetch comment count from SQLite (requires project_id for isolation)
         let comment_count = if let Some(db_mgr) = db {
-            db_mgr.get_comment_count(&rel_path).unwrap_or(0)
+            db_mgr.get_comment_count(project_id, &rel_path).unwrap_or(0)
         } else {
             0
         };

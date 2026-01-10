@@ -310,7 +310,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { ServiceStatus, ServiceType, dockerIsAvailable, dockerListServices, dockerStartService, dockerStopService, dockerRestartService, dockerGetLogs, dockerRemoveService, dockerCreateDatabase, dockerCreateVhost, dockerStartServiceWithPort, dockerStopContainer, dockerCheckPortConflict, justfileParse, justfileRun, fileRead, worktreeListBranches, envListFiles, envDefaultPatterns, fetchMcpTools, contextBuild, contextBuildSystemPrompt, stateInit, stateGet, stateDispatch } = nativeBinding
+const { ServiceStatus, ServiceType, dockerIsAvailable, dockerListServices, dockerStartService, dockerStopService, dockerRestartService, dockerGetLogs, dockerRemoveService, dockerCreateDatabase, dockerCreateVhost, dockerStartServiceWithPort, dockerStopContainer, dockerCheckPortConflict, justfileParse, justfileRun, fileRead, fileReadBinary, explorerListDirectory, worktreeListBranches, envListFiles, envDefaultPatterns, fetchMcpTools, contextBuild, contextBuildSystemPrompt, stateInit, stateGet, stateDispatch } = nativeBinding
 
 module.exports.ServiceStatus = ServiceStatus
 module.exports.ServiceType = ServiceType
@@ -329,6 +329,8 @@ module.exports.dockerCheckPortConflict = dockerCheckPortConflict
 module.exports.justfileParse = justfileParse
 module.exports.justfileRun = justfileRun
 module.exports.fileRead = fileRead
+module.exports.fileReadBinary = fileReadBinary
+module.exports.explorerListDirectory = explorerListDirectory
 module.exports.worktreeListBranches = worktreeListBranches
 module.exports.envListFiles = envListFiles
 module.exports.envDefaultPatterns = envDefaultPatterns

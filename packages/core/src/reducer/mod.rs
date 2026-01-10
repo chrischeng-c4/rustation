@@ -179,7 +179,11 @@ pub fn reduce(state: &mut AppState, action: Action) {
         | Action::DeleteFile { .. }
         | Action::RevealInOS { .. }
         | Action::AddFileComment { .. }
-        | Action::DeleteFileComment { .. } => {
+        | Action::DeleteFileComment { .. }
+        | Action::OpenFileTab { .. }
+        | Action::PinTab { .. }
+        | Action::CloseTab { .. }
+        | Action::SwitchTab { .. } => {
             explorer::reduce(state, action);
         }
 
@@ -210,7 +214,9 @@ pub fn reduce(state: &mut AppState, action: Action) {
 
         Action::ReadFile { .. }
         | Action::SetFileContent { .. }
-        | Action::SetFileLoading { .. } => {
+        | Action::SetFileLoading { .. }
+        | Action::ReadBinaryFile { .. }
+        | Action::SetBinaryFileContent { .. } => {
             file_viewer::reduce(state, action);
         }
 

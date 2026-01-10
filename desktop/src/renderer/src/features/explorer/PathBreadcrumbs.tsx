@@ -3,7 +3,7 @@ import {
   Home as HomeIcon,
   Folder as FolderIcon
 } from '@mui/icons-material'
-import { Button, Breadcrumbs, Link, Typography, Stack, Box } from '@mui/material'
+import { Button, Breadcrumbs, Typography } from '@mui/material'
 
 interface PathBreadcrumbsProps {
   currentPath: string
