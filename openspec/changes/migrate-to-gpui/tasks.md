@@ -14,13 +14,15 @@
 - [ ] 2.6 Verify UI renders correctly (BLOCKED by Metal Toolchain)
 
 ## 3. Core Features Migration
-- [ ] 3.1 Port `Tasks` view (List, details, running output)
-- [ ] 3.2 Port `Dockers` view (Service list, logs, actions)
-- [ ] 3.3 Port `Settings` view
-- [ ] 3.4 Port `Terminal` view (PTY integration + Text rendering)
-- [ ] 3.5 Port `Explorer` view (File tree, git status)
-- [ ] 3.6 Port `Chat` view (Message rendering, input)
-- [ ] 3.7 Port `Workflows` view (Constitution, Change Management)
+- [x] 3.0 Create `crates/rstn-views/` feature views library
+- [x] 3.1 Port `Tasks` view (TaskCard, LogPanel, 50/50 split layout)
+- [x] 3.2 Port `Dockers` view (ServiceCard, grouping, status badges)
+- [ ] 3.3 Port `Explorer` view (File tree, git status, preview)
+- [ ] 3.4 Port `Terminal` view (PTY integration + ANSI rendering)
+- [ ] 3.5 Port `Chat` view (Message rendering, input)
+- [ ] 3.6 Port `Workflows` view (Constitution, Change Management)
+- [ ] 3.7 Port `Settings` view (Configuration UI)
+- [ ] 3.8 Integrate views with main app tab routing
 
 ## 4. MCP & Advanced Features
 - [ ] 4.1 Port `MCP` inspector view
