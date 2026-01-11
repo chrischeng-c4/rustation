@@ -5,8 +5,8 @@
 Migration of rustation from Electron+React to GPUI (Zed's GPU-accelerated UI framework) for native Rust UI.
 
 **Start Date**: 2026-01-11
-**Current Phase**: Phase 5 Complete (All Feature Views) - Ready for Phase 6
-**Status**: ✅ All 8 views implemented, tested, and running. Code quality verified.
+**Current Phase**: Phase 6 - Backend Integration (Week 1)
+**Status**: 🟡 In Progress - TasksView and DockersView now load real backend data
 
 ---
 
@@ -362,12 +362,45 @@ rustation/
 - A2UI dynamic renderer
 - Context Engine visualizations
 
-### Phase 6: Final Polish
+### 🟡 Phase 6: Backend Integration & Polish (In Progress - Commit: 2cacbc5)
 
-- Feature parity verification
-- Performance optimization
-- Documentation updates
-- CI/CD pipeline updates
+**Objective**: Connect views to real backend data and add interactivity.
+
+**Stage 1: Backend Integration (Week 1)**
+
+✅ **TasksView Integration** ([main.rs:59-76](crates/rstn/src/main.rs#L59-L76)):
+- Load justfile from current directory
+- Parse commands using `rstn-core::justfile::parse_justfile()`
+- Display all commands with descriptions
+- Shows 11 commands from project justfile
+
+✅ **DockersView Integration** ([main.rs:78-95](crates/rstn/src/main.rs#L78-L95)):
+- Load 6 built-in Docker services
+- Display service name, image, port, type
+- Status: "Stopped" (static, async polling planned)
+
+**Stage 2: State Management (Next - Week 2)**
+- ⏸️ Design AppState structure
+- ⏸️ Implement event channel
+- ⏸️ Add background Docker polling
+- ⏸️ Add button click handlers
+
+**Stage 3: Remaining Views (Weeks 3-4)**
+- ⏸️ ExplorerView - File tree integration
+- ⏸️ TerminalView - PTY support
+- ⏸️ ChatView - Claude API client
+- ⏸️ McpView - Server inspector
+- ⏸️ SettingsView - Config persistence
+
+**Stage 4: Polish (Week 5+)**
+- ⏸️ Performance optimization
+- ⏸️ Testing infrastructure
+- ⏸️ Documentation
+- ⏸️ Keyboard shortcuts
+
+**Progress**: 25% (2/8 views with backend data)
+
+See [PHASE_6_PROGRESS.md](PHASE_6_PROGRESS.md) for detailed status.
 
 ---
 
@@ -459,7 +492,7 @@ f43d09c docs(openspec): Apply GPUI migration spec deltas
 | Phase 3: UI Foundation | ✅ Complete | 100% |
 | Phase 4: Core Features | ✅ Complete | 100% (4/8 views: Tasks, Dockers, Explorer, Terminal) |
 | Phase 5: Advanced Features | ✅ Complete | 100% (4/8 views: Chat, Workflows, MCP, Settings) |
-| Phase 6: Polish | ⏸️ Pending | 0% |
+| Phase 6: Backend Integration | 🟡 In Progress | 25% |
 
 **Overall Progress**: 5/6 phases (83%)
 
