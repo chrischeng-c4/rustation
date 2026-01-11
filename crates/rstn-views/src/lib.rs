@@ -3,6 +3,8 @@
 //! This crate contains all feature page implementations using GPUI.
 //! Each view corresponds to a tab in the main application.
 
+#![recursion_limit = "512"]
+
 pub mod chat;
 pub mod dockers;
 pub mod explorer;
