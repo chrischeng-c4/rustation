@@ -776,6 +776,31 @@ async fn refresh_worktrees_for_path(project_path: &str) {
     }
 }
 
+/// Convert internal FileEntry to action data type
+fn convert_to_action_entry(e: app_state::FileEntry) -> actions::FileEntryData {
+    actions::FileEntryData {
+        name: e.name,
+        path: e.path,
+        kind: match e.kind {
+            app_state::FileKind::File => actions::FileKindData::File,
+            app_state::FileKind::Directory => actions::FileKindData::Directory,
+            app_state::FileKind::Symlink => actions::FileKindData::Symlink,
+        },
+        size: e.size,
+        permissions: e.permissions,
+        updated_at: e.updated_at,
+        comment_count: e.comment_count,
+        git_status: e.git_status.map(|s| match s {
+            app_state::GitFileStatus::Modified => actions::GitFileStatusData::Modified,
+            app_state::GitFileStatus::Added => actions::GitFileStatusData::Added,
+            app_state::GitFileStatus::Deleted => actions::GitFileStatusData::Deleted,
+            app_state::GitFileStatus::Untracked => actions::GitFileStatusData::Untracked,
+            app_state::GitFileStatus::Ignored => actions::GitFileStatusData::Ignored,
+            app_state::GitFileStatus::Clean => actions::GitFileStatusData::Clean,
+        }),
+    }
+}
+
 /// Handle async operations for actions that require backend calls.
 async fn handle_async_action(action: Action) -> napi::Result<()> {
     match action {
@@ -1333,6 +1358,40 @@ async fn handle_async_action(action: Action) -> napi::Result<()> {
                         context: Some(format!("ResolveConflict: failed to stop {}", conflicting_container_id)),
                     });
                 }
+            }
+        }
+
+        Action::ValidateContextFile { ref path } => {
+            let project_root = {
+                let state = get_app_state().read().await;
+                state.active_project().map(|p| p.path.clone())
+            };
+
+            if let Some(root) = project_root {
+                let abs_path = if std::path::Path::new(path).is_absolute() {
+                    path.clone()
+                } else {
+                    std::path::Path::new(&root).join(path).to_string_lossy().to_string()
+                };
+
+                // Use file_reader to validate (check existence, security, size, utf8)
+                let result = match file_reader::read_file(&abs_path, &root) {
+                    Ok(_) => actions::ValidationResultData::Valid,
+                    Err(e) => {
+                        let code = match &e {
+                            file_reader::FileReadError::NotFound(_) => "FILE_NOT_FOUND",
+                            file_reader::FileReadError::PermissionDenied(_) => "PERMISSION_DENIED",
+                            file_reader::FileReadError::SecurityViolation(_) => "SECURITY_VIOLATION",
+                            file_reader::FileReadError::FileTooLarge { .. } => "FILE_TOO_LARGE",
+                            file_reader::FileReadError::NotUtf8 => "NOT_UTF8",
+                            file_reader::FileReadError::Io(_) => "IO_ERROR",
+                        };
+                        actions::ValidationResultData::Error(format!("{}: {}", code, e))
+                    }
+                };
+
+                let mut state = get_app_state().write().await;
+                reduce(&mut state, Action::SetContextValidationResult { result });
             }
         }
 
@@ -3777,6 +3836,58 @@ Execute the plan now. Start implementing."#,
         }
 
         // File Explorer actions
+        Action::ExpandDirectory { ref path } => {
+            // Check if already in cache
+            let needs_load = {
+                let state = get_app_state().read().await;
+                state
+                    .active_project()
+                    .and_then(|p| p.active_worktree())
+                    .map(|w| !w.explorer.directory_cache.contains_key(path))
+                    .unwrap_or(false)
+            };
+
+            if needs_load {
+                let project_root = {
+                    let state = get_app_state().read().await;
+                    state.active_project().map(|p| p.path.clone())
+                };
+
+                if let Some(root) = project_root {
+                    let path_obj = std::path::Path::new(path);
+                    let root_obj = std::path::Path::new(&root);
+                    let db = get_db_manager();
+                    let project_id = persistence::get_project_id(&root);
+
+                    match explorer::read_directory(path_obj, root_obj, &project_id, db.as_deref()) {
+                        Ok(entries) => {
+                            let entry_data: Vec<actions::FileEntryData> = entries
+                                .into_iter()
+                                .map(convert_to_action_entry)
+                                .collect();
+
+                            let mut state = get_app_state().write().await;
+                            reduce(&mut state, Action::SetDirectoryCache { 
+                                path: path.clone(), 
+                                entries: entry_data 
+                            });
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to expand directory {}: {}", path, e);
+                        }
+                    }
+                }
+            }
+        }
+
+        Action::CollapseDirectory { .. } => {
+            // Pure state change handled by reducer
+        }
+        
+        Action::SetDirectoryCache { .. } => {
+             // Pure state change handled by reducer
+        }
+
         Action::ExploreDir { ref path } => {
             let project_root = {
                 let state = get_app_state().read().await;
@@ -3784,38 +3895,16 @@ Execute the plan now. Start implementing."#,
             };
 
             if let Some(root) = project_root {
-                let path_buf = std::path::PathBuf::from(path);
-                let root_buf = std::path::PathBuf::from(&root);
-                let db_mgr = get_db_manager();
+                let path_obj = std::path::Path::new(path);
+                let root_obj = std::path::Path::new(&root);
+                let db = get_db_manager();
                 let project_id = persistence::get_project_id(&root);
 
-                match explorer::read_directory(&path_buf, &root_buf, &project_id, db_mgr.as_deref())
-                {
+                match explorer::read_directory(path_obj, root_obj, &project_id, db.as_deref()) {
                     Ok(entries) => {
-                        // Convert back to Action data types for SetExplorerEntries
                         let entry_data: Vec<actions::FileEntryData> = entries
                             .into_iter()
-                            .map(|e| actions::FileEntryData {
-                                name: e.name,
-                                path: e.path,
-                                kind: match e.kind {
-                                    app_state::FileKind::File => actions::FileKindData::File,
-                                    app_state::FileKind::Directory => actions::FileKindData::Directory,
-                                    app_state::FileKind::Symlink => actions::FileKindData::Symlink,
-                                },
-                                size: e.size,
-                                permissions: e.permissions,
-                                updated_at: e.updated_at,
-                                comment_count: e.comment_count,
-                                git_status: e.git_status.map(|s| match s {
-                                    app_state::GitFileStatus::Modified => actions::GitFileStatusData::Modified,
-                                    app_state::GitFileStatus::Added => actions::GitFileStatusData::Added,
-                                    app_state::GitFileStatus::Deleted => actions::GitFileStatusData::Deleted,
-                                    app_state::GitFileStatus::Untracked => actions::GitFileStatusData::Untracked,
-                                    app_state::GitFileStatus::Ignored => actions::GitFileStatusData::Ignored,
-                                    app_state::GitFileStatus::Clean => actions::GitFileStatusData::Clean,
-                                }),
-                            })
+                            .map(convert_to_action_entry)
                             .collect();
 
                         let mut state = get_app_state().write().await;
@@ -3966,6 +4055,8 @@ Execute the plan now. Start implementing."#,
             // TODO: Add terminal manager handling
             // These will be handled by a global terminal manager
         }
+
+        _ => {}
     }
 
     Ok(())

@@ -7,7 +7,7 @@
 //! - Debugging (time-travel, bug reproduction)
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /// Main application state - single source of truth
@@ -577,10 +577,19 @@ pub struct FileTab {
 /// File explorer state for a worktree
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FileExplorerState {
-    /// Currently viewed absolute path
+    /// Currently viewed absolute path (root of the tree view)
     pub current_path: String,
-    /// List of entries in the current directory
+    /// List of entries in the current directory (root level)
     pub entries: Vec<FileEntry>,
+    /// Cache of directory contents (path -> entries) for expanded subdirectories
+    #[serde(default)]
+    pub directory_cache: HashMap<String, Vec<FileEntry>>,
+    /// Set of expanded directory paths in the tree view
+    #[serde(default)]
+    pub expanded_paths: HashSet<String>,
+    /// Set of directory paths currently being loaded
+    #[serde(default)]
+    pub loading_paths: HashSet<String>,
     /// Currently selected path (if any) - DEPRECATED: use active_tab_path instead
     pub selected_path: Option<String>,
     /// Comments for the currently selected file
@@ -609,6 +618,9 @@ impl Default for FileExplorerState {
         Self {
             current_path: String::new(),
             entries: Vec::new(),
+            directory_cache: HashMap::new(),
+            expanded_paths: HashSet::new(),
+            loading_paths: HashSet::new(),
             selected_path: None,
             selected_comments: Vec::new(),
             sort_config: SortConfig::default(),
@@ -1120,6 +1132,15 @@ impl From<crate::actions::ContextFileData> for ContextFile {
     }
 }
 
+impl From<crate::actions::ValidationResultData> for ValidationResult {
+    fn from(data: crate::actions::ValidationResultData) -> Self {
+        match data {
+            crate::actions::ValidationResultData::Valid => ValidationResult::Valid,
+            crate::actions::ValidationResultData::Error(msg) => ValidationResult::Error(msg),
+        }
+    }
+}
+
 impl From<crate::actions::ConstitutionModeData> for ConstitutionMode {
     fn from(data: crate::actions::ConstitutionModeData) -> Self {
         match data {
@@ -1381,8 +1402,19 @@ pub struct ChangesState {
     /// Currently selected change for detail view
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_change_id: Option<String>,
+    /// Result of the last context file validation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validation_result: Option<ValidationResult>,
     /// Whether changes are being loaded
     pub is_loading: bool,
+}
+
+/// Result of context file validation
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "status", content = "message")]
+pub enum ValidationResult {
+    Valid,
+    Error(String),
 }
 
 /// A single Change (feature, bugfix, refactor, etc.)

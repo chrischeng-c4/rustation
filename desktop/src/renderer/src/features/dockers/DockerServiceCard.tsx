@@ -55,8 +55,6 @@ interface DockerServiceCardProps {
   onToggle?: (id: string) => void
   onRestart?: (id: string) => void
   onViewLogs?: (id: string) => void
-  onCreateDb?: (serviceId: string, dbName: string) => Promise<string>
-  onCreateVhost?: (serviceId: string, vhostName: string) => Promise<string>
 }
 
 export function DockerServiceCard({
@@ -66,8 +64,6 @@ export function DockerServiceCard({
   onToggle,
   onRestart,
   onViewLogs,
-  onCreateDb,
-  onCreateVhost,
 }: DockerServiceCardProps) {
   const [copied, setCopied] = useState(false)
   const isRunning = service.status === 'running'
@@ -195,7 +191,6 @@ export function DockerServiceCard({
             serviceId={service.id}
             serviceName={service.name}
             disabled={!isRunning}
-            onCreateDb={onCreateDb}
           />
         )}
 
@@ -204,7 +199,6 @@ export function DockerServiceCard({
           <AddVhostDialog
             serviceId={service.id}
             disabled={!isRunning}
-            onCreateVhost={onCreateVhost}
           />
         )}
 

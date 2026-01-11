@@ -132,16 +132,6 @@ export function DockersPage() {
     await dispatch({ type: 'RefreshDockerServices' })
   }, [dispatch])
 
-  const handleCreateDb = useCallback(async (serviceId: string, dbName: string): Promise<string> => {
-    await dispatch({ type: 'CreateDatabase', payload: { service_id: serviceId, db_name: dbName } })
-    return "" // Result will be in state.docker.last_connection_string
-  }, [dispatch])
-
-  const handleCreateVhost = useCallback(async (serviceId: string, vhostName: string): Promise<string> => {
-    await dispatch({ type: 'CreateVhost', payload: { service_id: serviceId, vhost_name: vhostName } })
-    return "" // Result will be in state.docker.last_connection_string
-  }, [dispatch])
-
   // Port conflict resolution handlers
   const handleResolveWithPort = useCallback(async (serviceId: string, port: number) => {
     await dispatch({
@@ -283,8 +273,6 @@ export function DockersPage() {
                             onToggle={handleToggle}
                             onRestart={handleRestart}
                             onViewLogs={handleViewLogs}
-                            onCreateDb={handleCreateDb}
-                            onCreateVhost={handleCreateVhost}
                           />
                         ))}
                       </Stack>

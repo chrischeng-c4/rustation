@@ -1,13 +1,24 @@
 use crate::actions::{Action, ChatRoleData};
 use crate::app_state::AppState;
+use uuid::Uuid;
 
 pub fn reduce(state: &mut AppState, action: Action) {
     match action {
-        Action::SendChatMessage { .. } => {
+        Action::SendChatMessage { text } => {
             if let Some(project) = state.active_project_mut() {
                 if let Some(worktree) = project.active_worktree_mut() {
                     worktree.chat.is_typing = true;
                     worktree.chat.error = None;
+
+                    // Add user message
+                    let user_msg = crate::app_state::ChatMessage {
+                        id: Uuid::new_v4().to_string(),
+                        role: crate::app_state::ChatRole::User,
+                        content: text,
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        is_streaming: false,
+                    };
+                    worktree.chat.add_message(user_msg);
                 }
             }
         }

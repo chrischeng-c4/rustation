@@ -283,6 +283,184 @@ mod tests {
     }
 
     // ========================================================================
+    // Chat SendChatMessage Flow Tests (Task 5.2)
+    // ========================================================================
+    #[test]
+    fn test_send_chat_message_creates_user_message() {
+        let mut state = state_with_project();
+
+        // Initially, no messages
+        assert!(active_worktree(&state).chat.messages.is_empty());
+        assert!(!active_worktree(&state).chat.is_typing);
+
+        // Send a message
+        reduce(&mut state, Action::SendChatMessage { text: "What is Rust?".to_string() });
+
+        // Should immediately add user message to state
+        assert_eq!(active_worktree(&state).chat.messages.len(), 1);
+        let user_msg = &active_worktree(&state).chat.messages[0];
+        assert_eq!(user_msg.content, "What is Rust?");
+        assert_eq!(user_msg.role, crate::app_state::ChatRole::User);
+        assert!(!user_msg.is_streaming);
+
+        // Should set is_typing to true
+        assert!(active_worktree(&state).chat.is_typing);
+
+        // Should clear any previous errors
+        assert!(active_worktree(&state).chat.error.is_none());
+    }
+
+    #[test]
+    fn test_send_chat_message_generates_unique_ids() {
+        let mut state = state_with_project();
+
+        // Send two messages
+        reduce(&mut state, Action::SendChatMessage { text: "First message".to_string() });
+        reduce(&mut state, Action::SendChatMessage { text: "Second message".to_string() });
+
+        // Should have 2 messages with unique IDs
+        assert_eq!(active_worktree(&state).chat.messages.len(), 2);
+        let id1 = &active_worktree(&state).chat.messages[0].id;
+        let id2 = &active_worktree(&state).chat.messages[1].id;
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn test_send_chat_message_includes_timestamp() {
+        let mut state = state_with_project();
+
+        // Send a message
+        reduce(&mut state, Action::SendChatMessage { text: "Test".to_string() });
+
+        // Message should have a valid RFC3339 timestamp
+        let user_msg = &active_worktree(&state).chat.messages[0];
+        assert!(!user_msg.timestamp.is_empty());
+        // Verify it's a valid RFC3339 timestamp
+        chrono::DateTime::parse_from_rfc3339(&user_msg.timestamp).expect("Invalid timestamp");
+    }
+
+    #[test]
+    fn test_send_chat_message_clears_previous_error() {
+        let mut state = state_with_project();
+
+        // Set an error
+        reduce(&mut state, Action::SetChatError { error: "Previous error".to_string() });
+        assert!(active_worktree(&state).chat.error.is_some());
+
+        // Send a message
+        reduce(&mut state, Action::SendChatMessage { text: "New message".to_string() });
+
+        // Error should be cleared
+        assert!(active_worktree(&state).chat.error.is_none());
+    }
+
+    #[test]
+    fn test_send_chat_message_preserves_existing_messages() {
+        let mut state = state_with_project();
+
+        // Add an existing message manually
+        {
+            let mut state_write = state.clone();
+            if let Some(project) = state_write.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.chat.messages.push(crate::app_state::ChatMessage {
+                        id: "existing-1".to_string(),
+                        role: crate::app_state::ChatRole::User,
+                        content: "Previous message".to_string(),
+                        timestamp: "2024-01-01T00:00:00Z".to_string(),
+                        is_streaming: false,
+                    });
+                }
+            }
+            state = state_write;
+        }
+
+        assert_eq!(active_worktree(&state).chat.messages.len(), 1);
+
+        // Send a new message
+        reduce(&mut state, Action::SendChatMessage { text: "New message".to_string() });
+
+        // Should have 2 messages
+        assert_eq!(active_worktree(&state).chat.messages.len(), 2);
+        assert_eq!(active_worktree(&state).chat.messages[0].content, "Previous message");
+        assert_eq!(active_worktree(&state).chat.messages[1].content, "New message");
+    }
+
+    #[test]
+    fn test_send_chat_message_full_flow_with_response() {
+        let mut state = state_with_project();
+
+        // 1. User sends message
+        reduce(&mut state, Action::SendChatMessage { text: "Explain Rust ownership".to_string() });
+
+        assert_eq!(active_worktree(&state).chat.messages.len(), 1);
+        assert!(active_worktree(&state).chat.is_typing);
+
+        // 2. Backend starts streaming assistant response
+        let asst_msg = crate::actions::ChatMessageData {
+            id: "asst-1".to_string(),
+            role: crate::actions::ChatRoleData::Assistant,
+            content: "".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            is_streaming: true,
+        };
+        reduce(&mut state, Action::AddChatMessage { message: asst_msg });
+
+        assert_eq!(active_worktree(&state).chat.messages.len(), 2);
+        assert!(active_worktree(&state).chat.messages[1].is_streaming);
+
+        // 3. Append content to assistant message
+        reduce(&mut state, Action::AppendChatContent { content: "Rust ownership ".to_string() });
+        reduce(&mut state, Action::AppendChatContent { content: "is a unique feature...".to_string() });
+
+        assert_eq!(active_worktree(&state).chat.messages[1].content, "Rust ownership is a unique feature...");
+
+        // 4. Finish streaming
+        reduce(&mut state, Action::SetChatTyping { is_typing: false });
+
+        assert!(!active_worktree(&state).chat.is_typing);
+        assert!(!active_worktree(&state).chat.messages[1].is_streaming);
+    }
+
+    #[test]
+    fn test_send_chat_message_error_handling() {
+        let mut state = state_with_project();
+
+        // Send message
+        reduce(&mut state, Action::SendChatMessage { text: "Test".to_string() });
+        assert!(active_worktree(&state).chat.is_typing);
+
+        // Simulate error
+        reduce(&mut state, Action::SetChatError { error: "Network error".to_string() });
+
+        // Error should be set and typing should stop
+        assert_eq!(active_worktree(&state).chat.error, Some("Network error".to_string()));
+        assert!(!active_worktree(&state).chat.is_typing);
+
+        // Clear error
+        reduce(&mut state, Action::ClearChatError);
+        assert!(active_worktree(&state).chat.error.is_none());
+    }
+
+    #[test]
+    fn test_send_chat_message_state_serialization() {
+        let mut state = state_with_project();
+
+        // Send a message
+        reduce(&mut state, Action::SendChatMessage { text: "Serialization test".to_string() });
+
+        // Serialize and deserialize
+        let json = serde_json::to_string(&state).unwrap();
+        let loaded: AppState = serde_json::from_str(&json).unwrap();
+
+        // Verify message persisted
+        let loaded_chat = &loaded.active_project().unwrap().active_worktree().unwrap().chat;
+        assert_eq!(loaded_chat.messages.len(), 1);
+        assert_eq!(loaded_chat.messages[0].content, "Serialization test");
+        assert_eq!(loaded_chat.messages[0].role, crate::app_state::ChatRole::User);
+    }
+
+    // ========================================================================
     // Docker Tests
     // ========================================================================
     #[test]
@@ -364,15 +542,189 @@ mod tests {
         assert_eq!(active_worktree(&state).explorer.selected_path, Some("/test/dir/file.txt".to_string()));
 
         // Sort/Filter
-        reduce(&mut state, Action::SetExplorerSort { 
-            field: crate::actions::SortFieldData::Size, 
-            direction: crate::actions::SortDirectionData::Desc 
+        reduce(&mut state, Action::SetExplorerSort {
+            field: crate::actions::SortFieldData::Size,
+            direction: crate::actions::SortDirectionData::Desc
         });
         assert_eq!(active_worktree(&state).explorer.sort_config.field, crate::app_state::SortField::Size);
         assert_eq!(active_worktree(&state).explorer.sort_config.direction, crate::app_state::SortDirection::Desc);
 
         reduce(&mut state, Action::SetExplorerFilter { query: "foo".to_string() });
         assert_eq!(active_worktree(&state).explorer.filter_query, "foo");
+    }
+
+    // ========================================================================
+    // File Explorer Directory Expansion Tests (Task 5.1)
+    // ========================================================================
+    #[test]
+    fn test_explorer_expand_directory() {
+        let mut state = state_with_project();
+        let dir_path = "/test/project/src".to_string();
+
+        // Initially, expanded_paths should be empty
+        assert!(active_worktree(&state).explorer.expanded_paths.is_empty());
+        assert!(active_worktree(&state).explorer.directory_cache.is_empty());
+
+        // Expand directory (not in cache)
+        reduce(&mut state, Action::ExpandDirectory { path: dir_path.clone() });
+
+        // Path should be in expanded_paths
+        assert!(active_worktree(&state).explorer.expanded_paths.contains(&dir_path));
+        // Path should be in loading_paths (not cached)
+        assert!(active_worktree(&state).explorer.loading_paths.contains(&dir_path));
+        // Cache should still be empty
+        assert!(active_worktree(&state).explorer.directory_cache.is_empty());
+
+        // Simulate loading directory contents
+        let entries = vec![
+            crate::actions::FileEntryData {
+                name: "lib.rs".to_string(),
+                path: "/test/project/src/lib.rs".to_string(),
+                kind: crate::actions::FileKindData::File,
+                size: 200,
+                permissions: "rw-".to_string(),
+                updated_at: "now".to_string(),
+                comment_count: 0,
+                git_status: None,
+            },
+            crate::actions::FileEntryData {
+                name: "main.rs".to_string(),
+                path: "/test/project/src/main.rs".to_string(),
+                kind: crate::actions::FileKindData::File,
+                size: 150,
+                permissions: "rw-".to_string(),
+                updated_at: "now".to_string(),
+                comment_count: 0,
+                git_status: None,
+            },
+        ];
+        reduce(&mut state, Action::SetDirectoryCache { path: dir_path.clone(), entries });
+
+        // Path should be in cache now
+        assert_eq!(active_worktree(&state).explorer.directory_cache.get(&dir_path).unwrap().len(), 2);
+        // Path should NOT be in loading_paths anymore
+        assert!(!active_worktree(&state).explorer.loading_paths.contains(&dir_path));
+        // Path should still be in expanded_paths
+        assert!(active_worktree(&state).explorer.expanded_paths.contains(&dir_path));
+    }
+
+    #[test]
+    fn test_explorer_expand_already_cached_directory() {
+        let mut state = state_with_project();
+        let dir_path = "/test/project/docs".to_string();
+
+        // Manually add to cache (simulating previous expansion)
+        {
+            let mut state_write = state.clone();
+            if let Some(project) = state_write.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.explorer.directory_cache.insert(
+                        dir_path.clone(),
+                        vec![crate::app_state::FileEntry {
+                            name: "README.md".to_string(),
+                            path: "/test/project/docs/README.md".to_string(),
+                            kind: crate::app_state::FileKind::File,
+                            size: 100,
+                            permissions: "rw-".to_string(),
+                            updated_at: "now".to_string(),
+                            comment_count: 0,
+                            git_status: None,
+                        }],
+                    );
+                }
+            }
+            state = state_write;
+        }
+
+        // Expand directory (already in cache)
+        reduce(&mut state, Action::ExpandDirectory { path: dir_path.clone() });
+
+        // Path should be in expanded_paths
+        assert!(active_worktree(&state).explorer.expanded_paths.contains(&dir_path));
+        // Path should NOT be in loading_paths (already cached)
+        assert!(!active_worktree(&state).explorer.loading_paths.contains(&dir_path));
+        // Cache should still have the entry
+        assert_eq!(active_worktree(&state).explorer.directory_cache.get(&dir_path).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_explorer_collapse_directory() {
+        let mut state = state_with_project();
+        let dir_path = "/test/project/tests".to_string();
+
+        // First, expand the directory
+        reduce(&mut state, Action::ExpandDirectory { path: dir_path.clone() });
+        assert!(active_worktree(&state).explorer.expanded_paths.contains(&dir_path));
+
+        // Now collapse it
+        reduce(&mut state, Action::CollapseDirectory { path: dir_path.clone() });
+
+        // Path should NOT be in expanded_paths anymore
+        assert!(!active_worktree(&state).explorer.expanded_paths.contains(&dir_path));
+        // Cache should remain (collapse doesn't clear cache)
+        // Note: Current implementation doesn't clear cache on collapse
+    }
+
+    #[test]
+    fn test_explorer_expand_collapse_multiple_directories() {
+        let mut state = state_with_project();
+        let dir1 = "/test/project/src".to_string();
+        let dir2 = "/test/project/tests".to_string();
+        let dir3 = "/test/project/docs".to_string();
+
+        // Expand multiple directories
+        reduce(&mut state, Action::ExpandDirectory { path: dir1.clone() });
+        reduce(&mut state, Action::ExpandDirectory { path: dir2.clone() });
+        reduce(&mut state, Action::ExpandDirectory { path: dir3.clone() });
+
+        assert_eq!(active_worktree(&state).explorer.expanded_paths.len(), 3);
+        assert!(active_worktree(&state).explorer.expanded_paths.contains(&dir1));
+        assert!(active_worktree(&state).explorer.expanded_paths.contains(&dir2));
+        assert!(active_worktree(&state).explorer.expanded_paths.contains(&dir3));
+
+        // Collapse one directory
+        reduce(&mut state, Action::CollapseDirectory { path: dir2.clone() });
+
+        assert_eq!(active_worktree(&state).explorer.expanded_paths.len(), 2);
+        assert!(active_worktree(&state).explorer.expanded_paths.contains(&dir1));
+        assert!(!active_worktree(&state).explorer.expanded_paths.contains(&dir2));
+        assert!(active_worktree(&state).explorer.expanded_paths.contains(&dir3));
+
+        // Collapse remaining directories
+        reduce(&mut state, Action::CollapseDirectory { path: dir1.clone() });
+        reduce(&mut state, Action::CollapseDirectory { path: dir3.clone() });
+
+        assert!(active_worktree(&state).explorer.expanded_paths.is_empty());
+    }
+
+    #[test]
+    fn test_explorer_state_serialization_with_expansion() {
+        let mut state = state_with_project();
+        let dir_path = "/test/project/src".to_string();
+
+        // Expand directory and populate cache
+        reduce(&mut state, Action::ExpandDirectory { path: dir_path.clone() });
+        let entries = vec![crate::actions::FileEntryData {
+            name: "lib.rs".to_string(),
+            path: "/test/project/src/lib.rs".to_string(),
+            kind: crate::actions::FileKindData::File,
+            size: 100,
+            permissions: "rw-".to_string(),
+            updated_at: "now".to_string(),
+            comment_count: 0,
+            git_status: None,
+        }];
+        reduce(&mut state, Action::SetDirectoryCache { path: dir_path.clone(), entries });
+
+        // Serialize and deserialize
+        let json = serde_json::to_string(&state).unwrap();
+        let loaded: AppState = serde_json::from_str(&json).unwrap();
+
+        // Verify expansion state persisted
+        let loaded_explorer = &loaded.active_project().unwrap().active_worktree().unwrap().explorer;
+        assert!(loaded_explorer.expanded_paths.contains(&dir_path));
+        assert_eq!(loaded_explorer.directory_cache.get(&dir_path).unwrap().len(), 1);
+        assert_eq!(loaded_explorer.directory_cache.get(&dir_path).unwrap()[0].name, "lib.rs");
     }
 
     // ========================================================================

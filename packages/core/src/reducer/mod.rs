@@ -183,7 +183,10 @@ pub fn reduce(state: &mut AppState, action: Action) {
         | Action::OpenFileTab { .. }
         | Action::PinTab { .. }
         | Action::CloseTab { .. }
-        | Action::SwitchTab { .. } => {
+        | Action::SwitchTab { .. }
+        | Action::ExpandDirectory { .. }
+        | Action::CollapseDirectory { .. }
+        | Action::SetDirectoryCache { .. } => {
             explorer::reduce(state, action);
         }
 
@@ -246,7 +249,9 @@ pub fn reduce(state: &mut AppState, action: Action) {
         | Action::ClearContextFiles { .. }
         | Action::StartProposalReview { .. }
         | Action::StartPlanReview { .. }
-        | Action::SetChangeArchived { .. } => {
+        | Action::SetChangeArchived { .. }
+        | Action::ValidateContextFile { .. }
+        | Action::SetContextValidationResult { .. } => {
             changes::reduce(state, action);
         }
 

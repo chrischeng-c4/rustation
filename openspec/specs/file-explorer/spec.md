@@ -47,8 +47,8 @@ The system SHALL display file entries with Git status indicators and metadata.
 - **WHEN** user clicks column header
 - **THEN** sort entries by that column (name, size, date)
 
-### Requirement: File Selection
-The system SHALL support single file selection with preview.
+### Requirement: File Selection State
+The system SHALL track the list of open tabs and the currently active tab.
 
 #### Scenario: Select file
 - **WHEN** user clicks on a file
@@ -57,6 +57,30 @@ The system SHALL support single file selection with preview.
 #### Scenario: Select different file
 - **WHEN** user clicks on another file while one is selected
 - **THEN** update selection and load new preview
+
+#### Scenario: Active tab state
+- **WHEN** a tab is selected
+- **THEN** the application state updates `active_tab_path`
+- **AND** the Detail Panel renders the content of that file
+
+### Requirement: File Preview Tabs
+The system SHALL provide a tabbed interface for viewing files in the Detail Panel.
+
+#### Scenario: Single click opens preview
+- **WHEN** the user single-clicks a file in the file tree
+- **THEN** it opens in a "Preview Tab" (italicized title)
+- **AND** if a Preview Tab already exists, it is replaced by the new file
+- **AND** the new tab becomes active
+
+#### Scenario: Double click pins tab
+- **WHEN** the user double-clicks a file OR double-clicks an existing Preview Tab
+- **THEN** the tab is converted to a "Pinned Tab" (normal title)
+- **AND** it is no longer replaced by subsequent single-clicks
+
+#### Scenario: Tab management
+- **WHEN** multiple tabs are open
+- **THEN** the user can switch between them by clicking the tab header
+- **AND** the user can close specific tabs via a close button
 
 ### Requirement: File Operations
 The system SHALL support creating, renaming, and deleting files.
@@ -115,15 +139,23 @@ The system SHALL provide multi-tab detail view for selected files.
 - **THEN** display threaded discussion UI for file-specific comments
 
 ### Requirement: File Comments
-The system SHALL support adding and viewing comments on files, stored in local SQLite.
+The system SHALL support adding and viewing comments on files, stored in local SQLite. UI MUST update comment count and display new comments immediately after submission.
 
-#### Scenario: Add comment
-- **WHEN** user enters comment text and clicks Submit
-- **THEN** persist comment to `.rstn/rstn.db` linked to file path
+#### Scenario: Add file comment
+- **WHEN** user enters comment text in the Comments tab and clicks Submit
+- **THEN** persist comment to `.rstn/rstn.db` linked to file path (without line number)
+- **AND** update UI to show new comment
+
+#### Scenario: Add inline comment
+- **WHEN** user clicks on a line number in the Preview tab and submits text
+- **THEN** persist comment to `.rstn/rstn.db` linked to file path AND line number
+- **AND** update UI to show new comment
 
 #### Scenario: View comments
 - **WHEN** file has comments
-- **THEN** display comment count badge in file list and show comments in detail panel
+- **THEN** display comment count badge in file list
+- **AND** show all comments in Comments tab (threaded)
+- **AND** show inline comments in Preview tab (embedded in code)
 
 ### Requirement: Breadcrumb Navigation
 The system SHALL display clickable path breadcrumbs for current directory.
@@ -131,6 +163,24 @@ The system SHALL display clickable path breadcrumbs for current directory.
 #### Scenario: Click breadcrumb segment
 - **WHEN** user clicks on path segment in breadcrumbs
 - **THEN** navigate to that directory
+
+### Requirement: Session Restoration
+The system SHALL restore explorer state (path, selected file, tabs) on app restart.
+
+#### Scenario: Restore on app restart
+- **WHEN** app restarts
+- **THEN** restore last viewed directory, selected file path, and open file tabs from persisted state
+
+### Requirement: Balanced Layout
+The system SHALL provide adjustable sidebar/detail panel layout with persistent width preferences.
+
+#### Scenario: Adjust panel width
+- **WHEN** user drags resize handle between panels
+- **THEN** update panel widths and persist preference to state
+
+#### Scenario: Restore panel layout
+- **WHEN** app loads or switches projects
+- **THEN** restore panel widths from persisted state
 
 ### Requirement: Git Integration
 The system SHALL integrate with Git to show file status.

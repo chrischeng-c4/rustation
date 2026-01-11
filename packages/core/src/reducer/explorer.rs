@@ -185,6 +185,44 @@ pub fn reduce(state: &mut AppState, action: Action) {
             }
         }
 
+        Action::ExpandDirectory { path } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.explorer.expanded_paths.insert(path.clone());
+                    if !worktree.explorer.directory_cache.contains_key(&path) {
+                        worktree.explorer.loading_paths.insert(path);
+                    }
+                }
+            }
+        }
+
+        Action::CollapseDirectory { path } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.explorer.expanded_paths.remove(&path);
+                }
+            }
+        }
+
+        Action::SetDirectoryCache { path, entries } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.explorer.directory_cache.insert(
+                        path.clone(), 
+                        entries.into_iter().map(|e| e.into()).collect()
+                    );
+                    worktree.explorer.loading_paths.remove(&path);
+                }
+            }
+        }
+
+        Action::CreateFile { .. }
+        | Action::RenameFile { .. }
+        | Action::DeleteFile { .. }
+        | Action::RevealInOS { .. }
+        | Action::AddFileComment { .. }
+        | Action::DeleteFileComment { .. } => {}
+
         _ => {}
     }
 }

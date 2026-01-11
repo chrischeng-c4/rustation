@@ -22,13 +22,11 @@ import { useDockersState } from '@/hooks/useAppState'
 interface AddVhostDialogProps {
   serviceId: string
   disabled?: boolean
-  onCreateVhost?: (serviceId: string, vhostName: string) => Promise<string>
 }
 
 export function AddVhostDialog({
   serviceId,
   disabled,
-  onCreateVhost,
 }: AddVhostDialogProps) {
   const { dockers, dispatch } = useDockersState()
   const [open, setOpen] = useState(false)
@@ -61,13 +59,10 @@ export function AddVhostDialog({
     setIsCreating(true)
 
     try {
-      if (onCreateVhost) {
-        // This will now trigger a dispatch which updates global state
-        await onCreateVhost(serviceId, vhostName)
-      } else {
-        setConnectionString(`amqp://guest:guest@localhost:5672/${vhostName}`)
-        setIsCreating(false)
-      }
+      await dispatch({
+        type: 'CreateVhost',
+        payload: { service_id: serviceId, vhost_name: vhostName }
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create vhost')
       setIsCreating(false)

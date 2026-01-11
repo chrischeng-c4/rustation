@@ -49,10 +49,14 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
-  await electronApp.close()
+  if (electronApp) {
+    await electronApp.close()
+  }
 
   try {
-    fs.rmSync(tempDir, { recursive: true, force: true })
+    if (tempDir) {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    }
   } catch {
     // Ignore cleanup errors
   }
@@ -147,3 +151,8 @@ test.describe('File Selection', () => {
     // Would test detail panel updates when file is selected
   })
 })
+
+// NOTE: Directory expansion E2E tests have been moved to explorer-expansion.spec.ts
+// See that file for:
+// - Unit test coverage documentation (passing test)
+// - Future E2E test plans when infrastructure is ready

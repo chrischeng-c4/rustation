@@ -24,27 +24,6 @@ interface BranchInfo {
   isCurrent: boolean
 }
 
-// Explorer file entry type
-interface ExplorerFileEntry {
-  name: string
-  path: string
-  kind: string // "file" | "directory" | "symlink"
-  size: number
-  permissions: string
-  updated_at: string
-  comment_count: number
-  git_status: string | null
-}
-
-// Explorer API for file tree operations
-interface ExplorerApi {
-  /**
-   * List files in a directory without mutating state.
-   * Used for tree view expansion.
-   */
-  listDirectory(path: string, projectRoot: string): Promise<ExplorerFileEntry[]>
-}
-
 // Dialog API for native dialogs
 interface DialogApi {
   /**
@@ -90,7 +69,6 @@ declare global {
   interface Window {
     electron: ElectronAPI
     stateApi: StateApi
-    explorerApi: ExplorerApi
     dialogApi: DialogApi
     screenshotApi: ScreenshotApi
   }

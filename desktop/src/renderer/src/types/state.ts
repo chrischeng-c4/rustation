@@ -76,6 +76,9 @@ export interface FileTab {
 export interface FileExplorerState {
   current_path: string
   entries: FileEntry[]
+  directory_cache: Record<string, FileEntry[]>
+  expanded_paths: string[]
+  loading_paths: string[]
   selected_path?: string
   selected_comments: Comment[]
   sort_config: SortConfig
@@ -171,9 +174,14 @@ export interface Change {
   context_files: string[]
 }
 
+export type ValidationResult =
+  | { status: 'Valid' }
+  | { status: 'Error'; message: string }
+
 export interface ChangesState {
   changes: Change[]
   selected_change_id: string | null
+  validation_result?: ValidationResult
   is_loading: boolean
 }
 
@@ -1027,6 +1035,16 @@ export interface ClearContextFilesAction {
   change_id: string
 }
 
+export interface ValidateContextFileAction {
+  type: 'ValidateContextFile'
+  payload: { path: string }
+}
+
+export interface SetContextValidationResultAction {
+  type: 'SetContextValidationResult'
+  payload: { result: ValidationResultData }
+}
+
 // ReviewGate Workflow Integration Actions (CESDD Phase B5)
 export interface StartProposalReviewAction {
   type: 'StartProposalReview'
@@ -1150,6 +1168,10 @@ export interface ContextFileData {
   last_updated: string
   token_estimate: number
 }
+
+export type ValidationResultData =
+  | { status: 'Valid' }
+  | { status: 'Error'; message: string }
 
 // Docker Actions
 export interface CheckDockerAvailabilityAction {
@@ -1678,6 +1700,24 @@ export interface SetExplorerFilterAction {
   payload: { query: string }
 }
 
+export interface ExpandDirectoryAction {
+  type: 'ExpandDirectory'
+  payload: { path: string }
+}
+
+export interface CollapseDirectoryAction {
+  type: 'CollapseDirectory'
+  payload: { path: string }
+}
+
+export interface SetDirectoryCacheAction {
+  type: 'SetDirectoryCache'
+  payload: {
+    path: string
+    entries: FileEntry[]
+  }
+}
+
 // Tab Management Actions (VSCode-style preview tabs)
 export interface OpenFileTabAction {
   type: 'OpenFileTab'
@@ -1781,6 +1821,8 @@ export type Action =
   | AddContextFileAction
   | RemoveContextFileAction
   | ClearContextFilesAction
+  | ValidateContextFileAction
+  | SetContextValidationResultAction
   | StartProposalReviewAction
   | StartPlanReviewAction
   | LoadContextAction
@@ -1879,6 +1921,9 @@ export type Action =
   | AddFileCommentAction
   | SetExplorerSortAction
   | SetExplorerFilterAction
+  | ExpandDirectoryAction
+  | CollapseDirectoryAction
+  | SetDirectoryCacheAction
   | OpenFileTabAction
   | PinTabAction
   | CloseTabAction

@@ -24,14 +24,12 @@ interface AddDbDialogProps {
   serviceId: string
   serviceName: string
   disabled?: boolean
-  onCreateDb?: (serviceId: string, dbName: string) => Promise<string>
 }
 
 export function AddDbDialog({
   serviceId,
   serviceName,
   disabled,
-  onCreateDb,
 }: AddDbDialogProps) {
   const { dockers, dispatch } = useDockersState()
   const [open, setOpen] = useState(false)
@@ -64,18 +62,10 @@ export function AddDbDialog({
     setIsCreating(true)
 
     try {
-      if (onCreateDb) {
-        // This will now trigger a dispatch which updates global state
-        await onCreateDb(serviceId, dbName)
-      } else {
-        const mockConnStr = serviceId.includes('postgres')
-          ? `postgresql://postgres:postgres@localhost:5432/${dbName}`
-          : serviceId.includes('mysql')
-          ? `mysql://root:mysql@localhost:3306/${dbName}`
-          : `mongodb://localhost:27017/${dbName}`
-        setConnectionString(mockConnStr)
-        setIsCreating(false)
-      }
+      await dispatch({
+        type: 'CreateDatabase',
+        payload: { service_id: serviceId, db_name: dbName }
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create database')
       setIsCreating(false)

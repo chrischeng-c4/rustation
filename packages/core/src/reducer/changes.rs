@@ -220,6 +220,18 @@ pub fn reduce(state: &mut AppState, action: Action) {
             }
         }
 
+        Action::SetContextValidationResult { result } => {
+            if let Some(project) = state.active_project_mut() {
+                if let Some(worktree) = project.active_worktree_mut() {
+                    worktree.changes.validation_result = Some(result.into());
+                }
+            }
+        }
+
+        Action::ValidateContextFile { .. } => {
+            // Async action, handled in lib.rs
+        }
+
         Action::AddContextFile { change_id, path } => {
             if let Some(project) = state.active_project_mut() {
                 if let Some(worktree) = project.active_worktree_mut() {

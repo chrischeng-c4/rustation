@@ -30,23 +30,6 @@ export function ChatPage() {
     const text = inputValue.trim()
     setInputValue('')
 
-    // Generate a unique ID for the user message
-    const messageId = `user-${Date.now()}`
-    const timestamp = new Date().toISOString()
-
-    // Add user message immediately
-    await dispatch({
-      type: 'AddChatMessage',
-      payload: {
-        message: {
-          id: messageId,
-          role: 'user',
-          content: text,
-          timestamp,
-        },
-      },
-    })
-
     // Trigger sending to Claude (this will set is_typing and handle response)
     await dispatch({
       type: 'SendChatMessage',

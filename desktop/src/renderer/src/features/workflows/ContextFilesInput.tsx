@@ -5,7 +5,6 @@ import {
   Close as XIcon,
   Visibility as EyeIcon,
   Code as FileCodeIcon,
-  ErrorOutline as AlertCircleIcon
 } from '@mui/icons-material'
 import {
   Button,
@@ -23,7 +22,7 @@ import {
   Tooltip
 } from '@mui/material'
 import { SourceCodeViewer } from '@/components/shared/SourceCodeViewer'
-import { useAppState } from '@/hooks/useAppState'
+import { useActiveWorktree } from '@/hooks/useAppState'
 
 interface ContextFilesInputProps {
   changeId: string
@@ -39,33 +38,35 @@ export function ContextFilesInput({
   files,
   projectRoot,
 }: ContextFilesInputProps): React.ReactElement {
-  const { state: appState, dispatch } = useAppState()
+  const { worktree, dispatch } = useActiveWorktree()
   const [inputValue, setInputValue] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isValidating, setIsValidating] = useState(false)
   const [pendingPath, setPendingPath] = useState<string | null>(null)
   const [previewPath, setPreviewPath] = useState<string | null>(null)
 
-  const viewerState = appState?.file_viewer
+  const validationResult = worktree?.changes.validation_result
 
   // Watch for validation result in global state
   useEffect(() => {
-    if (isValidating && pendingPath && viewerState?.path === pendingPath && !viewerState.is_loading) {
-      if (viewerState.error) {
-        const errorStr = viewerState.error
-        const colonIndex = errorStr.indexOf(':')
-        const code = colonIndex > 0 ? errorStr.substring(0, colonIndex).trim() : 'UNKNOWN'
+    if (isValidating && pendingPath && validationResult) {
+      if (validationResult.status === 'Error') {
+        // Validation failed
+        const errorMsg = validationResult.message
+        // Parse error message if it follows "CODE: Message" format
+        const colonIndex = errorMsg.indexOf(':')
+        const code = colonIndex > 0 ? errorMsg.substring(0, colonIndex).trim() : ''
 
         switch (code) {
           case 'FILE_NOT_FOUND': setError(`File not found: ${pendingPath}`); break
           case 'SECURITY_VIOLATION': setError('File is outside project scope'); break
           case 'FILE_TOO_LARGE': setError('File too large (max 10MB)'); break
           case 'NOT_UTF8': setError('File is not text (binary files not supported)'); break
-          default: setError(`Cannot read file: ${pendingPath}`)
+          default: setError(errorMsg)
         }
         setIsValidating(false)
         setPendingPath(null)
-      } else if (viewerState.content !== null) {
+      } else if (validationResult.status === 'Valid') {
         // Success
         dispatch({
           type: 'AddContextFile',
@@ -77,8 +78,11 @@ export function ContextFilesInput({
         setIsValidating(false)
         setPendingPath(null)
       }
+      
+      // Reset validation result (conceptually consumed)
+      // Note: We don't have an action to clear it explicitly, but checking isValidating prevents loop
     }
-  }, [viewerState, isValidating, pendingPath, changeId, dispatch])
+  }, [validationResult, isValidating, pendingPath, changeId, dispatch])
 
   const handleAddFile = useCallback(async () => {
     const path = inputValue.trim()
@@ -94,7 +98,7 @@ export function ContextFilesInput({
     setPendingPath(path)
 
     await dispatch({
-      type: 'ReadFile',
+      type: 'ValidateContextFile',
       payload: { path }
     })
   }, [inputValue, files, dispatch])

@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   ChatBubbleOutline as CommentIcon,
   Circle as CircleIcon,
@@ -22,104 +22,26 @@ import {
 import { useActiveWorktree } from '@/hooks/useAppState'
 import type { FileEntry, GitFileStatus } from '@/types/state'
 
-/** Cached directory entries for expanded folders */
-interface DirectoryCache {
-  entries: FileEntry[]
-  isLoading: boolean
-  error?: string
-}
-
-
 export function FileTreeView() {
   const { worktree, dispatch } = useActiveWorktree()
   const theme = useTheme()
   const explorer = worktree?.explorer
   const rootPath = worktree?.path ?? ''
-  const currentPath = explorer?.current_path ?? rootPath
-  const entries = explorer?.entries ?? []
+  
+  // State from backend
+  const expandedPaths = useMemo(() => new Set(explorer?.expanded_paths ?? []), [explorer?.expanded_paths])
+  const loadingPaths = useMemo(() => new Set(explorer?.loading_paths ?? []), [explorer?.loading_paths])
+  const directoryCache = explorer?.directory_cache ?? {}
   const selectedPath = explorer?.selected_path
 
-  // Track expanded folders and their cached entries
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
-  const [directoryCache, setDirectoryCache] = useState<Map<string, DirectoryCache>>(new Map())
-  const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set())
-
-  // Initialize: expand current path and cache its entries
-  useEffect(() => {
-    if (currentPath && entries.length > 0) {
-      setDirectoryCache(prev => {
-        const next = new Map(prev)
-        next.set(currentPath, { entries, isLoading: false })
-        return next
-      })
-      // Auto-expand current path
-      setExpandedPaths(prev => new Set([...prev, currentPath]))
-    }
-  }, [currentPath, entries])
-
-  // Load directory entries for a path
-  const loadDirectory = useCallback(async (path: string) => {
-    if (loadingPaths.has(path)) return
-
-    setLoadingPaths(prev => new Set([...prev, path]))
-    setDirectoryCache(prev => {
-      const next = new Map(prev)
-      next.set(path, { entries: [], isLoading: true })
-      return next
-    })
-
-    try {
-      // Use the backend to load directory without mutating state
-      const result = await window.explorerApi.listDirectory(path, rootPath)
-      if (result) {
-        // Convert API response to FileEntry format
-        const entries: FileEntry[] = result.map((e) => ({
-          name: e.name,
-          path: e.path,
-          kind: e.kind as 'file' | 'directory' | 'symlink',
-          size: e.size,
-          permissions: e.permissions,
-          updated_at: e.updated_at,
-          comment_count: e.comment_count,
-          git_status: e.git_status as GitFileStatus | undefined
-        }))
-        setDirectoryCache(prev => {
-          const next = new Map(prev)
-          next.set(path, { entries, isLoading: false })
-          return next
-        })
-      }
-    } catch (error) {
-      setDirectoryCache(prev => {
-        const next = new Map(prev)
-        next.set(path, { entries: [], isLoading: false, error: String(error) })
-        return next
-      })
-    } finally {
-      setLoadingPaths(prev => {
-        const next = new Set(prev)
-        next.delete(path)
-        return next
-      })
-    }
-  }, [loadingPaths, rootPath])
-
-  // Toggle folder expansion (for row click)
+  // Toggle folder expansion
   const toggleExpand = useCallback((path: string) => {
-    setExpandedPaths(prev => {
-      const next = new Set(prev)
-      if (next.has(path)) {
-        next.delete(path)
-      } else {
-        next.add(path)
-        // Load directory if not cached
-        if (!directoryCache.has(path)) {
-          loadDirectory(path)
-        }
-      }
-      return next
-    })
-  }, [directoryCache, loadDirectory])
+    if (expandedPaths.has(path)) {
+      dispatch({ type: 'CollapseDirectory', payload: { path } })
+    } else {
+      dispatch({ type: 'ExpandDirectory', payload: { path } })
+    }
+  }, [expandedPaths, dispatch])
 
   // Toggle folder expansion (for arrow button click, stops propagation)
   const handleToggleExpand = useCallback((path: string, e: React.MouseEvent) => {
@@ -191,10 +113,13 @@ export function FileTreeView() {
     return info?.color || 'inherit'
   }, [getGitStatusInfo])
 
-  // Build tree structure from root
+  // Root entries: Use entries from state if we are at root, or fetch from cache if we navigated away?
   const rootEntries = useMemo(() => {
-    return directoryCache.get(currentPath)?.entries ?? entries
-  }, [directoryCache, currentPath, entries])
+    if (explorer?.current_path === rootPath && explorer?.entries) {
+        return explorer.entries
+    }
+    return directoryCache[rootPath] ?? []
+  }, [explorer?.current_path, explorer?.entries, directoryCache, rootPath])
 
   // Render a single tree item
   const renderTreeItem = useCallback((entry: FileEntry, depth: number) => {
@@ -202,9 +127,10 @@ export function FileTreeView() {
     const isExpanded = expandedPaths.has(entry.path)
     const isSelected = selectedPath === entry.path
     const gitInfo = getGitStatusInfo(entry.git_status)
-    const cached = directoryCache.get(entry.path)
     const isLoading = loadingPaths.has(entry.path)
-    const childEntries = cached?.entries ?? []
+    
+    // For children, look in directory cache
+    const childEntries = directoryCache[entry.path] ?? []
     const indent = depth * 16
 
     return (

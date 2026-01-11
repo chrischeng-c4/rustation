@@ -1,28 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-// Explorer API for file tree operations
-interface FileEntry {
-  name: string
-  path: string
-  kind: string // "file" | "directory" | "symlink"
-  size: number
-  permissions: string
-  updated_at: string
-  comment_count: number
-  git_status: string | null
-}
-
-const explorerApi = {
-  /**
-   * List files in a directory without mutating state.
-   * Used for tree view expansion.
-   */
-  listDirectory: (path: string, projectRoot: string): Promise<FileEntry[]> => {
-    return ipcRenderer.invoke('explorer:listDirectory', path, projectRoot)
-  },
-}
-
 // Dialog API for native dialogs
 const dialogApi = {
   /**
@@ -85,7 +63,6 @@ if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('stateApi', stateApi)
-    contextBridge.exposeInMainWorld('explorerApi', explorerApi)
     contextBridge.exposeInMainWorld('dialogApi', dialogApi)
     contextBridge.exposeInMainWorld('screenshotApi', screenshotApi)
   } catch (error) {
@@ -96,8 +73,6 @@ if (process.contextIsolated) {
   window.electron = electronAPI
   // @ts-ignore (define in dts)
   window.stateApi = stateApi
-  // @ts-ignore (define in dts)
-  window.explorerApi = explorerApi
   // @ts-ignore (define in dts)
   window.dialogApi = dialogApi
   // @ts-ignore (define in dts)

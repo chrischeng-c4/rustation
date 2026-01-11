@@ -446,63 +446,96 @@ START: rstn needs to call Claude CLI?
 
 ---
 
-<agent-orchestration>
-The main conversation thread acts as an **Orchestrator/PM/Planner**. It should:
+<claude-role>
+## Claude's Dual Role: Orchestrator + Implementer
 
-1. **NEVER read code directly** - Delegate to `reader` agent
-2. **NEVER write code directly** - Delegate to `writer` agent
-3. **Plan and coordinate** - Break down tasks, sequence agent calls
-4. **Review and approve** - Validate agent outputs before proceeding
+You are BOTH the orchestrator and the implementer. You should:
 
-## Agent Definitions
+1. **Plan and coordinate** - Break down complex tasks into steps
+2. **Implement directly** - Read code, write code, edit files, run tests (no delegation)
+3. **Use skills when beneficial** - Tools to assist with specific workflows
 
-| Agent | Model | Location | Purpose |
-|-------|-------|----------|---------|
-| reader | haiku | .claude/agents/reader.md | All reading and summarization |
-| writer | sonnet | .claude/agents/writer.md | All writing and updating |
+### Available Skills
 
-## Delegation Rules
+| Skill | Purpose | When to Use |
+|-------|---------|-------------|
+| `explore` | Deep codebase exploration using Gemini CLI (2M context) | Understanding large/unfamiliar areas (>10 files), finding patterns, architecture analysis |
+| `openspec-proposal` | Generate OpenSpec specifications | Large features (>500 LOC, >5 files), architecture changes, user requests "spec this" |
+| `openspec-apply` | Implement approved proposals | After user approves OpenSpec proposal |
+| `openspec-archive` | Archive deployed changes | After feature is deployed to production |
 
-| Task | Delegate To | Model |
-|------|-------------|-------|
-| Read files | reader | haiku |
-| Search codebase | reader | haiku |
-| Summarize code | reader | haiku |
-| Understand patterns | reader | haiku |
-| Find file locations | reader | haiku |
-| Write code | writer | sonnet |
-| Edit files | writer | sonnet |
-| Create files | writer | sonnet |
-| Run commands | writer | sonnet |
-| Fix bugs | writer | sonnet |
+### When to Use Each Approach
 
-## Workflow Pattern
+#### Use `explore` skill when:
+- Need to understand large/unfamiliar codebase areas (>10 files)
+- Searching for patterns across multiple modules
+- Planning architecture for complex features
+- User asks "how does X work?" or "where is Y implemented?"
+- Need comprehensive analysis before planning
 
+#### Use `openspec-proposal` skill when:
+- New feature requires specification (>500 LOC, >5 files)
+- Architecture changes that need documentation
+- User requests "create a proposal" or "spec this out"
+- Following OpenSpec workflow for large initiatives
+
+#### Implement directly when:
+- Bug fixes (<100 LOC)
+- Small features (<500 LOC, <5 files)
+- Code refactoring
+- Following existing patterns
+- Implementing tasks from approved OpenSpec proposals
+- Any coding work that doesn't need deep exploration first
+
+### Workflow Examples
+
+**Small Task (Direct Implementation):**
 ```
-User Request
-    ↓
-Orchestrator (main thread)
-    ├── Spawns reader agent(s) for understanding
-    ├── Reviews reader findings
-    ├── Creates implementation plan
-    ├── Spawns writer agent(s) for execution
-    └── Reviews writer results
-```
+User: "Add email validation to User struct"
 
-## Example Orchestration
-
-```
-User: "Add email validation to the User document"
-
-Orchestrator:
-1. Spawn reader → "Find existing validation patterns in validation.rs"
-2. Review findings → Understands pattern
-3. Create plan → Task breakdown with file targets
-4. Spawn writer → "Add email regex validation following the existing pattern"
-5. Review result → Verify implementation matches plan
+Claude:
+1. Read existing validation code (directly, no skill)
+2. Implement email validation (directly, no skill)
+3. Write tests (directly)
+4. Run cargo test
 ```
 
-</agent-orchestration>
+**Medium Task (Explore + Implement):**
+```
+User: "Add chat history persistence"
+
+Claude:
+1. Use `explore` skill:
+   "How is chat currently implemented? What persistence patterns exist?"
+2. Review exploration findings
+3. Plan implementation approach
+4. Implement directly (read/write/edit files)
+5. Write tests and run cargo test
+```
+
+**Large Task (OpenSpec Workflow):**
+```
+User: "Add real-time collaboration features"
+
+Claude:
+1. Use `openspec-proposal` skill to generate spec
+2. User reviews and approves proposal
+3. Use `openspec-apply` skill for step-by-step implementation
+4. Each task implemented directly by Claude
+5. Tests run after each task
+```
+
+### Key Principles
+
+1. **No agent delegation** - Claude reads and writes code directly
+2. **Skills are tools** - Use them to assist, but Claude does the work
+3. **Choose the right tool**:
+   - Need understanding? → `explore` skill
+   - Need spec? → `openspec-proposal` skill
+   - Need code? → Claude implements directly
+4. **Always test** - Run tests after implementation (cargo test, pnpm test)
+
+</claude-role>
 
 ---
 
@@ -647,6 +680,7 @@ rustation/
 <rule severity="NEVER">Use "transport" in MCP config → Invalid schema → Use "type" field instead</rule>
 <rule severity="NEVER">Implement features without state tests → Untestable code → All features MUST have state serialization and transition tests</rule>
 <rule severity="NEVER">Use concrete language code blocks (rust, python, shell) in `dev-docs/` files → KB is for architecture, not implementation → Use `mermaid` or `pseudo-code` instead</rule>
+<rule severity="NEVER">Use skills for simple tasks → Unnecessary overhead → Implement directly for <100 LOC changes</rule>
 <rule severity="NEVER">Create files >500 lines without considering split → Monolithic code, hard to maintain → Split at 500 lines, MUST split at 1000 lines</rule>
 <rule severity="NEVER">Put all code in single file → Creates god modules → Use submodules (mod.rs pattern) for organization</rule>
 <rule severity="NEVER">Use MOCK_* data in renderer production code → Fake complete anti-pattern → Use window.api.* from real backend</rule>

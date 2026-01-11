@@ -190,6 +190,12 @@ pub enum Action {
     /// Clear all context files for a change
     ClearContextFiles { change_id: String },
 
+    /// Validate a context file path
+    ValidateContextFile { path: String },
+
+    /// Set context validation result (internal)
+    SetContextValidationResult { result: ValidationResultData },
+
     // ========================================================================
     // Living Context Actions (CESDD Phase 3)
     // ========================================================================
@@ -635,6 +641,12 @@ pub enum Action {
         entries: Vec<FileEntryData>,
     },
 
+    /// Set directory cache entries (internal, after load for tree view)
+    SetDirectoryCache {
+        path: String,
+        entries: Vec<FileEntryData>,
+    },
+
     /// Set comments for selected file (internal)
     SetFileComments {
         path: String,
@@ -661,6 +673,12 @@ pub enum Action {
 
     /// Set filter query
     SetExplorerFilter { query: String },
+
+    /// Expand a directory in the tree view (loads contents if not cached)
+    ExpandDirectory { path: String },
+
+    /// Collapse a directory in the tree view (hides children)
+    CollapseDirectory { path: String },
 
     /// Create new file or directory
     CreateFile {
@@ -1068,6 +1086,14 @@ pub struct ContextFileData {
     pub context_type: ContextTypeData,
     pub last_updated: String,
     pub token_estimate: u32,
+}
+
+/// Validation result data for actions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "status", content = "message")]
+pub enum ValidationResultData {
+    Valid,
+    Error(String),
 }
 
 // ============================================================================
