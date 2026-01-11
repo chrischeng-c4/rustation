@@ -1,43 +1,56 @@
-# rustation - Electron Desktop App
+# rustation - GPUI Native Desktop App
 
-# Install all dependencies and build core
-setup:
-    pnpm install --recursive
-    cd desktop && node node_modules/electron/install.js
-    cd packages/core && pnpm build
-
-# Run Electron dev server
-dev:
-    @test -d desktop/node_modules || (echo "Missing dependencies. Run: just setup" && exit 1)
-    cd desktop && pnpm dev
-
-# Build Electron app
+# Build the GPUI application
 build:
-    cd desktop && pnpm build
+    cargo build --workspace
 
-# Run all tests (unit + e2e)
-test: test-rust test-e2e
-    @echo "All tests passed!"
+# Run the GPUI application
+dev:
+    cargo run -p rstn
 
-# Run Rust unit tests
-test-rust:
-    cargo test
+# Run the GPUI application (release mode)
+run:
+    cargo run -p rstn --release
 
-# Run e2e tests
-test-e2e:
-    cd desktop && pnpm test:e2e
+# Run all Rust tests
+test:
+    cargo test --workspace
 
-# Build napi-rs module
-build-core:
-    cd packages/core && pnpm build
+# Run Rust unit tests only
+test-unit:
+    cargo test --workspace --lib
 
-# Build distributable app (.app bundle for macOS)
-build-app: build-core build
-    cd desktop && pnpm build:mac
+# Run clippy linter
+lint:
+    cargo clippy --workspace -- -D warnings
 
-# Install rstn CLI to ~/.local/bin
-install: build-app
+# Format all Rust code
+fmt:
+    cargo fmt --all
+
+# Check formatting without modifying files
+fmt-check:
+    cargo fmt --all -- --check
+
+# Build release binary
+build-release:
+    cargo build --workspace --release
+
+# Clean build artifacts
+clean:
+    cargo clean
+
+# Install rstn to ~/.local/bin
+install: build-release
     mkdir -p ~/.local/bin
-    ln -sf {{justfile_directory()}}/desktop/bin/rstn ~/.local/bin/rstn
+    cp target/release/rstn ~/.local/bin/rstn
     @echo "Installed rstn to ~/.local/bin/rstn"
-    @echo "Usage: rstn .  # Open current directory"
+    @echo "Usage: rstn  # Open current directory"
+
+# Build and run in one command
+dev-build:
+    cargo build -p rstn && cargo run -p rstn
+
+# Watch for changes and rebuild (requires cargo-watch)
+watch:
+    cargo watch -x 'build -p rstn' -x 'run -p rstn'
