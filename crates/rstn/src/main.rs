@@ -66,7 +66,7 @@ impl AppView {
             }
             "explorer" => {
                 // TODO: Load actual file tree from rstn-core::worktree
-                use rstn_views::explorer::{TreeNode, FileEntry, GitStatus};
+                use rstn_views::explorer::{TreeNode, GitStatus};
                 let current_path = "/".to_string();
                 let root_node = TreeNode {
                     name: "root".to_string(),
@@ -154,7 +154,7 @@ fn main() {
             };
 
             // Open main window
-            cx.open_window(options, |window, cx| {
+            cx.open_window(options, |_window, cx| {
                 cx.new(|_cx| AppView::new())
             })
             .expect("Failed to open window");

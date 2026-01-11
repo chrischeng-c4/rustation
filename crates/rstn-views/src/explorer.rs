@@ -442,7 +442,7 @@ impl ExplorerView {
         }
     }
 
-    pub fn render(&self, window: &mut Window, cx: &mut App) -> Div {
+    pub fn render(&self, _window: &mut Window, _cx: &mut App) -> Div {
         let page_header = PageHeader::new(
             "Explorer",
             Some("Browse files with Git status"),

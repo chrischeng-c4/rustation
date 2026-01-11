@@ -244,7 +244,7 @@ impl TerminalView {
         self.sessions.get(self.active_session_index)
     }
 
-    pub fn render(&self, window: &mut Window, cx: &mut App) -> Div {
+    pub fn render(&self, _window: &mut Window, _cx: &mut App) -> Div {
         let page_header = PageHeader::new(
             "Terminal",
             Some("Integrated shell sessions"),

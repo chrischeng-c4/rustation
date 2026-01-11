@@ -33,7 +33,7 @@ impl TaskCard {
     }
 
     /// Render a single task card
-    pub fn render(&self, theme: &MaterialTheme, _window: &mut Window, cx: &mut App) -> Div {
+    pub fn render(&self, theme: &MaterialTheme, _window: &mut Window, _cx: &mut App) -> Div {
         let state_color = match self.state {
             TaskState::Idle => theme.text.secondary,
             TaskState::Running => theme.primary.main,
