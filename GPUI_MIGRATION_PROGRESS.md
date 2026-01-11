@@ -5,8 +5,8 @@
 Migration of rustation from Electron+React to GPUI (Zed's GPU-accelerated UI framework) for native Rust UI.
 
 **Start Date**: 2026-01-11
-**Current Phase**: Phase 4 Complete (Core Feature Views)
-**Status**: ✅ Compiling - GPUI API migration complete
+**Current Phase**: Phase 5 Complete (All Feature Views)
+**Status**: ✅ All 8 views implemented and running
 
 ---
 
@@ -175,6 +175,58 @@ Migration of rustation from Electron+React to GPUI (Zed's GPU-accelerated UI fra
 - `crates/rstn/src/main.rs`: Fixed Application initialization, simplified state management
 
 **Result**: All crates compile successfully with only unused variable warnings.
+
+---
+
+### ✅ Phase 5: Advanced Feature Views (Commit: b8f00d6)
+
+**Objective**: Complete remaining 4 feature views to achieve 8/8 coverage.
+
+**Changes**:
+- ✅ **ChatView** ([crates/rstn-views/src/chat.rs](crates/rstn-views/src/chat.rs)):
+  - AI conversation interface with message history
+  - Role-based message cards (User/Assistant/System)
+  - Color-coded containers (primary/secondary)
+  - Input field with send button
+  - Timestamp display
+
+- ✅ **WorkflowsView** ([crates/rstn-views/src/workflows.rs](crates/rstn-views/src/workflows.rs)):
+  - Multi-panel workflow management (4 panels)
+  - Constitution: Coding rules with ON/OFF toggles
+  - Change Management: OpenSpec proposals with status badges
+  - Review Gate: Human approval workflow placeholder
+  - Context Engine: AI context configuration placeholder
+  - Status color coding (Draft/Proposed/Approved/In Progress/Complete)
+
+- ✅ **McpView** ([crates/rstn-views/src/mcp.rs](crates/rstn-views/src/mcp.rs)):
+  - MCP server inspector
+  - Server status indicator (Running/Stopped/Error)
+  - Tools list with parameters
+  - Tool cards with description and parameter pills
+  - Server URL display in header
+
+- ✅ **SettingsView** ([crates/rstn-views/src/settings.rs](crates/rstn-views/src/settings.rs)):
+  - Configuration interface with 4 categories
+  - General: Theme, Language, Font Size
+  - Project: Default directory, Git config
+  - MCP: Server port, auto-start, endpoints
+  - Claude Code: CLI path, model, max tokens
+  - Two-panel layout: category sidebar + settings content
+
+- ✅ Updated [crates/rstn/src/main.rs](crates/rstn/src/main.rs):
+  - Imported all 8 views
+  - Updated `render_content()` to route all tabs
+  - Added placeholder data for each view
+  - TODO comments for loading actual data from rstn-core
+
+**Key Files**:
+- [crates/rstn-views/src/chat.rs](crates/rstn-views/src/chat.rs) - Chat view
+- [crates/rstn-views/src/workflows.rs](crates/rstn-views/src/workflows.rs) - Workflows view
+- [crates/rstn-views/src/mcp.rs](crates/rstn-views/src/mcp.rs) - MCP view
+- [crates/rstn-views/src/settings.rs](crates/rstn-views/src/settings.rs) - Settings view
+- [crates/rstn-views/src/lib.rs](crates/rstn-views/src/lib.rs) - Updated exports
+
+**Status**: ✅ All 8 feature views implemented and integrated. Application launches successfully.
 
 ---
 
@@ -382,6 +434,8 @@ All components in `rstn-ui` are designed to be:
 ## Git History
 
 ```
+b8f00d6 feat(rstn-views): Add remaining 4 feature views (Phase 5 complete)
+61e1e62 docs(gpui): Update progress - Metal Toolchain resolved, Phase 4 complete
 32470d0 fix(gpui): migrate to latest GPUI API (Window + App + Context)
 cb68dc6 feat(rstn-views): Add Terminal view with PTY support
 3824120 feat(rstn-views): Add Explorer view with Git status
@@ -403,20 +457,20 @@ f43d09c docs(openspec): Apply GPUI migration spec deltas
 | Phase 1: Foundation | ✅ Complete | 100% |
 | Phase 2: Specs | ✅ Complete | 100% |
 | Phase 3: UI Foundation | ✅ Complete | 100% |
-| Phase 4: Core Features | ✅ Complete | 100% (4/8 views implemented, all compile) |
-| Phase 5: Advanced Features | ⏸️ Pending | 0% |
+| Phase 4: Core Features | ✅ Complete | 100% (4/8 views: Tasks, Dockers, Explorer, Terminal) |
+| Phase 5: Advanced Features | ✅ Complete | 100% (4/8 views: Chat, Workflows, MCP, Settings) |
 | Phase 6: Polish | ⏸️ Pending | 0% |
 
-**Overall Progress**: 4/6 phases (67%)
+**Overall Progress**: 5/6 phases (83%)
 
-**Feature Views Status**:
-- ✅ TasksView (Justfile runner with command cards, log panel) - Compiling
-- ✅ DockersView (Container management with service grouping) - Compiling
-- ✅ ExplorerView (File browser with Git status, 3-column layout) - Compiling
-- ✅ TerminalView (PTY terminal with session tabs, ANSI colors) - Compiling
-- ⏸️ ChatView (AI conversation)
-- ⏸️ WorkflowsView (Constitution, Change Management)
-- ⏸️ McpView (MCP inspector)
-- ⏸️ SettingsView (Configuration)
+**Feature Views Status** (8/8 Complete):
+1. ✅ TasksView - Justfile runner with command cards and log panel
+2. ✅ DockersView - Container management with service grouping
+3. ✅ ExplorerView - File browser with Git status (3-column layout)
+4. ✅ TerminalView - PTY terminal with session tabs and ANSI colors
+5. ✅ ChatView - AI conversation interface with message history
+6. ✅ WorkflowsView - Constitution, Change Management, Review Gate, Context Engine
+7. ✅ McpView - MCP server inspector with tools list
+8. ✅ SettingsView - Configuration interface (4 categories)
 
-**Blockers Resolved**: ✅ Metal Toolchain, ✅ GPUI API migration
+**All Blockers Resolved**: ✅ Metal Toolchain, ✅ GPUI API migration, ✅ All views implemented
