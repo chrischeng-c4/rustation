@@ -34,3 +34,12 @@ anyhow = "1.0"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+
+[dev-dependencies]
+# GPUI test support (requires Metal/Xcode)
+gpui = { git = "https://github.com/zed-industries/zed", package = "gpui", features = ["test-support"] }
+
+[features]
+# Enable GPUI test support for UI integration tests
+# Note: Tests require Metal shader compiler (Xcode installation)
+test-support = []

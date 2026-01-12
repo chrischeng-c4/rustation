@@ -182,17 +182,40 @@ cargo test --package rstn-ui
 cargo test --package rstn-views
 ```
 
+### UI Integration Tests (Planned)
+
+```bash
+# UI tests (requires Xcode/Metal - cannot run yet)
+cargo test --test '*' --features gpui/test-support
+
+# Specific view tests
+cargo test --test tasks_view_test
+cargo test --test dockers_view_test
+```
+
+**Status**: Test code written but cannot execute without Xcode installation.
+See [UI Testing Plan](openspec/UI_TESTING_PLAN.md) for details.
+
 ### Test Coverage
 
 Current test coverage:
 - **rstn-core**: 182 unit tests ✅
 - **rstn/state.rs**: 18 accessor tests ✅
+- **UI tests**: Test code written, execution blocked by Metal ⚠️
 - **Integration tests**: Planned
 - **E2E tests**: Planned
 
+**Three-Layer Testing Strategy**:
+1. **State Tests** (Layer 1): ✅ 200+ tests passing (no Xcode required)
+2. **View Integration Tests** (Layer 2): 📝 Planned, cannot run without Xcode
+3. **Interactive Tests** (Layer 3): 📝 Planned, requires event handlers
+
+See [UI Testing Plan](openspec/UI_TESTING_PLAN.md) for comprehensive testing strategy.
+
 ### Known Testing Issues
 
-- **GPUI/Metal**: Binary tests require Xcode Command Line Tools (Metal shader compilation)
+- **GPUI/Metal**: UI tests require full Xcode (not just Command Line Tools)
+- **Workaround**: Use GitHub Actions CI with macOS runners (has Xcode pre-installed)
 - **Doc tests**: 5 doc tests currently failing (non-blocking, documentation examples)
 
 ## 📖 Documentation
