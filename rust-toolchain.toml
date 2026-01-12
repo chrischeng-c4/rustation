@@ -1,0 +1,9 @@
+# Rust toolchain specification for rustation
+#
+# This ensures consistent Rust version across development environments.
+# Matches Zed repository requirements for GPUI compatibility.
+
+[toolchain]
+channel = "1.92"
+profile = "minimal"
+components = ["rustfmt", "clippy"]

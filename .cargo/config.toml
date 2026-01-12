@@ -1,0 +1,13 @@
+# Cargo build configuration for rustation
+#
+# This configuration is required for GPUI tests to compile correctly on macOS.
+# Based on Zed repository configuration.
+
+[build]
+# Use stable symbol mangling and enable tokio unstable features
+rustflags = ["-C", "symbol-mangling-version=v0", "--cfg", "tokio_unstable"]
+
+[env]
+# macOS deployment target - required for Metal shader compilation
+# GPUI's build.rs compiles Metal shaders, which require this to be set
+MACOSX_DEPLOYMENT_TARGET = "10.15.7"
