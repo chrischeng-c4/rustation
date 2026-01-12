@@ -210,13 +210,24 @@ impl ChangeItem {
 /// Main Workflows view
 pub struct WorkflowsView {
     pub active_panel: WorkflowPanel,
+    pub constitution_rules: Vec<ConstitutionRule>,
+    pub changes: Vec<ChangeItem>,
+    pub context_files: Vec<String>,
     pub theme: MaterialTheme,
 }
 
 impl WorkflowsView {
-    pub fn new(theme: MaterialTheme) -> Self {
+    pub fn new(
+        constitution_rules: Vec<ConstitutionRule>,
+        changes: Vec<ChangeItem>,
+        context_files: Vec<String>,
+        theme: MaterialTheme,
+    ) -> Self {
         Self {
             active_panel: WorkflowPanel::Constitution,
+            constitution_rules,
+            changes,
+            context_files,
             theme,
         }
     }
@@ -299,11 +310,7 @@ impl WorkflowsView {
     }
 
     fn render_constitution(&self, window: &mut Window, cx: &mut App) -> Div {
-        let rules = vec![
-            ConstitutionRule::new("YAGNI Principle", true, "Start with minimal viable solution"),
-            ConstitutionRule::new("500-line File Limit", true, "Split files over 500 lines"),
-            ConstitutionRule::new("State-First Architecture", true, "All state must be serializable"),
-        ];
+        let rules = &self.constitution_rules;
 
         div()
             .flex()
@@ -331,10 +338,7 @@ impl WorkflowsView {
     }
 
     fn render_changes(&self, window: &mut Window, cx: &mut App) -> Div {
-        let changes = vec![
-            ChangeItem::new("GPUI Migration", ChangeStatus::Implementing, "Migrate from Electron to GPUI"),
-            ChangeItem::new("Add Dark Mode", ChangeStatus::Complete, "Implement Material Design 3 dark theme"),
-        ];
+        let changes = &self.changes;
 
         div()
             .flex()
@@ -411,7 +415,22 @@ impl WorkflowsView {
                 div()
                     .text_base()
                     .text_color(self.theme.text.secondary)
-                    .child("Context engine configuration"),
+                    .mb(self.theme.spacing(1.0))
+                    .child(format!("{} context files loaded", self.context_files.len())),
+            )
+            .children(
+                self.context_files
+                    .iter()
+                    .map(|file| {
+                        div()
+                            .p(self.theme.spacing(1.0))
+                            .mb(self.theme.spacing(0.5))
+                            .bg(self.theme.background.paper)
+                            .border_1()
+                            .border_color(self.theme.border.divider)
+                            .rounded(self.theme.shape.border_radius_sm)
+                            .child(file.clone())
+                    }),
             )
     }
 }

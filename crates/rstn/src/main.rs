@@ -2,26 +2,30 @@
 //!
 //! This is the main entry point for the rustation desktop application.
 
+mod state;
+
 use gpui::*;
 use rstn_ui::{MaterialTheme, NavItem, PageHeader, ShellLayout, Sidebar};
 use anyhow::Result;
-use rstn_core::{justfile, docker::BUILTIN_SERVICES, state::{DockerService, ServiceStatus}};
 use rstn_views::{
     ChatView, DockersView, ExplorerView, McpView,
     SettingsView, TasksView, TerminalView, WorkflowsView,
 };
-use std::env;
+use state::AppState;
 
 /// Main application view
 struct AppView {
-    /// Current active tab
-    active_tab: &'static str,
+    /// Application state (GPUI Model)
+    state: Model<AppState>,
 }
 
 impl AppView {
-    fn new() -> Self {
+    fn new(cx: &mut Context<Self>) -> Self {
+        let mut state = AppState::new();
+        state.initialize();
+
         Self {
-            active_tab: "tasks",
+            state: cx.new_model(|_cx| state),
         }
     }
 }
@@ -29,6 +33,9 @@ impl AppView {
 impl Render for AppView {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<'_, Self>) -> impl IntoElement {
         let theme = MaterialTheme::dark();
+
+        // Read active tab from state
+        let active_tab = self.state.read(_cx).active_tab.clone();
 
         // Create navigation items based on OLD_UI_ANALYSIS.md sidebar structure
         let nav_items = vec![
@@ -42,7 +49,7 @@ impl Render for AppView {
             NavItem::new("terminal", "Term", "⌨️"),
         ];
 
-        let sidebar = Sidebar::new(nav_items, self.active_tab.to_string(), theme.clone());
+        let sidebar = Sidebar::new(nav_items, active_tab, theme.clone());
         let shell = ShellLayout::new("rstn - Developer Workbench", sidebar, theme.clone());
 
         // Render content based on active tab
@@ -55,83 +62,86 @@ impl Render for AppView {
 impl AppView {
     /// Render content area based on active tab
     fn render_content(&self, theme: &MaterialTheme, window: &mut Window, cx: &mut App) -> Div {
-        match self.active_tab {
+        let state = self.state.read(cx);
+        let active_tab = state.active_tab.as_str();
+
+        match active_tab {
             "tasks" => {
-                // Load commands from justfile in current directory
-                let justfile_path = env::current_dir()
-                    .ok()
-                    .and_then(|path| {
-                        let jf = path.join("justfile");
-                        if jf.exists() {
-                            Some(jf.to_string_lossy().to_string())
-                        } else {
-                            None
-                        }
-                    });
-
-                let commands = justfile_path
-                    .and_then(|path| justfile::parse_justfile(&path).ok())
-                    .unwrap_or_default();
-
+                // Load commands from state
+                let commands = state.get_justfile_commands();
                 TasksView::new(commands, theme.clone()).render(window, cx)
             }
             "dockers" => {
-                // Load built-in Docker services
-                // TODO: In Phase 6, implement async Docker service polling
-                let services: Vec<DockerService> = BUILTIN_SERVICES
-                    .iter()
-                    .map(|config| DockerService {
-                        id: config.id.to_string(),
-                        name: config.name.to_string(),
-                        image: config.image.to_string(),
-                        status: ServiceStatus::Stopped, // Default to stopped, will be updated by async polling
-                        port: Some(config.port as u32),
-                        service_type: config.service_type.clone(),
-                        project_group: Some("rstn".to_string()),
-                        is_rstn_managed: true,
-                    })
-                    .collect();
-
+                // Load Docker services from state
+                let services = state.get_docker_services();
                 DockersView::new(services, theme.clone()).render(window, cx)
             }
             "explorer" => {
-                // TODO: Load actual file tree from rstn-core::worktree
-                use rstn_views::explorer::{TreeNode, GitStatus};
-                let current_path = "/".to_string();
-                let root_node = TreeNode {
-                    name: "root".to_string(),
-                    path: "/".to_string(),
-                    is_dir: true,
-                    is_expanded: true,
-                    children: vec![],
-                    git_status: GitStatus::Unmodified,
-                };
-                let file_entries = vec![];
-                ExplorerView::new(current_path, root_node, file_entries, theme.clone()).render(window, cx)
+                // Load file tree from state
+                let current_path = state.get_explorer_current_path();
+                let tree_root = state.get_explorer_tree_root();
+                let files = state.get_explorer_files();
+
+                ExplorerView::new(current_path, tree_root, files, theme.clone()).render(window, cx)
             }
             "terminal" => {
-                // TODO: Load actual sessions from rstn-core::terminal
-                let sessions = vec![];
-                let active_session_index = 0;
+                // Load terminal sessions from state
+                let sessions = state.get_terminal_sessions();
+                let active_session_index = state.get_active_terminal_session_index();
                 TerminalView::new(sessions, active_session_index, theme.clone()).render(window, cx)
             }
             "chat" => {
-                // TODO: Load actual messages from chat history
-                let messages = vec![];
+                // Load chat messages from state
+                let messages = state.get_chat_messages();
                 ChatView::new(messages, theme.clone()).render(window, cx)
             }
             "workflows" => {
-                WorkflowsView::new(theme.clone()).render(window, cx)
+                // Load workflows data from state
+                let constitution_rules = state.get_constitution_rules();
+                let changes = state.get_changes();
+                let context_files = state.get_context_files();
+
+                WorkflowsView::new(
+                    constitution_rules,
+                    changes,
+                    context_files,
+                    theme.clone(),
+                )
+                .render(window, cx)
             }
             "mcp" => {
-                // TODO: Load actual MCP server status and tools
+                // Load MCP server status and tools from state
                 use rstn_views::mcp::ServerStatus;
-                let status = ServerStatus::Stopped;
-                let tools = vec![];
-                McpView::new(status, tools, "http://localhost:5000", theme.clone()).render(window, cx)
+
+                let status = match state.get_mcp_status() {
+                    rstn_core::app_state::McpStatus::Stopped => ServerStatus::Stopped,
+                    rstn_core::app_state::McpStatus::Starting => ServerStatus::Starting,
+                    rstn_core::app_state::McpStatus::Running => ServerStatus::Running,
+                    rstn_core::app_state::McpStatus::Error => ServerStatus::Error,
+                };
+
+                let tools = state.get_mcp_tools();
+                let url = state.get_mcp_url();
+
+                McpView::new(status, tools, &url, theme.clone()).render(window, cx)
             }
             "settings" => {
-                SettingsView::new(theme.clone()).render(window, cx)
+                // Load settings data from state
+                let theme_setting = state.get_theme();
+                let default_project_path = state.get_default_project_path();
+                let current_project_path = state.get_current_project_path();
+                let mcp_port = state.get_mcp_port();
+                let mcp_config_path = state.get_mcp_config_path();
+
+                SettingsView::new(
+                    theme_setting,
+                    default_project_path,
+                    current_project_path,
+                    mcp_port,
+                    mcp_config_path,
+                    theme.clone(),
+                )
+                .render(window, cx)
             }
             _ => {
                 // Fallback: Welcome screen
@@ -151,7 +161,7 @@ impl AppView {
                             .p(theme.spacing(1.5))
                             .bg(theme.background.paper)
                             .rounded(theme.shape.border_radius_sm)
-                            .child(format!("Active tab: {}", self.active_tab)),
+                            .child(format!("Active tab: {}", active_tab)),
                     )
             }
         }
@@ -185,7 +195,7 @@ fn main() {
 
             // Open main window
             cx.open_window(options, |_window, cx| {
-                cx.new(|_cx| AppView::new())
+                cx.new(|cx| AppView::new(cx))
             })
             .expect("Failed to open window");
         });

@@ -154,13 +154,30 @@ impl SettingsCategoryPanel {
 /// Main Settings view
 pub struct SettingsView {
     pub active_category: SettingsCategory,
+    pub theme_setting: String,
+    pub default_project_path: String,
+    pub current_project_path: String,
+    pub mcp_port: String,
+    pub mcp_config_path: String,
     pub theme: MaterialTheme,
 }
 
 impl SettingsView {
-    pub fn new(theme: MaterialTheme) -> Self {
+    pub fn new(
+        theme_setting: String,
+        default_project_path: String,
+        current_project_path: String,
+        mcp_port: String,
+        mcp_config_path: String,
+        theme: MaterialTheme,
+    ) -> Self {
         Self {
             active_category: SettingsCategory::General,
+            theme_setting,
+            default_project_path,
+            current_project_path,
+            mcp_port,
+            mcp_config_path,
             theme,
         }
     }
@@ -242,14 +259,14 @@ impl SettingsView {
             SettingsCategory::General => vec![
                 SettingItem::new(
                     "Theme",
-                    "Choose color theme (dark/light)",
-                    "Dark",
+                    "Choose color theme (System/Light/Dark)",
+                    &self.theme_setting,
                     self.theme.clone(),
                 ),
                 SettingItem::new(
                     "Language",
                     "Select interface language",
-                    "English",
+                    "English (US)",
                     self.theme.clone(),
                 ),
                 SettingItem::new(
@@ -261,9 +278,15 @@ impl SettingsView {
             ],
             SettingsCategory::Project => vec![
                 SettingItem::new(
+                    "Current Project",
+                    "Currently opened project path",
+                    &self.current_project_path,
+                    self.theme.clone(),
+                ),
+                SettingItem::new(
                     "Default Directory",
-                    "Default project directory",
-                    "~/projects",
+                    "Default directory for new projects",
+                    &self.default_project_path,
                     self.theme.clone(),
                 ),
                 SettingItem::new(
@@ -283,19 +306,19 @@ impl SettingsView {
                 SettingItem::new(
                     "Server Port",
                     "MCP HTTP server port",
-                    "5000",
+                    &self.mcp_port,
+                    self.theme.clone(),
+                ),
+                SettingItem::new(
+                    "Config Path",
+                    "Path to mcp-session.json configuration file",
+                    &self.mcp_config_path,
                     self.theme.clone(),
                 ),
                 SettingItem::new(
                     "Auto Start",
                     "Start MCP server on launch",
                     "Enabled",
-                    self.theme.clone(),
-                ),
-                SettingItem::new(
-                    "Tools Endpoint",
-                    "MCP tools/list endpoint path",
-                    "/mcp/tools",
                     self.theme.clone(),
                 ),
             ],

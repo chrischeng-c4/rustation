@@ -245,11 +245,12 @@ mod tests {
     fn test_chat_actions() {
         let mut state = state_with_project();
 
-        // Send message (sets typing)
+        // Send message (sets typing and adds user message)
         reduce(&mut state, Action::SendChatMessage { text: "Hello".to_string() });
         assert!(active_worktree(&state).chat.is_typing);
+        assert_eq!(active_worktree(&state).chat.messages.len(), 1); // SendChatMessage added 1 message
 
-        // Add message
+        // Add message (manually add another message)
         let msg = crate::actions::ChatMessageData {
             id: "msg-1".to_string(),
             role: crate::actions::ChatRoleData::User,
@@ -258,9 +259,9 @@ mod tests {
             is_streaming: false,
         };
         reduce(&mut state, Action::AddChatMessage { message: msg });
-        assert_eq!(active_worktree(&state).chat.messages.len(), 1);
+        assert_eq!(active_worktree(&state).chat.messages.len(), 2); // Now we have 2 messages
 
-        // Streaming response
+        // Streaming response (3rd message)
         let asst_msg = crate::actions::ChatMessageData {
             id: "msg-2".to_string(),
             role: crate::actions::ChatRoleData::Assistant,
@@ -269,13 +270,14 @@ mod tests {
             is_streaming: true,
         };
         reduce(&mut state, Action::AddChatMessage { message: asst_msg });
+        assert_eq!(active_worktree(&state).chat.messages.len(), 3); // Now 3 messages
         reduce(&mut state, Action::AppendChatContent { content: "Hi".to_string() });
-        assert_eq!(active_worktree(&state).chat.messages[1].content, "Hi");
+        assert_eq!(active_worktree(&state).chat.messages[2].content, "Hi"); // Check 3rd message (index 2)
 
         // Stop typing (finishes streaming)
         reduce(&mut state, Action::SetChatTyping { is_typing: false });
         assert!(!active_worktree(&state).chat.is_typing);
-        assert!(!active_worktree(&state).chat.messages[1].is_streaming);
+        assert!(!active_worktree(&state).chat.messages[2].is_streaming); // Check 3rd message
 
         // Clear chat
         reduce(&mut state, Action::ClearChat);
