@@ -3,9 +3,9 @@
 //! This module wraps rstn-core::AppState and adds GPUI-specific functionality.
 
 use rstn_core::app_state::AppState as CoreAppState;
-use rstn_core::justfile::{self, Command as JustCommand};
+use rstn_core::justfile;
 use rstn_core::docker::BUILTIN_SERVICES;
-use rstn_core::state::{DockerService, ServiceStatus};
+use rstn_core::state::DockerService;
 use std::env;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -102,7 +102,7 @@ impl AppState {
                 image: config.image.to_string(),
                 status: rstn_core::app_state::ServiceStatus::Stopped,
                 port: Some(config.port as u32),
-                service_type: config.service_type.clone().into(),
+                service_type: Self::convert_service_type_to_app_state(config.service_type.clone()),
                 project_group: Some("rstn".to_string()),
                 is_rstn_managed: true,
             })
@@ -112,12 +112,12 @@ impl AppState {
     }
 
     /// Get justfile commands for the active worktree
-    pub fn get_justfile_commands(&self) -> Vec<JustCommand> {
+    pub fn get_justfile_commands(&self) -> Vec<rstn_core::justfile::JustCommand> {
         self.core
             .active_project()
             .and_then(|p| p.active_worktree())
             .map(|w| {
-                w.tasks.commands.iter().map(|cmd| JustCommand {
+                w.tasks.commands.iter().map(|cmd| rstn_core::justfile::JustCommand {
                     name: cmd.name.clone(),
                     description: cmd.description.clone(),
                     recipe: cmd.recipe.clone(),
@@ -132,9 +132,9 @@ impl AppState {
             id: info.id.clone(),
             name: info.name.clone(),
             image: info.image.clone(),
-            status: info.status.clone().into(),
+            status: Self::convert_service_status_from_app_state(info.status),
             port: info.port,
-            service_type: info.service_type.clone().into(),
+            service_type: Self::convert_service_type_from_app_state(info.service_type),
             project_group: info.project_group.clone(),
             is_rstn_managed: info.is_rstn_managed,
         }).collect()
@@ -825,32 +825,11 @@ pub enum AppAction {
     RefreshDockerServices,
 }
 
-// Conversion trait implementations to bridge between core types and state types
-impl From<rstn_core::state::ServiceStatus> for rstn_core::app_state::ServiceStatus {
-    fn from(status: rstn_core::state::ServiceStatus) -> Self {
-        match status {
-            rstn_core::state::ServiceStatus::Running => rstn_core::app_state::ServiceStatus::Running,
-            rstn_core::state::ServiceStatus::Stopped => rstn_core::app_state::ServiceStatus::Stopped,
-            rstn_core::state::ServiceStatus::Starting => rstn_core::app_state::ServiceStatus::Starting,
-            rstn_core::state::ServiceStatus::Error => rstn_core::app_state::ServiceStatus::Error,
-        }
-    }
-}
-
-impl From<rstn_core::app_state::ServiceStatus> for rstn_core::state::ServiceStatus {
-    fn from(status: rstn_core::app_state::ServiceStatus) -> Self {
-        match status {
-            rstn_core::app_state::ServiceStatus::Running => rstn_core::state::ServiceStatus::Running,
-            rstn_core::app_state::ServiceStatus::Stopped => rstn_core::state::ServiceStatus::Stopped,
-            rstn_core::app_state::ServiceStatus::Starting => rstn_core::state::ServiceStatus::Starting,
-            rstn_core::app_state::ServiceStatus::Stopping => rstn_core::state::ServiceStatus::Stopped,
-            rstn_core::app_state::ServiceStatus::Error => rstn_core::state::ServiceStatus::Error,
-        }
-    }
-}
-
-impl From<rstn_core::state::ServiceType> for rstn_core::app_state::ServiceType {
-    fn from(service_type: rstn_core::state::ServiceType) -> Self {
+impl AppState {
+    /// Convert ServiceType from state module to app_state module
+    fn convert_service_type_to_app_state(
+        service_type: rstn_core::state::ServiceType,
+    ) -> rstn_core::app_state::ServiceType {
         match service_type {
             rstn_core::state::ServiceType::Database => rstn_core::app_state::ServiceType::Database,
             rstn_core::state::ServiceType::MessageBroker => rstn_core::app_state::ServiceType::MessageBroker,
@@ -858,15 +837,29 @@ impl From<rstn_core::state::ServiceType> for rstn_core::app_state::ServiceType {
             rstn_core::state::ServiceType::Other => rstn_core::app_state::ServiceType::Other,
         }
     }
-}
 
-impl From<rstn_core::app_state::ServiceType> for rstn_core::state::ServiceType {
-    fn from(service_type: rstn_core::app_state::ServiceType) -> Self {
+    /// Convert ServiceType from app_state module to state module
+    fn convert_service_type_from_app_state(
+        service_type: rstn_core::app_state::ServiceType,
+    ) -> rstn_core::state::ServiceType {
         match service_type {
             rstn_core::app_state::ServiceType::Database => rstn_core::state::ServiceType::Database,
             rstn_core::app_state::ServiceType::MessageBroker => rstn_core::state::ServiceType::MessageBroker,
             rstn_core::app_state::ServiceType::Cache => rstn_core::state::ServiceType::Cache,
             rstn_core::app_state::ServiceType::Other => rstn_core::state::ServiceType::Other,
+        }
+    }
+
+    /// Convert ServiceStatus from app_state module to state module
+    fn convert_service_status_from_app_state(
+        status: rstn_core::app_state::ServiceStatus,
+    ) -> rstn_core::state::ServiceStatus {
+        match status {
+            rstn_core::app_state::ServiceStatus::Running => rstn_core::state::ServiceStatus::Running,
+            rstn_core::app_state::ServiceStatus::Stopped => rstn_core::state::ServiceStatus::Stopped,
+            rstn_core::app_state::ServiceStatus::Starting => rstn_core::state::ServiceStatus::Starting,
+            rstn_core::app_state::ServiceStatus::Stopping => rstn_core::state::ServiceStatus::Stopped,
+            rstn_core::app_state::ServiceStatus::Error => rstn_core::state::ServiceStatus::Error,
         }
     }
 }

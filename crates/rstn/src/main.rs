@@ -15,18 +15,16 @@ use state::AppState;
 
 /// Main application view
 struct AppView {
-    /// Application state (GPUI Model)
-    state: Model<AppState>,
+    /// Application state
+    state: AppState,
 }
 
 impl AppView {
-    fn new(cx: &mut Context<Self>) -> Self {
+    fn new(_cx: &mut Context<Self>) -> Self {
         let mut state = AppState::new();
         state.initialize();
 
-        Self {
-            state: cx.new_model(|_cx| state),
-        }
+        Self { state }
     }
 }
 
@@ -35,7 +33,7 @@ impl Render for AppView {
         let theme = MaterialTheme::dark();
 
         // Read active tab from state
-        let active_tab = self.state.read(_cx).active_tab.clone();
+        let active_tab = self.state.active_tab.clone();
 
         // Create navigation items based on OLD_UI_ANALYSIS.md sidebar structure
         let nav_items = vec![
@@ -62,7 +60,7 @@ impl Render for AppView {
 impl AppView {
     /// Render content area based on active tab
     fn render_content(&self, theme: &MaterialTheme, window: &mut Window, cx: &mut App) -> Div {
-        let state = self.state.read(cx);
+        let state = &self.state;
         let active_tab = state.active_tab.as_str();
 
         match active_tab {

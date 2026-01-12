@@ -83,6 +83,7 @@ impl McpTool {
 pub enum ServerStatus {
     Running,
     Stopped,
+    Starting,
     Error,
 }
 
@@ -91,6 +92,7 @@ impl ServerStatus {
         match self {
             ServerStatus::Running => "Running",
             ServerStatus::Stopped => "Stopped",
+            ServerStatus::Starting => "Starting",
             ServerStatus::Error => "Error",
         }
     }
@@ -99,6 +101,7 @@ impl ServerStatus {
         match self {
             ServerStatus::Running => rgb(0x4CAF50), // Green
             ServerStatus::Stopped => theme.text.disabled,
+            ServerStatus::Starting => rgb(0xFFC107), // Amber/Yellow
             ServerStatus::Error => rgb(0xF44336), // Red
         }
     }
